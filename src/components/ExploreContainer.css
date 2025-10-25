@@ -1,0 +1,255 @@
+/* ===== Layout general de la landing ===== */
+.landing-wrapper {
+  width: 100%;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+/* ===== Secciones ===== */
+.section {
+  padding: 56px 0 40px;
+  background: #ffffff;
+}
+
+.section.light {
+  background: #eef3f9; /* gris azulado muy suave como en el mockup */
+}
+
+/* ===== Títulos y subtítulos ===== */
+.section-title {
+  text-align: center;
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0 0 10px;
+  color: #0d2147; /* azul/gris muy oscuro */
+}
+
+.section-subtitle {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 400;
+  color: #000000;
+  max-width: 900px;
+  margin:  auto 28px;
+  line-height: 1.55;
+}
+
+/* ===== Tarjetas (Why & Categories) ===== */
+.cards-row {
+  align-items: stretch;
+  row-gap: 22px;
+}
+
+.info-card,
+.category-card,
+.service-card {
+  position: relative;
+  overflow: visible;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 14px 28px rgba(16, 24, 40, 0.08);
+  padding: 22px 22px 18px 22px;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.info-card:hover,
+.category-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px rgba(16, 24, 40, 0.10);
+}
+
+/* === Ajuste cuadrado para categorías === */
+.category-card {
+ 
+  height: auto;
+  min-height: 200px;    /* asegura altura mínima */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  text-align: left;
+}
+
+/* Deja espacio a la izquierda del badge */
+.info-card ion-card-header,
+.category-card ion-card-header {
+  padding-inline-start: 68px;
+  padding-inline-end: 8px;
+}
+
+.info-card ion-card-title,
+.category-card ion-card-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.1px;
+  margin-top: 2px;
+  color: #0d2147;
+}
+
+.info-card ion-card-content,
+.category-card ion-card-content {
+  font-size: 15px;
+  color: #46556d;
+  line-height: 1.6;
+  margin-top: 8px;
+}
+
+/* ===== Badge del icono (azul) ===== */
+.icon-badge {
+  position: absolute;
+  left: 22px;
+  top: 22px;
+  width: 48px;
+  height: 48px;
+  background: #12396f;        /* azul profundo como el mockup */
+  color: #fff;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 24px rgba(18, 57, 111, 0.22);
+}
+.icon-badge ion-icon {
+  font-size: 24px;
+}
+
+/* ===== Cómo funciona ===== */
+.how-row {
+  row-gap: 30px;
+}
+
+.how-item {
+  text-align: center;
+  padding: 6px 10px;
+}
+
+.how-item h3 {
+  margin: 14px 0 6px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #0d2147;
+}
+
+.how-item p {
+  color: #46556d;
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.how-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  background: #12396f;
+  color: #fff;
+  border-radius: 999px;
+  box-shadow: 0 14px 28px rgba(18, 57, 111, 0.22);
+}
+.how-icon ion-icon {
+  font-size: 30px;
+}
+
+/* Números naranja (1,2,3,4) */
+.how-step {
+  position: absolute;
+  right: -10px;
+  top: -10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #ff7a1a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 20px rgba(255, 122, 26, 0.35);
+}
+
+/* Texto secundario gris en categorías */
+.muted {
+  color: #6a7a92 !important;
+}
+
+/* botón favorito en la esquina superior derecha */
+.card-fav-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  --padding-start: 6px;
+  --padding-end: 6px;
+  color: var(--ion-color-primary);
+  background: rgba(255,255,255,0.92);
+  border-radius: 20px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+/* cuando está activo, usar color sólido */
+.card-fav-btn[aria-pressed="true"] {
+  color: var(--ion-color-danger);
+  background: rgba(255,255,255,0.98);
+}
+
+/* tamaño del icono dentro del botón */
+.card-fav-btn ion-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hide favorite buttons site-wide when we don't want them visible */
+.card-fav-btn, .fav-btn {
+  display: none !important;
+}
+
+/* ===== Ajustes responsivos ===== */
+@media (max-width: 767px) {
+  .section {
+    padding: 40px 0 28px;
+  }
+  .section-title {
+    font-size: 28px;
+  }
+  .section-subtitle {
+    font-size: 16px;
+    padding: 0 14px;
+  }
+  .info-card,
+  .category-card {
+    border-radius: 16px;
+    padding: 20px 18px 16px 18px;
+    aspect-ratio: auto;   /* en móvil no forzamos cuadrado */
+    min-height: 160px;
+  }
+  .icon-badge {
+    left: 18px;
+    top: 18px;
+  }
+  .info-card ion-card-header,
+  .category-card ion-card-header {
+    padding-inline-start: 64px;
+  }
+}
+
+/* ===== Compatibilidad con modo oscuro (opcional) ===== */
+@media (prefers-color-scheme: dark) {
+  .section.light { background: #0f172a; }
+  .section { background: #0b1224; }
+  .section-title { color: #e6edf7; }
+  .section-subtitle { color: #98a6bd; }
+  .info-card, .category-card { background: #0f172a; box-shadow: 0 10px 20px rgba(0,0,0,0.45); }
+  .info-card ion-card-title, .category-card ion-card-title { color: #e6edf7; }
+  .info-card ion-card-content, .category-card ion-card-content { color: #b8c3d6; }
+  .icon-badge { background: #16407e; box-shadow: 0 10px 22px rgba(22,64,126,.35); }
+}

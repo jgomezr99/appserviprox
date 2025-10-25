@@ -1,0 +1,25 @@
+/* For information on how to create your own theme, please see:
+http://ionicframework.com/docs/theming/ */
+
+:root {
+	/* Marca principal (azul marino) */
+	--ion-color-primary:#1373f1;
+	--ion-color-primary-rgb: 15, 39, 70;
+	--ion-color-primary-contrast: #ffffff;
+	--ion-color-primary-contrast-rgb: 255, 255, 255;
+	--ion-color-primary-shade: #1373f1;
+	--ion-color-primary-tint: #1373f1;
+
+	/* Opcional: tono de marca para seleccionados */
+	--brand-soft-bg: #2c97d4; /* azul marino más suave */
+	--brand-soft-bg-rgb: 20, 153, 142; /* corrige valores RGB */
+
+		/* Colores del menú (puedes cambiarlos para ajustar el fondo) */
+		--menu-bg:#0c80a3;           /* fondo base del panel lateral */
+		--menu-footer-bg: #0c80a3;    /* fondo del footer del menú */
+		--menu-header-bg: #0c80a3;    /* fondo del header del menú */
+
+	/* Colores del encabezado de lista del menú */
+	--menu-list-header-bg: transparent; /* o suave: #eef5ff */
+	--menu-list-header-fg: var(--ion-color-primary);
+}

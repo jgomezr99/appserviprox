@@ -1,0 +1,34 @@
+[
+  {
+    "id": "1",
+    "titulo": "Entrenamiento Fitness Personalizado",
+    "profesional": "Ana García",
+    "lugar": "Gimnasio Local Central",
+    "email": "ana.garcia@example.com",
+    "celular": "+573001112233",
+    "fechaInicio": "2025-09-15T09:00:00",
+    "fechaFin": "2025-09-15T10:00:00",
+    "numeroOrden": "ORD-U001",
+    "estado": "Completado",
+    "descripcion": "Sesión enfocada en fuerza y movilidad. Llevar toalla e hidratación. Incluye evaluación rápida de postura.",
+    "cliente": "Carlos Pérez",
+    "emailCliente": "carlos.perez@example.com",
+    "celularCliente": "+573001234567"
+  },
+  {
+    "id": "2",
+    "titulo": "Clases Particulares de Matemáticas",
+    "profesional": "Elena Martínez",
+    "lugar": "Remoto",
+    "email": "elena.martinez@example.com",
+    "celular": "+573109998877",
+    "fechaInicio": "2025-05-15T16:00:00",
+    "fechaFin": null,
+    "numeroOrden": "ORD-U002",
+    "estado": "Programado",
+    "descripcion": "Repaso de límites y derivadas. Material: cuaderno y calculadora. Enviar guía previa por correo.",
+    "cliente": "María López",
+    "emailCliente": "maria.lopez@example.com",
+    "celularCliente": "+573112223344"
+  }
+]

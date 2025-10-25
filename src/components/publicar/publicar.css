@@ -1,0 +1,78 @@
+.container { padding: 12px 12px 24px; }
+
+.toolbar-secondary {
+  --background: #fff;
+  border-top: 1px solid rgba(0,0,0,.06);
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.table-wrap {
+  overflow: auto;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+}
+
+/* ✅ evita scroll horizontal */
+.reservas-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed; /* fuerzas ajuste y corte */
+  font-size: 14px;
+}
+
+.reservas-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: #f8fafc;
+  text-align: left; font-weight: 600;
+  padding: 12px; border-bottom: 1px solid #e5e7eb;
+}
+
+/* Anchos orientativos por columna */
+.col-title { width: 220px; }
+.col-lugar { width: 160px; }
+.col-email { width: 200px; }
+.col-tel { width: 130px; }
+.col-orden { width: 120px; }
+.col-pago  { width: 120px; }
+.min-col   { width: 120px; }
+
+.reservas-table tbody td {
+  padding: 12px; vertical-align: top; border-bottom: 1px solid #f1f5f9;
+}
+.reservas-table tbody tr:hover { background: #fafafa; }
+
+/* Cortes limpios para textos largos */
+.wrap-anywhere { overflow-wrap: anywhere; }
+.link { color: #2563eb; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.empty { text-align: center; color: #6b7280; padding: 24px 12px; }
+.acciones { white-space: nowrap; }
+
+/* Badges suaves para pago */
+.badge-soft { filter: saturate(.9) opacity(.95); }
+
+/* Tarjetas móviles */
+.cards { display: grid; gap: 12px; }
+.reserva-card { border-radius: 16px; }
+.card-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;
+}
+.card-title { font-size: 16px; font-weight: 700; margin: 0; }
+.badge-row { display: flex; gap: 6px; }
+.card-row {
+  display: grid; grid-template-columns: 110px 1fr; gap: 10px;
+  padding: 6px 0; border-bottom: 1px dashed #eef2f7;
+}
+.card-row:last-of-type { border-bottom: 0; }
+.label { color: #64748b; } .value { color: #0f172a; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* Responsive: tabla en escritorio, tarjetas en móvil */
+.desktop-only { display: none; }
+.mobile-only { display: block; }
+@media (min-width: 992px) {
+  .desktop-only { display: block; }
+  .mobile-only { display: none; }
+}

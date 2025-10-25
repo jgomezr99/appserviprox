@@ -1,0 +1,28 @@
+.step-indicator {
+  padding-right: 16px;
+  color: var(--ion-color-medium);
+  font-size: 14px;
+}
+
+ion-item {
+  --padding-start: 0;
+  --inner-padding-end: 0;
+  margin-bottom: 16px;
+}
+
+ion-select {
+  width: 100%;
+  max-width: 100%;
+}
+
+ion-datetime {
+  width: 100%;
+}
+
+form {
+  padding: 16px;
+}
+
+ion-button[type="submit"] {
+  margin-top: 24px;
+}

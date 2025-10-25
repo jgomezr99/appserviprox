@@ -1,0 +1,178 @@
+.loginPage {
+  --background: linear-gradient(135deg, #1976d2 0%, #64b5f6 100%);
+}
+
+.container {
+  min-height: 100%;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loginCard {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 24px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.logo {
+  width: 120px;
+  height: auto;
+  margin: 0 auto 24px;
+  display: block;
+}
+
+.title {
+  color: #e60808;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.formGroup ion-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--ion-color-dark);
+}
+
+.input {
+  --background: #f5f5f5;
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --padding-top: 12px;
+  --padding-bottom: 12px;
+  --border-radius: 8px;
+  --placeholder-color: #999;
+  margin-top: 4px;
+}
+
+.input[data-type="datetime"] {
+  --background: #f5f5f5;
+  --border-radius: 8px;
+  --padding: 12px;
+  margin-top: 4px;
+  border: 1px solid var(--ion-color-medium);
+}
+
+.input.focused {
+  --border-color: #1976d2;
+  --border-width: 2px;
+}
+
+.input.valid {
+  --background: #f0f7f0;
+  --border-color: #4caf50;
+}
+
+.input.invalid {
+  --background: #fff7f7;
+  --border-color: #f44336;
+}
+
+.select {
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --padding-top: 12px;
+  --padding-bottom: 12px;
+  --border-radius: 8px;
+  --background: #f5f5f5;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.select {
+  --padding-start: 12px;
+  --padding-end: 12px;
+  --padding-top: 12px;
+  --padding-bottom: 12px;
+  --background: #f5f5f5;
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.button {
+  margin: 32px 0 20px;
+  --border-radius: 10px;
+  --background: #1976d2;
+  font-weight: 600;
+  font-size: 16px;
+  height: 48px;
+}
+
+.submitButton {
+  margin-top: 32px;
+  --background: #1976d2;
+  --border-radius: 8px;
+  height: 48px;
+  font-weight: 600;
+}
+
+.submitButton:disabled {
+  opacity: 0.7;
+}
+
+.linkButton {
+  --color: #666;
+  font-size: 14px;
+  font-weight: 500;
+  height: 40px;
+  margin: 4px 0;
+}
+
+.error {
+  color: #f44336;
+  font-size: 12px;
+  margin: 4px 16px;
+}
+
+.errorText {
+  color: #f44336;
+  font-size: 12px;
+  margin-top: 4px;
+  margin-left: 16px;
+}
+
+.registerInput {
+  margin-bottom: 16px;
+  --background: #f5f5f5;
+  --border-radius: 8px;
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --highlight-height: 2px;
+}
+
+.stepIndicator {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 16px 0;
+  padding-right: 16px;
+  color: var(--ion-color-medium);
+}
+
+.stepDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ion-color-medium);
+}
+
+.stepDot.active {
+  background: var(--ion-color-primary);
+  transform: scale(1.2);
+}
+
+.loginLink {
+  text-align: center;
+  margin-top: 16px;
+}

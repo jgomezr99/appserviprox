@@ -1,0 +1,198 @@
+/* ===== Scope: evita que el estilo afecte otras pantallas ===== */
+.mr, .mr * { box-sizing: border-box; }
+
+/* Contenedor y buscador */
+.mr.container { padding: 12px; }
+
+.mr.search{
+  width: 100%;
+  padding: 10px 12px;
+  margin: 6px 0 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  outline: none;
+}
+
+/* ===== Tabla ===== */
+.mr.table-wrap{
+  overflow: auto;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+}
+
+.mr.table{
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;           /* evita cortes raros y scroll lateral */
+  font-size: 14px;
+}
+
+.mr.table thead th{
+  position: sticky; top: 0; z-index: 2;
+  background: #f8fafc;
+  text-align: left; font-weight: 600;
+  padding: 12px; border-bottom: 1px solid #e5e7eb;
+  line-height: 1.2;
+}
+
+.mr.table tbody td{
+  padding: 12px;
+  vertical-align: top;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.mr.table tbody tr:hover{ background: #fafafa; }
+
+/* Anchos y comportamiento del texto */
+.col-title{ min-width: 220px; max-width: 360px; }
+.col-lugar{ min-width: 160px; max-width: 240px; }
+.col-email{ min-width: 200px; max-width: 300px; }
+.col-tel{ width: 130px; }
+.col-orden{ width: 120px; }
+.min-col{ width: 120px; }
+
+.wrap{ overflow-wrap: anywhere; }
+.link{ color: #2563eb; text-decoration: none; }
+.link:hover{ text-decoration: underline; }
+.acciones{ white-space: nowrap; }
+.empty{ text-align: center; color: #6b7280; padding: 24px 12px; }
+
+/* Botones de acción compactos (ojo, email, teléfono) */
+.acciones ion-button{
+  --padding-start: 6px;
+  --padding-end: 6px;
+}
+
+/* ===== Detalle (card) debajo de la fila ===== */
+.detail-row td{ padding: 0; border-bottom: none; }
+
+.detail-inner{
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height .25s ease, opacity .25s ease, margin .25s ease;
+  margin: 0 12px;
+}
+
+/* Cuando data-open="1", se despliega */
+.detail-row[data-open="1"] .detail-inner{
+  max-height: 600px;     /* ponlo más grande si tu card puede crecer más */
+  opacity: 1;
+  margin: 10px 12px 16px;
+}
+
+.detail-card{
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+  padding: 12px;
+}
+
+.detail-head{
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 6px;
+}
+
+.detail-title{ font-weight: 700; }
+
+.detail-desc{
+  font-size: 13px; color: #334155; background: #fff;
+  border: 1px dashed #e2e8f0; border-radius: 10px;
+  padding: 10px 12px; margin: 8px 0 6px;
+}
+
+.detail-grid{ display: grid; gap: 6px; margin-top: 6px; }
+.drow{ display: grid; grid-template-columns: 150px 1fr; gap: 10px; font-size: 14px; }
+.dlabel{ color: #64748b; }
+.dvalue{ color: #0f172a; }
+
+.detail-actions{ display: flex; gap: 8px; margin-top: 10px; }
+
+/* Responsive básico */
+@media (max-width: 991px){
+  .col-title{ min-width: 180px; }
+}
+
+/* Diseño 100% Ionic (cards). Elimina estilos de tabla previos */
+.misreservas-content {
+  --background: var(--page-bg, #f6f8fb);
+}
+
+.res-container { padding: 12px; }
+
+.res-search {
+  margin-bottom: 8px;
+}
+
+/* Segment con badges */
+.res-segment {
+  margin: 2px 4px 10px;
+}
+.res-segment ion-segment-button {
+  gap: 6px;
+  --indicator-color: var(--ion-color-primary);
+}
+
+/* Lista de tarjetas */
+.res-list { display: grid; gap: 12px; }
+
+.res-card {
+  border-radius: 14px;
+  border: 1px solid #e6edf5;
+  box-shadow: 0 2px 10px rgba(16, 24, 40, 0.05);
+  background: #fff;
+}
+
+/* Encabezado de tarjeta */
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-titles ion-card-title {
+  font-size: 16px;
+  line-height: 1.2;
+}
+.card-titles ion-card-subtitle {
+  margin-top: 2px;
+  color: #64748b;
+}
+
+.estado-badge {
+  align-self: flex-start;
+}
+
+/* Descripción */
+.desc {
+  display: block;
+  background: #f8fafc;
+  border: 1px dashed #e2e8f0;
+  color: #334155;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+/* Lista de metadatos dentro de la tarjeta */
+.meta-list {
+  margin-bottom: 6px;
+}
+
+/* Acciones */
+.res-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* Vacío */
+.empty {
+  text-align: center;
+  color: #6b7280;
+  padding: 16px 4px;
+}

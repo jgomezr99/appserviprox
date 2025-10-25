@@ -1,0 +1,35 @@
+.login-form-container {
+  max-width: 420px;
+  margin: 32px auto 0 auto;
+  padding: 0 12px;
+}
+
+.login-form-container form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-form-container .ion-margin-top {
+  margin-top: 18px !important;
+}
+
+.login-card {
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(2,6,23,0.08);
+}
+
+.register-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.register-btn {
+  --padding-start: 0;
+  --padding-end: 0;
+  --color: #2563eb;
+  font-weight: 600;
+}

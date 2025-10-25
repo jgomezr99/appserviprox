@@ -1,0 +1,20 @@
+.config-list {
+  padding: 16px 0;
+}
+
+.config-item {
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --min-height: 56px;
+}
+
+ion-icon {
+  color: var(--ion-color-primary);
+  font-size: 24px;
+}
+
+.version-info {
+  color: var(--ion-color-medium);
+  font-size: 14px;
+  margin-top: 8px;
+}

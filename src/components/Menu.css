@@ -1,0 +1,226 @@
+/* Fondo general del menú (configurable por variables) */
+.menu-content, ion-menu {
+  --background: var(--menu-bg, #f8f8f9);
+}
+
+/* Evita que el footer tape el último item */
+.menu-has-footer {
+  --padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+/* ===== Header con logo centrado ===== */
+.menu-header {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  gap: 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+
+/* Colores del encabezado de la lista (IonListHeader) */
+ion-list-header.menu-header { 
+  --color: var(--menu-list-header-fg, var(--ion-color-primary));
+}
+ion-list-header.menu-header::part(native) {
+  background: var(--menu-list-header-bg, transparent);
+  color: var(--menu-list-header-fg, var(--ion-color-primary));
+}
+.menu-header-logo {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  background: var(--menu-header-bg, var(--menu-bg, transparent));
+  --background: var(--menu-header-bg, var(--menu-bg, transparent));
+  box-shadow: none;
+}
+.menu-logo {
+  display: block;
+  width: 95%;                   /* ancho responsivo, ocupa más espacio */
+  height: 95%;                  /* mantiene proporción */
+  object-fit: contain;             /* no recorta el logo */
+}
+.menu-avatar {
+  width: 56px;
+  height: 56px;
+}
+
+/* ===== Lista ===== */
+#side-menu { padding-top: 0; }
+
+/* ===== Items ===== */
+ion-item {
+  --padding-start: 12px;
+  --inner-padding-end: 8px;
+  --min-height: 44px;
+  margin: 6px 8px;            /* misma sangría del pill de la imagen */
+  border-radius: 10px;
+  --color: #03080f;           /* color de texto por defecto del item */
+}
+
+ion-item ion-icon { color: #02060c; font-size: 20px; }
+ion-item ion-label { font-weight: 500; }
+
+/* ===== Item activo (pill) ===== */
+:root {
+  --menu-selected-bg: var(--brand-soft-bg, #ecf3fc);           /* fondo seleccionado */
+  --menu-selected-fg: var(--ion-color-primary-contrast, #fff); /* texto/iconos seleccionados */
+}
+
+ion-item.selected {
+  background: var(--menu-selected-bg);
+  --background: var(--menu-selected-bg);
+  --color: var(--menu-selected-fg);
+  border-radius: 10px;
+}
+ion-item.selected ion-icon { color: var(--menu-selected-fg); }
+/* Forzar color por si algún estilo pone azul tipo enlace */
+ion-item.selected a,
+ion-item.selected ion-label { color: var(--menu-selected-fg) !important; }
+
+/* Pase el cursor suavemente (escritorio) */
+@media (hover: hover) {
+  ion-item:not(.selected):hover { --background: rgba(0,0,0,0.04); }
+}
+
+/* ===== Footer inferior ===== */
+.menu-footer {
+  --background: var(--menu-footer-bg, #1486e2);
+  border-top: 1px solid rgba(75, 59, 59, 0.08);
+  padding: 6px 0 10px;
+}
+.login-item { margin: 0 8px; }
+.login-item ion-icon { color: #ffffff; }
+.login-item ion-label { color: #ffffff; }
+.login-item {
+  margin: 0 8px;
+  /* fuerza color del contenido del item (IonItem usa esta var) */
+  --color: #ffffff;
+  /* opcional: leve fondo claro para contraste en footer azul */
+  --background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+}
+.menu-footer .login-item ion-icon { color: #ffffff !important; }
+.menu-footer .login-item ion-label { color: #ffffff !important; }
+.login-item::part(native) {
+  color: #ffffff;
+}
+
+/* Make the "Ingresar / Crear Cuenta" text and icon white */
+.login-item {
+  --color: #fff; /* Ionic item text color */
+  color: #fff;   /* Fallback for nested elements */
+}
+
+.login-item ion-icon {
+  color: #fff;
+}
+
+/* Keep it white on hover/pressed */
+.login-item:hover,
+.login-item.ion-activated {
+  --color: #fff;
+  color: #fff;
+}
+
+
+
+/* ===== Estilos de usuario en el menú ===== */
+.menu-user .menu-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+.menu-user .menu-email {
+  font-size: 12px;
+  color: var(--ion-color-medium);
+}
+
+/* New: set a non-white background for the side menu */
+:root {
+  --menu-bg: #0b7a8a; /* teal */
+}
+
+/* Scope to this menu instance */
+ion-menu[menu-id="main-menu"] {
+  --ion-background-color: var(--menu-bg);
+}
+
+/* Ensure the menu panel/content uses the teal background 
+ion-menu[menu-id="main-menu"],
+ion-menu[menu-id="main-menu"] ion-content,
+ion-menu[menu-id="main-menu"] .menu-content,
+ion-menu[menu-id="main-menu"]::part(content),
+ion-menu[menu-id="main-menu"] ion-content::part(background),
+ion-menu[menu-id="main-menu"] ion-content::part(scroll) {
+ 
+}*/
+
+/* Remove white backgrounds from lists */
+ion-menu[menu-id="main-menu"] ion-list,
+ion-menu[menu-id="main-menu"] ion-list::part(native) {
+  background: transparent !important;
+}
+
+/* Remove white backgrounds from items (when not selected) */
+ion-menu[menu-id="main-menu"] ion-item,
+ion-menu[menu-id="main-menu"] ion-item::part(native) {
+  --background: transparent !important;
+  background: transparent !important;
+}
+
+/* Keep the header consistent with the menu background */
+ion-menu[menu-id="main-menu"] .menu-header-logo {
+  background: var(--menu-bg) !important;
+  --background: var(--menu-bg) !important;
+}
+
+/* Optional: small hover tint that works over colored bg */
+@media (hover: hover) {
+  ion-menu[menu-id="main-menu"] ion-item:not(.selected):hover {
+    --background: rgba(255,255,255,0.06);
+   
+  }
+}
+
+/* ===== Make the menu backdrop fully opaque ===== */
+
+/* Panel del menú 100% opaco 
+ion-menu[menu-id="main-menu"]::part(content) {
+
+
+}
+*/
+
+/* IonContent totalmente sólido dentro del menú 
+ion-menu[menu-id="main-menu"] ion-content::part(background),
+ion-menu[menu-id="main-menu"] ion-content::part(scroll) {
+  
+}*/
+
+/* Backdrop opaco para ocultar el contenido de la página 
+ion-menu[menu-id="main-menu"]::part(backdrop) {
+}*/
+
+/* Menu items: white text and icons for contrast */
+ion-menu[menu-id="main-menu"] ion-item {
+  --color: #fff;
+  color: #fff;
+  --background: transparent;
+}
+ion-menu[menu-id="main-menu"] ion-item::part(native) { background: transparent; }
+ion-menu[menu-id="main-menu"] ion-item ion-icon { color: #fff; }
+ion-menu[menu-id="main-menu"] ion-item ion-label { color: #fff !important; }
+
+/* Selected/hover states: subtle white overlay ***  */
+ion-menu[menu-id="main-menu"] ion-item.selected {
+ 
+  --color: #fff;
+}
+ion-menu[menu-id="main-menu"] ion-item.selected ion-icon { color: #fff; }
+
+/* Footer divider tint over teal 
+ion-menu[menu-id="main-menu"] .menu-footer {
+  
+}
+*/
