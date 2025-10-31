@@ -110,7 +110,7 @@ const Menu: React.FC = () => {
           ))}
         </IonList>
       </IonContent>
-
+  {/* Footer del menú */}
       <IonFooter className="menu-footer">
         <IonMenuToggle autoHide={false}>
           {/* Mostrar LOGIN solo si NO hay sesión y NO estoy en /login o /ingresar */}

@@ -56,6 +56,9 @@ const TIPOS_DOCUMENTO = [
   { value: 'CPF', label: 'CPF (Brasil)' }
 ];
 
+// URL del fondo (ubica una imagen en public/assets/bg/login.jpg si quieres cambiarla)
+const BG_URL = "/assets/bg/login.jpg";
+
 const Login: React.FC = () => {
   const history = useHistory();
   const ionRouter = useIonRouter();
@@ -273,318 +276,332 @@ const Login: React.FC = () => {
 
   return (
     <IonPage className={styles.loginPage}>
-      <IonContent fullscreen>
-        
-           <h1 className={styles.title}>
-              {mode === "login" ? "¡Bienvenido de nuevo!" : "Recuperar cuenta"}
-            </h1>
-        <IonText className={styles.container}>
-        
-          <IonText className={styles.loginCard}>
-            <IonImg 
-              src={logo} 
-              alt="ServiProx Logo" 
-              className={styles.logo}
-            />
-            
-           
-
-            {mode === "login" ? (
-              <form onSubmit={handleLogin}>
-                <IonText className={styles.formGroup}>
-                  <IonItem lines="none" className={styles.input}>
-                    <IonInput
-                      type="email"
-                      placeholder="Correo electrónico"
-                      value={email}
-                      onIonChange={(e) => setEmail(e.detail.value ?? "")}
-                      className={email ? styles.focused : ""}
-                      required
-                    />
-                  </IonItem>
-                  {!emailOk(email) && email !== "" && (
-                    <div className={styles.error}>Email inválido</div>
-                  )}
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonItem lines="none" className={styles.input}>
-                    <IonInput
-                      type="password"
-                      placeholder="Contraseña"
-                      value={password}
-                      onIonChange={(e) => setPassword(e.detail.value ?? "")}
-                      className={password ? styles.focused : ""}
-                      required
-                    />
-                  </IonItem>
-                  {password !== "" && password.length < 6 && (
-                    <IonText className={styles.error}>Mínimo 6 caracteres</IonText>
-                  )}
-                </IonText>
-
-                <IonButton 
-                  expand="block" 
-                  type="submit"
-                  className={styles.button}
-                  disabled={!emailOk(email) || password.length < 6}
-                >
-                  Iniciar Sesión
-                </IonButton>
-
-                <IonButton
-                  expand="block"
-                  fill="clear"
-                  className={styles.linkButton}
-                  onClick={() => setMode("recover")}
-                >
-                  ¿Olvidaste tu contraseña?
-                </IonButton>
-
-                <IonButton
-                  expand="block"
-                  fill="clear"
-                  className={styles.linkButton}
-                  onClick={() => setRegisterOpen(true)}
-                >
-                  ¿No tienes cuenta? Regístrate
-                </IonButton>
-              </form>
-            ) : (
-              <form onSubmit={handleRecover}>
-                <IonText className={styles.formGroup}>
-                  <IonItem lines="none" className={styles.input}>
-                    <IonInput
-                      ref={recEmailRef}
-                      type="email"
-                      placeholder="Correo electrónico"
-                      required
-                    />
-                  </IonItem>
-                </IonText>
-
-                <IonButton expand="block" type="submit" className={styles.button}>
-                  Enviar enlace
-                </IonButton>
-
-                <IonButton
-                  expand="block"
-                  fill="clear"
-                  className={styles.linkButton}
-                  onClick={() => setMode("login")}
-                >
-                  Volver a iniciar sesión
-                </IonButton>
-              </form>
-            )}
-          </IonText>
-        </IonText>
-
-        {/* Modal: Crear cuenta */}
-        <IonModal isOpen={registerOpen} onDidDismiss={handleModalDismiss}>
-          <IonHeader>
-            <IonToolbar>
-              <IonButtons slot="start">
-                <IonButton onClick={() => history.push('/login')}>
-                  Volver a Inicio
-                </IonButton>
-              </IonButtons>
-              <IonTitle>Crear Cuenta</IonTitle>
-              <IonLabel slot="end" className={styles.stepIndicator}>
-                Paso {registerStep} de 2
-              </IonLabel>
-            </IonToolbar>
-          </IonHeader>
-
-          <IonContent className="ion-padding">
-            {registerStep === 1 ? (
-              <form onSubmit={(e) => { e.preventDefault(); handleNextStep(e); }}>
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Nombre</IonLabel>
-                  <IonInput
-                    value={formStep1.nombre}
-                    onIonChange={n => updateStep1('nombre', n.detail.value!)}
-                    className={styles.input}
-                    placeholder=" Juan Pablo"
-                    required
-                  />
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Apellido</IonLabel>
-                  <IonInput
-                    value={formStep1.apellido}
-                    onIonChange={e => updateStep1('apellido', e.detail.value!)}
-                    className={styles.input}
-                    placeholder=" Gómez López"
-                    required
-                  />
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonLabel>País</IonLabel>
-                  <IonSelect 
-                    className={styles.select} 
-                    interface="action-sheet"
-                    value={formStep1.pais}
-                    onIonChange={e => updateStep1('pais', e.detail.value!)}
-                    placeholder="Selecciona tu país"
-                  >
-                    {PAISES_SURAMERICA.map(pais => (
-                      <IonSelectOption key={pais.value} value={pais.value}>
-                        {pais.label}
-                      </IonSelectOption>
-                    ))}
-                  </IonSelect>
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Teléfono (Opcional)</IonLabel>
-                  <IonInput
-                    value={formStep1.telefono}
-                    onIonChange={e => updateStep1('telefono', e.detail.value!)}
-                    className={styles.input}
-                    type="tel"
-                    placeholder="+573028505481"
-                  />
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Tipo de perfil</IonLabel>
-                  <IonSelect 
-                    className={styles.select} 
-                    interface="action-sheet"
-                    value={formStep1.tipoPerfil}
-                    onIonChange={e => updateStep1('tipoPerfil', e.detail.value!)}
-                  >
-                    <IonSelectOption value="user">Usuario (Busco servicios/espacios)</IonSelectOption>
-                    <IonSelectOption value="pro">Profesional (Ofrezco servicios)</IonSelectOption>
-                  </IonSelect>
-                </IonText>
-
-                <IonButton expand="block" type="submit" className={styles.submitButton}>
-                  Siguiente
-                </IonButton>
-
-                <IonText className={styles.loginLink}>
-                  <IonButton fill="clear" onClick={() => history.push('/login')}>
-                    ¿Ya tienes cuenta? Ingresar
-                  </IonButton>
-                </IonText>
-              </form>
-            ) : (
-              <form onSubmit={confirmRegister}>
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Fecha de Nacimiento</IonLabel>
-                  <IonDatetime
-                    className={styles.input}
-                    presentation="date"
-                    preferWheel={true}
-                    value={formStep2.fechaNacimiento || ''}
-                    onIonChange={e => updateStep2('fechaNacimiento', String(e.detail.value ?? ''))}
-                    max={todayISO}
-                    min={minDateISO}
-                    aria-label="Selecciona tu fecha de nacimiento"
-                  />
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Tipo de documento</IonLabel>
-                  <IonSelect 
-                    className={styles.select}
-                    interface="action-sheet"
-                    placeholder="Selecciona tipo de documento"
-                    value={formStep2.tipoDocumento || ''}
-                    onIonChange={e => updateStep2('tipoDocumento', String(e.detail.value ?? ''))}
-                  >
-                    {TIPOS_DOCUMENTO.map(tipo => (
-                      <IonSelectOption key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </IonSelectOption>
-                    ))}
-                  </IonSelect>
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Número de documento</IonLabel>
-                  <IonInput
-                    className={styles.input}
-                    type="text"
-                    placeholder="Ingresa tu número de documento"
-                    value={formStep2.numeroDocumento}
-                    onIonChange={e => updateStep2('numeroDocumento', String(e.detail.value ?? ''))}
-                  />
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Correo</IonLabel>
-                  <IonInput
-                    className={styles.input}
-                    type="email"
-                    placeholder="tu@correo.com"
-                    value={formStep2.correo}
-                    onIonChange={e => updateStep2('correo', e.detail.value!)}
-                    required
-                  />
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Contraseña</IonLabel>
-                  <IonInput
-                    className={styles.input}
-                    type="password"
-                    placeholder="Mínimo 6 caracteres"
-                    value={formStep2.password}
-                    onIonChange={e => updateStep2('password', e.detail.value!)}
-                    required
-                  />
-                  {formStep2.password && formStep2.password.length < 6 && (
-                    <div className={styles.error}>La contraseña debe tener al menos 6 caracteres</div>
-                  )}
-                </IonText>
-
-                <IonText className={styles.formGroup}>
-                  <IonLabel>Confirmar Contraseña</IonLabel>
-                  <IonInput
-                    className={styles.input}
-                    type="password"
-                    placeholder="Repite tu contraseña"
-                    value={formStep2.confirmPassword}
-                    onIonChange={c => updateStep2('confirmPassword', c.detail.value!)}
-                    required
-                  />
-                  {formStep2.confirmPassword && formStep2.password !== formStep2.confirmPassword && (
-                    <div className={styles.error}>Las contraseñas no coinciden</div>
-                  )}
-                </IonText>
-
-                <IonButton 
-                  expand="block" 
-                  type="submit"
-                  className={styles.submitButton}
-                  disabled={!formStep2.password || 
-                           formStep2.password.length < 6 || 
-                           formStep2.password !== formStep2.confirmPassword}
-                >
-                  Crear Cuenta
-                </IonButton>
-              </form>
-            )}
-          </IonContent>
-        </IonModal>
-
-        <IonAlert
-          isOpen={alertState.isOpen}
-          header={alertState.header}
-          message={alertState.message}
-          buttons={[
-            {
-              text: "OK",
-              role: "confirm",
-              handler: () => setAlertState(prev => ({ ...prev, isOpen: false }))
-            }
-          ]}
+      {/* Hacemos transparente el fondo de IonContent para ver la imagen */}
+      <IonContent fullscreen style={{ ["--background" as any]: "transparent" }}>
+        {/* Capa de fondo: imagen + degradado para mejorar contraste */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 0,
+            backgroundImage: `linear-gradient(rgba(0,0,0,0.15), rgba(0,0,0,0.15)), url(${BG_URL})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            filter: "none",
+          }}
         />
+
+        {/* Contenido por encima del fondo */}
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <h1 className={styles.title}>
+            {mode === "login" ? "¡Bienvenido de nuevo!" : "Recuperar cuenta"}
+          </h1>
+
+          <IonText className={styles.container}>
+            <IonText className={styles.loginCard}>
+              {/* Logo centrado dentro de la tarjeta */}
+              <IonImg src={logo} alt="ServiProx Logo" className={styles.logo} />
+
+              {mode === "login" ? (
+                <form onSubmit={handleLogin}>
+                  <IonText className={styles.formGroup}>
+                    <IonItem lines="none" className={styles.input}>
+                      <IonInput
+                        type="email"
+                        placeholder="Correo electrónico"
+                        value={email}
+                        onIonChange={(e) => setEmail(e.detail.value ?? "")}
+                        className={email ? styles.focused : ""}
+                        required
+                      />
+                    </IonItem>
+                    {!emailOk(email) && email !== "" && (
+                      <div className={styles.error}>Email inválido</div>
+                    )}
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonItem lines="none" className={styles.input}>
+                      <IonInput
+                        type="password"
+                        placeholder="Contraseña"
+                        value={password}
+                        onIonChange={(e) => setPassword(e.detail.value ?? "")}
+                        className={password ? styles.focused : ""}
+                        required
+                      />
+                    </IonItem>
+                    {password !== "" && password.length < 6 && (
+                      <IonText className={styles.error}>Mínimo 6 caracteres</IonText>
+                    )}
+                  </IonText>
+
+                  <IonButton 
+                    expand="block" 
+                    type="submit"
+                    className={styles.button}
+                    disabled={!emailOk(email) || password.length < 6}
+                  >
+                    Iniciar Sesión
+                  </IonButton>
+
+                  <IonButton
+                    expand="block"
+                    fill="clear"
+                    className={styles.linkButton}
+                    onClick={() => setMode("recover")}
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </IonButton>
+
+                  <IonButton
+                    expand="block"
+                    fill="clear"
+                    className={styles.linkButton}
+                    onClick={() => setRegisterOpen(true)}
+                  >
+                    ¿No tienes cuenta? Regístrate
+                  </IonButton>
+                </form>
+              ) : (
+                <form onSubmit={handleRecover}>
+                  <IonText className={styles.formGroup}>
+                    <IonItem lines="none" className={styles.input}>
+                      <IonInput
+                        ref={recEmailRef}
+                        type="email"
+                        placeholder="Correo electrónico"
+                        required
+                      />
+                    </IonItem>
+                  </IonText>
+
+                  <IonButton expand="block" type="submit" className={styles.button}>
+                    Enviar enlace
+                  </IonButton>
+
+                  <IonButton
+                    expand="block"
+                    fill="clear"
+                    className={styles.linkButton}
+                    onClick={() => setMode("login")}
+                  >
+                    Volver a iniciar sesión
+                  </IonButton>
+                </form>
+              )}
+            </IonText>
+          </IonText>
+
+          {/* Modal: Crear cuenta */}
+          <IonModal isOpen={registerOpen} onDidDismiss={handleModalDismiss}>
+            <IonHeader>
+              <IonToolbar>
+                <IonButtons slot="start">
+                  <IonButton onClick={() => history.push('/login')}>
+                    Volver a Inicio
+                  </IonButton>
+                </IonButtons>
+                <IonTitle>Crear Cuenta</IonTitle>
+                <IonLabel slot="end" className={styles.stepIndicator}>
+                  Paso {registerStep} de 2
+                </IonLabel>
+              </IonToolbar>
+            </IonHeader>
+
+            <IonContent className="ion-padding">
+              {registerStep === 1 ? (
+                <form onSubmit={(e) => { e.preventDefault(); handleNextStep(e); }}>
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Nombre</IonLabel>
+                    <IonInput
+                      value={formStep1.nombre}
+                      onIonChange={n => updateStep1('nombre', n.detail.value!)}
+                      className={styles.input}
+                      placeholder=" Juan Pablo"
+                      required
+                    />
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Apellido</IonLabel>
+                    <IonInput
+                      value={formStep1.apellido}
+                      onIonChange={e => updateStep1('apellido', e.detail.value!)}
+                      className={styles.input}
+                      placeholder=" Gómez López"
+                      required
+                    />
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>País</IonLabel>
+                    <IonSelect 
+                      className={styles.select} 
+                      interface="action-sheet"
+                      value={formStep1.pais}
+                      onIonChange={e => updateStep1('pais', e.detail.value!)}
+                      placeholder="Selecciona tu país"
+                    >
+                      {PAISES_SURAMERICA.map(pais => (
+                        <IonSelectOption key={pais.value} value={pais.value}>
+                          {pais.label}
+                        </IonSelectOption>
+                      ))}
+                    </IonSelect>
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Teléfono (Opcional)</IonLabel>
+                    <IonInput
+                      value={formStep1.telefono}
+                      onIonChange={e => updateStep1('telefono', e.detail.value!)}
+                      className={styles.input}
+                      type="tel"
+                      placeholder="+573028505481"
+                    />
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Tipo de perfil</IonLabel>
+                    <IonSelect 
+                      className={styles.select} 
+                      interface="action-sheet"
+                      value={formStep1.tipoPerfil}
+                      onIonChange={e => updateStep1('tipoPerfil', e.detail.value!)}
+                    >
+                      <IonSelectOption value="user">Usuario (Busco servicios/espacios)</IonSelectOption>
+                      <IonSelectOption value="pro">Profesional (Ofrezco servicios)</IonSelectOption>
+                    </IonSelect>
+                  </IonText>
+
+                  <IonButton expand="block" type="submit" className={styles.submitButton}>
+                    Siguiente
+                  </IonButton>
+
+                  <IonText className={styles.loginLink}>
+                    <IonButton fill="clear" onClick={() => history.push('/login')}>
+                      ¿Ya tienes cuenta? Ingresar
+                    </IonButton>
+                  </IonText>
+                </form>
+              ) : (
+                <form onSubmit={confirmRegister}>
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Fecha de Nacimiento</IonLabel>
+                    <IonDatetime
+                      className={styles.input}
+                      presentation="date"
+                      preferWheel={true}
+                      value={formStep2.fechaNacimiento || ''}
+                      onIonChange={e => updateStep2('fechaNacimiento', String(e.detail.value ?? ''))}
+                      max={todayISO}
+                      min={minDateISO}
+                      aria-label="Selecciona tu fecha de nacimiento"
+                    />
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Tipo de documento</IonLabel>
+                    <IonSelect 
+                      className={styles.select}
+                      interface="action-sheet"
+                      placeholder="Selecciona tipo de documento"
+                      value={formStep2.tipoDocumento || ''}
+                      onIonChange={e => updateStep2('tipoDocumento', String(e.detail.value ?? ''))}
+                    >
+                      {TIPOS_DOCUMENTO.map(tipo => (
+                        <IonSelectOption key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </IonSelectOption>
+                      ))}
+                    </IonSelect>
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Número de documento</IonLabel>
+                    <IonInput
+                      className={styles.input}
+                      type="text"
+                      placeholder="Ingresa tu número de documento"
+                      value={formStep2.numeroDocumento}
+                      onIonChange={e => updateStep2('numeroDocumento', String(e.detail.value ?? ''))}
+                    />
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Correo</IonLabel>
+                    <IonInput
+                      className={styles.input}
+                      type="email"
+                      placeholder="tu@correo.com"
+                      value={formStep2.correo}
+                      onIonChange={e => updateStep2('correo', e.detail.value!)}
+                      required
+                    />
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Contraseña</IonLabel>
+                    <IonInput
+                      className={styles.input}
+                      type="password"
+                      placeholder="Mínimo 6 caracteres"
+                      value={formStep2.password}
+                      onIonChange={e => updateStep2('password', e.detail.value!)}
+                      required
+                    />
+                    {formStep2.password && formStep2.password.length < 6 && (
+                      <div className={styles.error}>La contraseña debe tener al menos 6 caracteres</div>
+                    )}
+                  </IonText>
+
+                  <IonText className={styles.formGroup}>
+                    <IonLabel>Confirmar Contraseña</IonLabel>
+                    <IonInput
+                      className={styles.input}
+                      type="password"
+                      placeholder="Repite tu contraseña"
+                      value={formStep2.confirmPassword}
+                      onIonChange={c => updateStep2('confirmPassword', c.detail.value!)}
+                      required
+                    />
+                    {formStep2.confirmPassword && formStep2.password !== formStep2.confirmPassword && (
+                      <div className={styles.error}>Las contraseñas no coinciden</div>
+                    )}
+                  </IonText>
+
+                  <IonButton 
+                    expand="block" 
+                    type="submit"
+                    className={styles.submitButton}
+                    disabled={!formStep2.password || 
+                             formStep2.password.length < 6 || 
+                             formStep2.password !== formStep2.confirmPassword}
+                  >
+                    Crear Cuenta
+                  </IonButton>
+                </form>
+              )}
+            </IonContent>
+          </IonModal>
+
+          {/* Alertas (sin cambios) */}
+          <IonAlert
+            isOpen={alertState.isOpen}
+            header={alertState.header}
+            message={alertState.message}
+            buttons={[
+              {
+                text: "OK",
+                role: "confirm",
+                handler: () => setAlertState(prev => ({ ...prev, isOpen: false }))
+              }
+            ]}
+          />
+        </div>
       </IonContent>
     </IonPage>
   );

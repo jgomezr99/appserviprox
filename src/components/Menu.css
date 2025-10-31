@@ -12,8 +12,7 @@
 .menu-header {
   display: flex;
   align-items: center;
-  padding: 16px;
-  gap: 12px;
+ 
   border-bottom: 1px solid rgba(0,0,0,0.04);
 }
 
@@ -40,6 +39,7 @@ ion-list-header.menu-header::part(native) {
   width: 95%;                   /* ancho responsivo, ocupa más espacio */
   height: 95%;                  /* mantiene proporción */
   object-fit: contain;             /* no recorta el logo */
+  transform: translateY(-10%); /* sube la imagen 10% sin cambiar tamaño */
 }
 .menu-avatar {
   width: 56px;
@@ -87,8 +87,10 @@ ion-item.selected ion-label { color: var(--menu-selected-fg) !important; }
 /* ===== Footer inferior ===== */
 .menu-footer {
   --background: var(--menu-footer-bg, #1486e2);
-  border-top: 1px solid rgba(75, 59, 59, 0.08);
+  border-top: 4px solid rgba(2, 154, 255, 0.082);
   padding: 6px 0 10px;
+  position: relative;
+  transform: translateY(calc(-6 * var(--menu-footer-offset-percent, 10%)));
 }
 .login-item { margin: 0 8px; }
 .login-item ion-icon { color: #ffffff; }
@@ -124,7 +126,18 @@ ion-item.selected ion-label { color: var(--menu-selected-fg) !important; }
   color: #fff;
 }
 
+/* +10% tamaño para el CTA "Ingresar / Crear Cuenta" */
+.login-item {
+  --min-height: 48px;          /* 44px -> 48px (~+10%) */
+  --padding-start: 13px;       /* 12px -> 13px */
+  --inner-padding-end: 9px;    /* 8px -> 9px */
+  font-size: 1.1em;            /* texto +10% */
+  border-radius: 11px;         /* 10px -> 11px */
+}
 
+.login-item ion-icon {
+  font-size: 22px;             /* 20px -> 22px (~+10%) */
+}
 
 /* ===== Estilos de usuario en el menú ===== */
 .menu-user .menu-name {
@@ -138,7 +151,7 @@ ion-item.selected ion-label { color: var(--menu-selected-fg) !important; }
 
 /* New: set a non-white background for the side menu */
 :root {
-  --menu-bg: #0b7a8a; /* teal */
+  --menu-bg: #ec3102; /* teal */
 }
 
 /* Scope to this menu instance */
@@ -224,3 +237,8 @@ ion-menu[menu-id="main-menu"] .menu-footer {
   
 }
 */
+
+/* Offset para subir el footer (en porcentaje) */
+:root {
+  --menu-footer-offset-percent: 10%;
+}

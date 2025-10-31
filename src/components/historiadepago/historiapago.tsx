@@ -7,6 +7,7 @@ import {
   IonMenuButton
 } from "@ionic/react";
 import { downloadOutline, searchOutline } from "ionicons/icons";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 
 /* Tipos */
 type Estado = "Pagada" | "Pendiente" | "Pago Rechazado";
@@ -40,9 +41,8 @@ const descargarComprobante = async (f: Factura) => {
 
   let mod: any;
   try {
-    // carga dinámica para evitar errores en build si no está instalado
     mod = await import("jspdf");
-  } catch (err) {
+  } catch {
     alert("Funcionalidad PDF no disponible. Instala 'jspdf' con: npm install jspdf");
     return;
   }
@@ -54,18 +54,9 @@ const descargarComprobante = async (f: Factura) => {
   }
 
   try {
-    // Crear documento simple
-    // jsPDF puede exportar una clase como named export o default, por eso instancia flexible:
     // @ts-ignore
     const doc = new (jsPDF as any)();
-    doc.setFontSize(25);
-    doc.setTextColor("blue");
-    
-    doc.text("Serviprox", 150, 10,);
     doc.setFontSize(20);
-    // datos del cliente fijos en este demo
-   
-
     doc.text("Comprobante de Pago", 20, 20);
     doc.setFontSize(11);
     doc.text(`Nº Factura: ${f.id}`, 20, 34);
@@ -74,10 +65,75 @@ const descargarComprobante = async (f: Factura) => {
     doc.text(`Monto: ${formatCOP(f.montoCOP)}`, 20, 58);
     doc.text(`Método de Pago: ${f.metodoPago}`, 20, 66);
     doc.text(`Estado: ${f.estado}`, 20, 74);
-    doc.save(`${f.id}-comprobante.pdf`);
+
+    const filename = `${f.id}-comprobante.pdf`;
+    const platform = Capacitor.getPlatform?.() ?? "web";
+
+    // Web: descarga directa
+    if (platform === "web") {
+      doc.save(filename);
+      return;
+    }
+
+    // Nativo: guardar y compartir usando plugins registrados dinámicamente
+    const Filesystem: any = registerPlugin("Filesystem");
+    const Share: any = registerPlugin("Share");
+
+    // Si plugins no están disponibles, abrir en nueva pestaña como fallback
+    if (!Filesystem?.writeFile || !Share?.share) {
+      const blobUrl = doc.output("bloburl");
+      window.open(blobUrl, "_blank");
+      return;
+    }
+
+    // Verificar capacidad de compartir (si está disponible en el plugin)
+    try {
+      if (typeof Share.canShare === "function") {
+        const can = await Share.canShare();
+        if (can && can.value === false) {
+          const blobUrl = doc.output("bloburl");
+          window.open(blobUrl, "_blank");
+          return;
+        }
+      }
+    } catch {
+      // Ignorar si canShare no está soportado
+    }
+
+    // Guardar PDF en Documents
+    const dataUri = doc.output("datauristring") as string;
+    const base64 = dataUri.split(",")[1];
+    const path = `comprobantes/${filename}`;
+
+    const writeRes = await Filesystem.writeFile({
+      path,
+      data: base64,
+      directory: "DOCUMENTS", // equivalente a Directory.Documents
+      recursive: true,
+    });
+
+    // Resolver URL compartible
+    let shareUrl: string | undefined = writeRes?.uri || (writeRes as any)?.uriPath;
+
+    // En Android, convertir a content://
+    if (platform === "android" && typeof Filesystem.getUri === "function") {
+      const r = await Filesystem.getUri({ directory: "DOCUMENTS", path });
+      shareUrl = r?.uri || shareUrl;
+    }
+
+    if (shareUrl) {
+      await Share.share({
+        title: "Comprobante de Pago",
+        text: `Comprobante ${f.id}`,
+        url: shareUrl,
+      });
+    } else {
+      const blobUrl = doc.output("bloburl");
+      window.open(blobUrl, "_blank");
+    }
   } catch (e) {
     console.error(e);
-    alert("Error generando PDF. Revisa la consola.");
+    alert("Error generando o compartiendo el PDF.");
   }
 };
 
