@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import {
   IonPage,
   IonHeader,
@@ -23,13 +23,13 @@ import {
   useIonAlert,
   IonMenuButton,
   IonButtons,
+  IonText,
 } from "@ionic/react";
 import {
-  businessOutline,
   briefcaseOutline,
   cloudUploadOutline,
 } from "ionicons/icons";
-
+import { useIonRouter } from "@ionic/react";
 
 type Categoria = {
   id: string;
@@ -39,19 +39,82 @@ type Categoria = {
 type ImagenPreview = {
   file: File;
   url: string;
+  data?: string; // <-- base64 para persistir
 };
 
+// Persistencia simple (sin backend)
+type Publicacion = {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  categoriaId: string;
+  categoriaNombre: string;
+  tarifaCOP: number;
+  disponibilidad: string;
+  ubicacion: string;
+  imagenes: string[]; // base64 o URLs
+  createdAt: string;
+};
+const STORAGE_KEY = "serviprox_publicaciones";
+
+const loadPublicaciones = (): Publicacion[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Publicacion[]) : [];
+  } catch {
+    return [];
+  }
+};
+const savePublicaciones = (items: Publicacion[]) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+};
+const addPublicacion = (p: Publicacion) => {
+  const items = loadPublicaciones();
+  items.unshift(p);
+  savePublicaciones(items);
+};
+const removePublicacion = (id: string) => {
+  const items = loadPublicaciones().filter((x) => x.id !== id);
+  savePublicaciones(items);
+};
+
+// Helper: leer archivo como base64
+const readFileAsDataURL = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+
+const PAISES = [
+  { value: 'CO', label: 'Colombia' },
+  { value: 'AR', label: 'Argentina' },
+  { value: 'CL', label: 'Chile' },
+  { value: 'PE', label: 'Perú' },
+  { value: 'BR', label: 'Brasil' },
+  { value: 'EC', label: 'Ecuador' },
+  { value: 'UY', label: 'Uruguay' },
+  { value: 'PY', label: 'Paraguay' },
+  { value: 'BO', label: 'Bolivia' },
+
+];
+
 export default function Publicar() {
-  const [segment, setSegment] = useState<"espacio" | "servicio">("servicio");
+  // Reajuste: solo existe el segmento "servicio"
+  const router = useIonRouter();
+
+  // Segment ampliado
+  const [segment, setSegment] = useState<"publicar" | "publicaciones" | "reservas">("publicar");
 
   const categorias: Categoria[] = useMemo(
     () => [
-    { id: "tecno_diseno",      nombre: "Tecnología y Diseño" },
-    { id: "mantenimiento",     nombre: "Mantenimiento y Reparaciones" },
-    { id: "cuidado_mascota",   nombre: "Cuidado mascota" },
-    { id: "seguridad_privada", nombre: "Servicio de seguridad privada" },
-    { id: "foto_video",        nombre: "Foto y Video" },
-    { id: "educacion_tutoria", nombre: "Educación y entrenador "},
+      { id: "tecno_diseno", nombre: "Tecnología y Diseño" },
+      { id: "mantenimiento", nombre: "Mantenimiento y Reparaciones" },
+      { id: "cuidado_mascota", nombre: "Cuidado mascota" },
+      { id: "seguridad_privada", nombre: "Servicio de seguridad privada" },
+      { id: "foto_video", nombre: "Foto y Video" },
+      { id: "educacion_tutoria", nombre: "Educación y entrenador" }, // quitado espacio final
     ],
     []
   );
@@ -64,13 +127,33 @@ export default function Publicar() {
   const [disponibilidad, setDisponibilidad] = useState(
     "Ej: L-V 9am-6pm, Fines de semana contactar."
   );
-  const [ubicacion, setUbicacion] = useState(
-    "Ej: Remoto, Bogotá, Medellín y alrededores"
-  );
+  // Estado de ubicación desglosado
+  const [pais, setPais] = useState("CO");
+  const [departamento, setDepartamento] = useState("");
+  const [ciudad, setCiudad] = useState("");
+  const [barrio, setBarrio] = useState("");
+  const [direccion, setDireccion] = useState("");
+
   const [imagenes, setImagenes] = useState<ImagenPreview[]>([]);
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string>(""); // <-- mensaje del toast
   const [presentAlert] = useIonAlert();
   const inputArchivoRef = useRef<HTMLInputElement | null>(null);
+
+  // Estado de publicaciones cargadas
+  const [publicaciones, setPublicaciones] = useState<Publicacion[]>([]);
+  const refreshPublicaciones = () => setPublicaciones(loadPublicaciones());
+  useEffect(() => {
+    refreshPublicaciones();
+  }, []);
+
+  // Redirigir cuando se selecciona "reservas"
+  useEffect(() => {
+    if (segment === "reservas") {
+      router.push("/reservas");
+      setSegment("publicar");
+    }
+  }, [segment, router]);
 
   // Helpers
   const formatoCOP = (valor: number) =>
@@ -90,7 +173,7 @@ export default function Publicar() {
     });
   };
 
-  const validarArchivos = (files: FileList) => {
+  const validarArchivos = async (files: FileList) => {
     const aceptados = ["image/png", "image/jpeg", "image/webp"];
     const maxMB = 5;
     const maxArchivos = 8;
@@ -100,7 +183,7 @@ export default function Publicar() {
     const toArray = Array.from(files).slice(0, resto);
 
     const invalidos: string[] = [];
-    const nuevos: ImagenPreview[] = [];
+    const pendientes: File[] = [];
 
     toArray.forEach((f) => {
       if (!aceptados.includes(f.type)) {
@@ -111,7 +194,7 @@ export default function Publicar() {
         invalidos.push(`${f.name} (> ${maxMB} MB)`);
         return;
       }
-      nuevos.push({ file: f, url: URL.createObjectURL(f) });
+      pendientes.push(f);
     });
 
     if (invalidos.length) {
@@ -124,18 +207,24 @@ export default function Publicar() {
       });
     }
 
-    if (nuevos.length) {
+    if (pendientes.length) {
+      const nuevos = await Promise.all(
+        pendientes.map(async (f) => {
+          const data = await readFileAsDataURL(f);
+          return { file: f, url: URL.createObjectURL(f), data } as ImagenPreview;
+        })
+      );
       setImagenes((prev) => [...prev, ...nuevos]);
     }
   };
 
-  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const onDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    if (e.dataTransfer?.files?.length) validarArchivos(e.dataTransfer.files);
+    if (e.dataTransfer?.files?.length) await validarArchivos(e.dataTransfer.files);
   };
 
-  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.length) validarArchivos(e.target.files);
+  const onPickFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) await validarArchivos(e.target.files);
     if (inputArchivoRef.current) inputArchivoRef.current.value = "";
   };
 
@@ -159,11 +248,48 @@ export default function Publicar() {
       return;
     }
 
-    // Aquí integrarías la llamada a tu backend…
-    // const payload = {...}
-    // await api.post('/servicios', payload)
+    // Construir objeto de publicación y persistir en localStorage
+    const cat = categorias.find((c) => c.id === categoriaId);
+    const id = String(Date.now());
+    const pub: Publicacion = {
+      id,
+      titulo: titulo.trim(),
+      descripcion: descripcion.trim(),
+      categoriaId: categoriaId!,
+      categoriaNombre: cat?.nombre ?? "",
+      tarifaCOP: desformatearNumero(tarifa),
+      disponibilidad: disponibilidad.trim(),
+      // Unir campos de ubicación en una sola cadena, incluyendo el país
+      ubicacion: [pais, departamento, ciudad, barrio, direccion].filter(Boolean).join(", "),
+      imagenes: imagenes.map((p) => p.data || p.url),
+      createdAt: new Date().toISOString(),
+    };
+    addPublicacion(pub);
+    refreshPublicaciones();
 
+    setToastMessage("Publicación creada");
     setShowToast(true);
+    // Opcional: limpiar formulario
+    setTitulo("");
+    setDescripcion("");
+    setCategoriaId(undefined);
+    setTarifa("");
+    setDisponibilidad("Ej: L-V 9am-6pm, Fines de semana contactar.");
+    // Limpiar campos de ubicación
+    setPais("CO"); // Resetear país
+    setDepartamento("");
+    setCiudad("");
+    setBarrio("");
+    setDireccion("");
+    setImagenes([]);
+  };
+
+  // Nuevo: eliminar individual
+  const eliminarPublicacion = (id: string) => {
+    removePublicacion(id);
+    setToastMessage("Publicación eliminada");
+    setShowToast(true);
+    refreshPublicaciones();
   };
 
   return (
@@ -177,222 +303,304 @@ export default function Publicar() {
         </IonToolbar>
       </IonHeader>
 
-      <IonContent fullscreen className="ps-content">
-        <div className="ps-container">
-          <IonSegment
-            value={segment}
-            onIonChange={(e) =>
-              setSegment(e.detail.value as "espacio" | "servicio")
-            }
-            className="ps-segment"
-          >
-            
-            <IonSegmentButton value="servicio">
-              <IonIcon icon={briefcaseOutline} />
-              <IonLabel>Servicio Independiente</IonLabel>
-            </IonSegmentButton>
-          </IonSegment>
+        <IonContent fullscreen className="ps-content">
+          <IonText className="ps-container">
+            {/* Nuevo IonSegment */}
+            <IonSegment
+              value={segment}
+              onIonChange={e => setSegment(e.detail.value as any)}
+              className="ps-segment"
+            >
+              <IonSegmentButton value="publicar">
+                <IonIcon icon={briefcaseOutline} />
+                <IonLabel>Publicar</IonLabel>
+              </IonSegmentButton>
+              <IonSegmentButton value="publicaciones">
+                <IonIcon icon={cloudUploadOutline} />
+                <IonLabel>Mis Publicaciones</IonLabel>
+              </IonSegmentButton>
+            </IonSegment>
 
-          <h2 className="ps-subtitle">Publicar Servicio Independiente</h2>
-          <p className="ps-intro">
-            Describe tus servicios profesionales para que los clientes puedan
-            contactarte.
-          </p>
-
-          <IonGrid className="ps-form">
-            {/* Título */}
-            <IonRow>
-              <IonCol size="12">
-                <IonItem className="input-item" lines="none">
-                  <IonLabel position="stacked">Título del Servicio</IonLabel>
-                  <IonInput
-                    placeholder="Ej: Desarrollo Web Frontend Avanzado"
-                    value={titulo}
-                    onIonInput={(e) => setTitulo(String(e.detail.value ?? ""))}
-                  />
-                </IonItem>
-                <IonNote className="helper-note">
-                  Un título claro y atractivo para tu servicio.
-                </IonNote>
-              </IonCol>
-            </IonRow>
-
-            {/* Descripción */}
-            <IonRow>
-              <IonCol size="12">
-                <IonItem className="input-item" lines="none">
-                  <IonLabel position="stacked">
-                    Descripción Detallada del Servicio
-                  </IonLabel>
-                  <IonTextarea
-                    autoGrow
-                    placeholder="Describe tu servicio, qué ofreces, tu experiencia, etc."
-                    value={descripcion}
-                    onIonInput={(e) =>
-                      setDescripcion(String(e.detail.value ?? ""))
-                    }
-                  />
-                </IonItem>
-                <IonNote className="helper-note">
-                  Proporciona detalles completos sobre tu servicio para atraer
-                  clientes.
-                </IonNote>
-              </IonCol>
-            </IonRow>
-
-            {/* Categoría y Tarifa */}
-            <IonRow className="gap-row">
-              <IonCol sizeMd="7" size="12">
-                <IonItem className="input-item" lines="none">
-                  <IonLabel position="stacked">Categoría del Servicio</IonLabel>
-                  <IonSelect
-                    interface="popover"
-                    placeholder="Selecciona una categoría"
-                    value={categoriaId}
-                    onIonChange={(e) => setCategoriaId(e.detail.value)}
-                  >
-                    {categorias.map((c) => (
-                      <IonSelectOption value={c.id} key={c.id}>
-                        {c.nombre}
-                      </IonSelectOption>
-                    ))}
-                  </IonSelect>
-                </IonItem>
-                <IonNote className="helper-note">
-                  Elige la categoría que mejor describa tu servicio.
-                </IonNote>
-              </IonCol>
-
-              <IonCol sizeMd="5" size="12">
-                <IonItem className="input-item" lines="none">
-                  <IonLabel position="stacked">Tarifa</IonLabel>
-                  <IonInput
-                    inputmode="numeric"
-                    placeholder="$ 75.000"
-                    value={tarifa}
-                    onIonInput={(e) => setTarifa(String(e.detail.value ?? ""))}
-                    onIonBlur={formatearTarifaEnBlur}
-                  />
-                </IonItem>
-                <IonNote className="helper-note">
-                  Ingresa tu tarifa. Esta categoría puede ser por proyecto u
-                  hora.
-                </IonNote>
-              </IonCol>
-            </IonRow>
-
-            {/* Disponibilidad */}
-            <IonRow>
-              <IonCol size="12">
-                <IonItem className="input-item" lines="none">
-                  <IonLabel position="stacked">Disponibilidad</IonLabel>
-                  <IonInput
-                    value={disponibilidad}
-                    onIonInput={(e) =>
-                      setDisponibilidad(String(e.detail.value ?? ""))
-                    }
-                  />
-                </IonItem>
-                <IonNote className="helper-note">
-                  Indica tus horarios y días de trabajo.
-                </IonNote>
-              </IonCol>
-            </IonRow>
-
-            {/* Ubicación */}
-            <IonRow>
-              <IonCol size="12">
-                <IonItem className="input-item" lines="none">
-                  <IonLabel position="stacked">
-                    Ubicación / Área de Servicio
-                  </IonLabel>
-                  <IonInput
-                    value={ubicacion}
-                    onIonInput={(e) =>
-                      setUbicacion(String(e.detail.value ?? ""))
-                    }
-                  />
-                </IonItem>
-                <IonNote className="helper-note">
-                  Especifica dónde ofreces tus servicios. Escribe “Remoto” si
-                  aplica.
-                </IonNote>
-              </IonCol>
-            </IonRow>
-
-            {/* Upload */}
-            <IonRow>
-              <IonCol size="12">
-                <div
-                  className="upload-dropzone"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={onDrop}
-                  onClick={() => inputArchivoRef.current?.click()}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <IonIcon icon={cloudUploadOutline} />
-                  <div className="upload-text-1">
-                    Haz clic para subir o arrastra y suelta
-                  </div>
-                  <div className="upload-text-2">
-                    PNG, JPG, WEBP (MAX 5 MB por imagen)
-                  </div>
-                  <input
-                    ref={inputArchivoRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    multiple
-                    hidden
-                    onChange={onPickFiles}
-                  />
-                </div>
-
-                {imagenes.length > 0 && (
-                  <div className="thumbs">
-                    {imagenes.map((img) => (
-                      <div className="thumb" key={img.url}>
-                        <img src={img.url} alt={img.file.name} />
-                        <button
-                          type="button"
-                          className="thumb-remove"
-                          onClick={() => eliminarImagen(img.url)}
-                          aria-label="Eliminar imagen"
+            {segment === "publicar" && (
+              <>
+                <h2 className="ps-subtitle">Publicar Servicio Independiente</h2>
+                <p className="ps-intro">
+                  Describe tus servicios profesionales para que los clientes puedan
+                  contactarte.
+                </p>
+    
+                <IonGrid className="ps-form">
+                  {/* Título */}
+                  <IonRow>
+                    <IonCol size="12">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Título del Servicio</IonLabel>
+                        <IonInput
+                          placeholder="Ej: Desarrollo Web Frontend Avanzado"
+                          value={titulo}
+                          onIonInput={(e) => setTitulo(String(e.detail.value ?? ""))}
+                        />
+                      </IonItem>
+                      <IonNote className="helper-note">
+                        Un título claro y atractivo para tu servicio.
+                      </IonNote>
+                    </IonCol>
+                  </IonRow>
+    
+                  {/* Descripción */}
+                  <IonRow>
+                    <IonCol size="12">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">
+                          Descripción Detallada del Servicio
+                        </IonLabel>
+                        <IonTextarea
+                          autoGrow
+                          placeholder="Describe tu servicio, qué ofreces, tu experiencia, etc."
+                          value={descripcion}
+                          onIonInput={(e) =>
+                            setDescripcion(String(e.detail.value ?? ""))
+                          }
+                        />
+                      </IonItem>
+                      <IonNote className="helper-note">
+                        Proporciona detalles completos sobre tu servicio para atraer
+                        clientes.
+                      </IonNote>
+                    </IonCol>
+                  </IonRow>
+    
+                  {/* Categoría y Tarifa */}
+                  <IonRow className="gap-row">
+                    <IonCol sizeMd="7" size="12">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Categoría del Servicio</IonLabel>
+                        <IonSelect
+                          interface="popover"
+                          placeholder="Selecciona una categoría"
+                          value={categoriaId}
+                          onIonChange={(e) => setCategoriaId(e.detail.value)}
                         >
-                          ×
-                        </button>
+                          {categorias.map((c) => (
+                            <IonSelectOption value={c.id} key={c.id}>
+                              {c.nombre}
+                            </IonSelectOption>
+                          ))}
+                        </IonSelect>
+                      </IonItem>
+                      <IonNote className="helper-note">
+                        Elige la categoría que mejor describa tu servicio.
+                      </IonNote>
+                    </IonCol>
+    
+                    <IonCol sizeMd="5" size="12">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Tarifa</IonLabel>
+                        <IonInput
+                          inputmode="numeric"
+                          placeholder="$ 75.000"
+                          value={tarifa}
+                          onIonInput={(e) => setTarifa(String(e.detail.value ?? ""))}
+                          onIonBlur={formatearTarifaEnBlur}
+                        />
+                      </IonItem>
+                      <IonNote className="helper-note">
+                        Ingresa tu tarifa. Esta categoría puede ser por proyecto u
+                        hora.
+                      </IonNote>
+                    </IonCol>
+                  </IonRow>
+    
+                  {/* Disponibilidad */}
+                  <IonRow>
+                    <IonCol size="12">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Disponibilidad</IonLabel>
+                        <IonInput
+                          value={disponibilidad}
+                          onIonInput={(e) =>
+                            setDisponibilidad(String(e.detail.value ?? ""))
+                          }
+                        />
+                      </IonItem>
+                      <IonNote className="helper-note">
+                        Indica tus horarios y días de trabajo.
+                      </IonNote>
+                    </IonCol>
+                  </IonRow>
+    
+                  {/* Ubicación desglosada */}
+                  <IonRow>
+                    <IonCol size="12">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">País</IonLabel>
+                        <IonSelect
+                          interface="popover"
+                          placeholder="Selecciona un país"
+                          value={pais}
+                          onIonChange={(e) => setPais(e.detail.value)}
+                        >
+                          {PAISES.map((p) => (
+                            <IonSelectOption value={p.value} key={p.value}>
+                              {p.label}
+                            </IonSelectOption>
+                          ))}
+                        </IonSelect>
+                      </IonItem>
+                    </IonCol>
+                  </IonRow>
+                  <IonRow className="gap-row">
+                    <IonCol size="12" sizeMd="6">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Departamento</IonLabel>
+                        <IonInput
+                          placeholder="Ej: Antioquia"
+                          value={departamento}
+                          onIonInput={(e) => setDepartamento(String(e.detail.value ?? ""))}
+                        />
+                      </IonItem>
+                    </IonCol>
+                    <IonCol size="12" sizeMd="6">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Ciudad</IonLabel>
+                        <IonInput
+                          placeholder="Ej: Medellín"
+                          value={ciudad}
+                          onIonInput={(e) => setCiudad(String(e.detail.value ?? ""))}
+                        />
+                      </IonItem>
+                    </IonCol>
+                  </IonRow>
+                  <IonRow className="gap-row">
+                    <IonCol size="12" sizeMd="6">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Barrio</IonLabel>
+                        <IonInput
+                          placeholder="Ej: El Poblado"
+                          value={barrio}
+                          onIonInput={(e) => setBarrio(String(e.detail.value ?? ""))}
+                        />
+                      </IonItem>
+                    </IonCol>
+                    <IonCol size="12" sizeMd="6">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Dirección (Opcional)</IonLabel>
+                        <IonInput
+                          placeholder="Ej: Calle 10 #43A-30"
+                          value={direccion}
+                          onIonInput={(e) => setDireccion(String(e.detail.value ?? ""))}
+                        />
+                      </IonItem>
+                    </IonCol>
+                  </IonRow>
+                  <IonRow>
+                    <IonCol>
+                      <IonNote className="helper-note">
+                        Especifica la ubicación para servicios presenciales.
+                      </IonNote>
+                    </IonCol>
+                  </IonRow>
+    
+                  {/* Upload */}
+                  <IonRow>
+                    <IonCol size="12">
+                      <div
+                        className="upload-dropzone"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={onDrop}
+                        onClick={() => inputArchivoRef.current?.click()}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <IonIcon icon={cloudUploadOutline} />
+                        <div className="upload-text-1">
+                          Haz clic para subir o arrastra y suelta
+                        </div>
+                        <div className="upload-text-2">
+                          PNG, JPG, WEBP (MAX 5 MB por imagen)
+                        </div>
+                        <input
+                          ref={inputArchivoRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          multiple
+                          hidden
+                          onChange={onPickFiles}
+                        />
                       </div>
-                    ))}
-                  </div>
+    
+                      {imagenes.length > 0 && (
+                        <div className="thumbs">
+                          {imagenes.map((img) => (
+                            <div className="thumb" key={img.url}>
+                              <img src={img.url} alt={img.file.name} />
+                              <button
+                                type="button"
+                                className="thumb-remove"
+                                onClick={() => eliminarImagen(img.url)}
+                                aria-label="Eliminar imagen"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+    
+                      <IonNote className="helper-note">
+                        Sube imágenes de trabajos previos, portafolio, etc.
+                      </IonNote>
+    
+                      {/* Acciones: publicar */}
+                      <div className="actions-row" style={{ marginTop: 16 }}>
+                        <IonButton expand="block" onClick={handleSubmit}>
+                          Publicar
+                        </IonButton>
+                      </div>
+                    </IonCol>
+                  </IonRow>
+                </IonGrid>
+    
+                {/* Toast para feedback */}
+                <IonToast
+                  isOpen={showToast}
+                  message={toastMessage}
+                  duration={2000}
+                  onDidDismiss={() => setShowToast(false)}
+                />
+              </>
+            )}
+
+            {segment === "publicaciones" && (
+              <div className="mis-publicaciones">
+                <h2>Mis Publicaciones</h2>
+                {publicaciones.length === 0 && (
+                  <IonNote>No tienes publicaciones aún.</IonNote>
                 )}
+                {publicaciones.map(p => (
+                  <IonItem key={p.id} lines="none" className="pub-item">
+                    <IonLabel className="ion-text-wrap">
+                      <h3>{p.titulo}</h3>
+                      <p>{p.categoriaNombre} • {formatoCOP(p.tarifaCOP)}</p>
+                      <p>
+                        Creado: {new Date(p.createdAt).toLocaleDateString()} •
+                        Imágenes: {p.imagenes.length}
+                      </p>
+                    </IonLabel>
+                    <IonButton
+                      color="danger"
+                      size="small"
+                      onClick={() => eliminarPublicacion(p.id)}
+                    >
+                      Eliminar
+                    </IonButton>
+                  </IonItem>
+                ))}
+              </div>
+            )}
 
-                <IonNote className="helper-note">
-                  Sube imágenes de trabajos previos, portafolio, etc. (Opcional,
-                  hasta 8)
-                </IonNote>
-              </IonCol>
-            </IonRow>
-
-            {/* Submit */}
-            <IonRow>
-              <IonCol size="12" className="submit-wrap">
-                <IonButton size="default" onClick={handleSubmit}>
-                  Publicar Servicio Independiente
-                </IonButton>
-              </IonCol>
-            </IonRow>
-          </IonGrid>
-        </div>
-
-        <IonToast
-          isOpen={showToast}
-          duration={2500}
-          message="¡Tu servicio fue publicado!"
-          onDidDismiss={() => setShowToast(false)}
-        />
-      </IonContent>
-    </IonPage>
+          </IonText>
+        </IonContent>
+      </IonPage>
   );
 }
-
-
