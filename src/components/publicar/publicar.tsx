@@ -24,10 +24,12 @@ import {
   IonMenuButton,
   IonButtons,
   IonText,
+  IonDatetime,
 } from "@ionic/react";
 import {
   briefcaseOutline,
   cloudUploadOutline,
+  calendarClearOutline,
 } from "ionicons/icons";
 import { useIonRouter } from "@ionic/react";
 
@@ -124,9 +126,10 @@ export default function Publicar() {
   const [descripcion, setDescripcion] = useState("");
   const [categoriaId, setCategoriaId] = useState<string | undefined>(undefined);
   const [tarifa, setTarifa] = useState<string>(""); // cadena formateada
-  const [disponibilidad, setDisponibilidad] = useState(
-    "Ej: L-V 9am-6pm, Fines de semana contactar."
-  );
+  // Estado para disponibilidad
+  const [dias, setDias] = useState<string[]>([]);
+  const [horaInicio, setHoraInicio] = useState<string>("");
+  const [horaFin, setHoraFin] = useState<string>("");
   // Estado de ubicación desglosado
   const [pais, setPais] = useState("CO");
   const [departamento, setDepartamento] = useState("");
@@ -248,9 +251,20 @@ export default function Publicar() {
       return;
     }
 
+    // Helper para formatear la hora desde ISO string
+    const formatTime = (isoString: string) => {
+      if (!isoString) return "";
+      try {
+        return new Date(isoString).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true });
+      } catch {
+        return "";
+      }
+    };
+
     // Construir objeto de publicación y persistir en localStorage
     const cat = categorias.find((c) => c.id === categoriaId);
     const id = String(Date.now());
+    const disponibilidadString = `Días: ${dias.join(', ')}. Horario: ${formatTime(horaInicio)} - ${formatTime(horaFin)}`;
     const pub: Publicacion = {
       id,
       titulo: titulo.trim(),
@@ -258,7 +272,7 @@ export default function Publicar() {
       categoriaId: categoriaId!,
       categoriaNombre: cat?.nombre ?? "",
       tarifaCOP: desformatearNumero(tarifa),
-      disponibilidad: disponibilidad.trim(),
+      disponibilidad: disponibilidadString,
       // Unir campos de ubicación en una sola cadena, incluyendo el país
       ubicacion: [pais, departamento, ciudad, barrio, direccion].filter(Boolean).join(", "),
       imagenes: imagenes.map((p) => p.data || p.url),
@@ -274,7 +288,10 @@ export default function Publicar() {
     setDescripcion("");
     setCategoriaId(undefined);
     setTarifa("");
-    setDisponibilidad("Ej: L-V 9am-6pm, Fines de semana contactar.");
+    // Limpiar disponibilidad
+    setDias([]);
+    setHoraInicio("");
+    setHoraFin("");
     // Limpiar campos de ubicación
     setPais("CO"); // Resetear país
     setDepartamento("");
@@ -286,10 +303,23 @@ export default function Publicar() {
 
   // Nuevo: eliminar individual
   const eliminarPublicacion = (id: string) => {
-    removePublicacion(id);
-    setToastMessage("Publicación eliminada");
-    setShowToast(true);
-    refreshPublicaciones();
+    presentAlert({
+      header: 'Confirmar eliminación',
+      message: '¿Estás seguro de que quieres eliminar esta publicación?',
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        {
+          text: 'Eliminar',
+          role: 'destructive',
+          handler: () => {
+            removePublicacion(id);
+            setToastMessage("Publicación eliminada");
+            setShowToast(true);
+            refreshPublicaciones();
+          },
+        },
+      ],
+    });
   };
 
   return (
@@ -318,6 +348,10 @@ export default function Publicar() {
               <IonSegmentButton value="publicaciones">
                 <IonIcon icon={cloudUploadOutline} />
                 <IonLabel>Mis Publicaciones</IonLabel>
+              </IonSegmentButton>
+              <IonSegmentButton value="reservas">
+                <IonIcon icon={calendarClearOutline} />
+                <IonLabel>Mis Reservas</IonLabel>
               </IonSegmentButton>
             </IonSegment>
 
@@ -412,17 +446,56 @@ export default function Publicar() {
                   </IonRow>
     
                   {/* Disponibilidad */}
-                  <IonRow>
+                  <IonRow className="gap-row">
                     <IonCol size="12">
                       <IonItem className="input-item" lines="none">
-                        <IonLabel position="stacked">Disponibilidad</IonLabel>
-                        <IonInput
-                          value={disponibilidad}
-                          onIonInput={(e) =>
-                            setDisponibilidad(String(e.detail.value ?? ""))
-                          }
+                        <IonLabel position="stacked">Días Disponibles</IonLabel>
+                        <IonSelect
+                          multiple={true}
+                          interface="popover"
+                          placeholder="Selecciona los días"
+                          value={dias}
+                          onIonChange={(e) => setDias(e.detail.value)}
+                        >
+                          <IonSelectOption value="Lunes">Lunes</IonSelectOption>
+                          <IonSelectOption value="Martes">Martes</IonSelectOption>
+                          <IonSelectOption value="Miércoles">Miércoles</IonSelectOption>
+                          <IonSelectOption value="Jueves">Jueves</IonSelectOption>
+                          <IonSelectOption value="Viernes">Viernes</IonSelectOption>
+                          <IonSelectOption value="Sábado">Sábado</IonSelectOption>
+                          <IonSelectOption value="Domingo">Domingo</IonSelectOption>
+                        </IonSelect>
+                      </IonItem>
+                    </IonCol>
+                  </IonRow>
+                  <IonRow className="gap-row">
+                    <IonCol size="12" sizeMd="6">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Hora de inicio</IonLabel>
+                        <IonDatetime
+                          presentation="time"
+                          preferWheel={true}
+                          aria-label="Selecciona hora"
+                          value={horaInicio}
+                          onIonChange={(e) => setHoraInicio(String(e.detail.value ?? ""))}
                         />
                       </IonItem>
+                    </IonCol>
+                    <IonCol size="12" sizeMd="6">
+                      <IonItem className="input-item" lines="none">
+                        <IonLabel position="stacked">Hora de fin</IonLabel>
+                        <IonDatetime
+                          presentation="time"
+                          preferWheel={true}
+                          aria-label="Selecciona hora"
+                          value={horaFin}
+                          onIonChange={(e) => setHoraFin(String(e.detail.value ?? ""))}
+                        />
+                      </IonItem>
+                    </IonCol>
+                  </IonRow>
+                  <IonRow>
+                    <IonCol>
                       <IonNote className="helper-note">
                         Indica tus horarios y días de trabajo.
                       </IonNote>

@@ -19,8 +19,9 @@ import {
   IonText,
   IonSegment,
   IonSegmentButton,
+  useIonRouter,
 } from "@ionic/react";
-import { mailOutline, callOutline } from "ionicons/icons"; // quitado eyeOutline
+import { mailOutline, callOutline, cloudUploadOutline } from "ionicons/icons"; // quitado eyeOutline
 import "./misreserva.css";
 
 type Estado = "Programado" | "Completado" | "Cancelado";
@@ -64,9 +65,10 @@ const badgeColor = (es?: Estado) =>
   es === "Programado" ? "primary" : es === "Completado" ? "success" : "danger";
 
 export default function TablaReservas() {
+  const router = useIonRouter();
   const [openId, setOpenId] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  type Rol = "usuario" | "profesional";
+  type Rol = "usuario" | "profesional" | "publicaciones";
   const [rol, setRol] = useState<Rol>("usuario");
 
   // Nuevo: estado de datos desde servicio/base JSON
@@ -75,6 +77,12 @@ export default function TablaReservas() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (rol === "publicaciones") {
+      router.push("/publicar");
+      setRol("usuario"); // Reset segment to avoid being stuck
+      return;
+    }
+
     const ac = new AbortController();
     (async () => {
       try {
@@ -101,7 +109,7 @@ export default function TablaReservas() {
       }
     })();
     return () => ac.abort();
-  }, []);
+  }, [rol]);
 
   const items = useMemo(() => {
     const k = q.trim().toLowerCase();
@@ -155,6 +163,10 @@ export default function TablaReservas() {
         >
           <IonSegmentButton value="usuario">Usuario</IonSegmentButton>
           <IonSegmentButton value="profesional">Profesional</IonSegmentButton>
+          <IonSegmentButton value="publicaciones">
+            <IonIcon icon={cloudUploadOutline} />
+            <IonLabel>Mis Publicaciones</IonLabel>
+          </IonSegmentButton>
         </IonSegment>
 
         <IonSearchbar

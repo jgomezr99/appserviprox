@@ -41,7 +41,7 @@ interface AppPage {
 const appPages: AppPage[] = [
   { title: 'Home',              url: '/folder/inbox',      iosIcon: homeOutline,          mdIcon: homeSharp },
   { title: 'Servicios Job',     url: '/servicioJob/servicio',         iosIcon: briefcaseOutline,     mdIcon: briefcaseSharp },
-  { title: 'Publicar',          url: '/publicar',          iosIcon: cloudUploadOutline,   mdIcon: cloudUploadSharp },
+  { title: ' Publicaciones', url: '/publicar',          iosIcon: cloudUploadOutline,   mdIcon: cloudUploadSharp },
   { title: 'Mis Reservas',      url: '/reservas',          iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
   { title: 'Mis Favoritos',     url: '/misfavorito',         iosIcon: heartOutline,         mdIcon: heartSharp },
   { title: 'Historia de pago ', url: '/historialpago',       iosIcon: cardOutline,          mdIcon: cardSharp },
