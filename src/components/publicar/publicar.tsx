@@ -142,6 +142,7 @@ export default function Publicar() {
   const [toastMessage, setToastMessage] = useState<string>(""); // <-- mensaje del toast
   const [presentAlert] = useIonAlert();
   const inputArchivoRef = useRef<HTMLInputElement | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
   // Estado de publicaciones cargadas
   const [publicaciones, setPublicaciones] = useState<Publicacion[]>([]);
@@ -204,7 +205,7 @@ export default function Publicar() {
       presentAlert({
         header: "Archivo no permitido",
         message:
-          "Revisa tipo (PNG/JPG/WEBP) y tamaño (máx. 5 MB):<br/>• " +
+          "Revisa tipo (PNG/JPG/WEBP) y tamaño (máx. 5 MB): " +
           invalidos.join("<br/>• "),
         buttons: ["Entendido"],
       });
@@ -236,17 +237,23 @@ export default function Publicar() {
   };
 
   const handleSubmit = async () => {
+    setSubmitted(true);
     const errores: string[] = [];
     if (!titulo.trim()) errores.push("El título es obligatorio.");
-    if (!descripcion.trim() || descripcion.trim().length < 20)
-      errores.push("La descripción debe tener al menos 20 caracteres.");
+    if (!descripcion.trim() || descripcion.trim().length < 20) errores.push("La descripción debe tener al menos 20 caracteres.");
     if (!categoriaId) errores.push("Selecciona una categoría.");
-    if (!tarifa) errores.push("Ingresa la tarifa.");
+    if (!tarifa || desformatearNumero(tarifa) === 0) errores.push("Ingresa una tarifa válida.");
+    if (dias.length === 0) errores.push("Selecciona al menos un día de disponibilidad.");
+    if (!horaInicio) errores.push("Selecciona la hora de inicio.");
+    if (!horaFin) errores.push("Selecciona la hora de fin.");
+    if (!departamento.trim()) errores.push("Ingresa el departamento.");
+    if (!ciudad.trim()) errores.push("Ingresa la ciudad.");
+    if (!barrio.trim()) errores.push("Ingresa el barrio.");
     if (errores.length) {
       presentAlert({
-        header: "Revisa el formulario",
-        message: "• " + errores.join("<br/>• "),
-        buttons: ["Ok"],
+        header: "Formulario incompleto",
+        message: errores.map((p) => `• ${p}`).join("\n"),
+        buttons: ["Entendido"],
       });
       return;
     }
@@ -283,6 +290,7 @@ export default function Publicar() {
 
     setToastMessage("Publicación creada");
     setShowToast(true);
+    router.push("/servicioJob/servicio");
     // Opcional: limpiar formulario
     setTitulo("");
     setDescripcion("");
@@ -299,6 +307,7 @@ export default function Publicar() {
     setBarrio("");
     setDireccion("");
     setImagenes([]);
+    setSubmitted(false);
   };
 
   // Nuevo: eliminar individual
@@ -357,8 +366,8 @@ export default function Publicar() {
 
             {segment === "publicar" && (
               <>
-                <h2 className="ps-subtitle">Publicar Servicio Independiente</h2>
-                <p className="ps-intro">
+                <h2 className="ps-subtitle ion-text-center">Publicar Servicio Independiente</h2>
+                <p className="ps-intro ion-text-center">
                   Describe tus servicios profesionales para que los clientes puedan
                   contactarte.
                 </p>
@@ -375,6 +384,7 @@ export default function Publicar() {
                           onIonInput={(e) => setTitulo(String(e.detail.value ?? ""))}
                         />
                       </IonItem>
+                      {submitted && !titulo.trim() && <IonNote color="danger">El título es obligatorio.</IonNote>}
                       <IonNote className="helper-note">
                         Un título claro y atractivo para tu servicio.
                       </IonNote>
@@ -397,6 +407,7 @@ export default function Publicar() {
                           }
                         />
                       </IonItem>
+                      {submitted && (descripcion.trim().length < 20) && <IonNote color="danger">Mínimo 20 caracteres.</IonNote>}
                       <IonNote className="helper-note">
                         Proporciona detalles completos sobre tu servicio para atraer
                         clientes.
@@ -422,6 +433,7 @@ export default function Publicar() {
                           ))}
                         </IonSelect>
                       </IonItem>
+                      {submitted && !categoriaId && <IonNote color="danger">Selecciona una categoría.</IonNote>}
                       <IonNote className="helper-note">
                         Elige la categoría que mejor describa tu servicio.
                       </IonNote>
@@ -438,6 +450,7 @@ export default function Publicar() {
                           onIonBlur={formatearTarifaEnBlur}
                         />
                       </IonItem>
+                      {submitted && (!tarifa || desformatearNumero(tarifa) === 0) && <IonNote color="danger">Ingresa una tarifa.</IonNote>}
                       <IonNote className="helper-note">
                         Ingresa tu tarifa. Esta categoría puede ser por proyecto u
                         hora.
@@ -466,32 +479,35 @@ export default function Publicar() {
                           <IonSelectOption value="Domingo">Domingo</IonSelectOption>
                         </IonSelect>
                       </IonItem>
+                      {submitted && dias.length === 0 && <IonNote color="danger">Selecciona al menos un día.</IonNote>}
                     </IonCol>
                   </IonRow>
                   <IonRow className="gap-row">
                     <IonCol size="12" sizeMd="6">
-                      <IonItem className="input-item" lines="none">
-                        <IonLabel position="stacked">Hora de inicio</IonLabel>
+                      <IonItem className="input-item datetime-item" lines="none">
+                        <IonLabel position="stacked" className="ion-text-center">Hora de inicio</IonLabel>
+                        <br />
                         <IonDatetime
                           presentation="time"
                           preferWheel={true}
-                          aria-label="Selecciona hora"
                           value={horaInicio}
-                          onIonChange={(e) => setHoraInicio(String(e.detail.value ?? ""))}
+                          onIonChange={(t) => setHoraInicio(String(t.detail.value ?? ""))}
                         />
                       </IonItem>
+                      {submitted && !horaInicio && <IonNote color="danger">Hora inicio requerida.</IonNote>}
                     </IonCol>
                     <IonCol size="12" sizeMd="6">
-                      <IonItem className="input-item" lines="none">
-                        <IonLabel position="stacked">Hora de fin</IonLabel>
+                      <IonItem className="input-item datetime-item" lines="none">
+                        <IonLabel position="stacked" className="ion-text-center">Hora de fin</IonLabel>
+                        <br />
                         <IonDatetime
                           presentation="time"
                           preferWheel={true}
-                          aria-label="Selecciona hora"
                           value={horaFin}
-                          onIonChange={(e) => setHoraFin(String(e.detail.value ?? ""))}
+                          onIonChange={(tf) => setHoraFin(String(tf.detail.value ?? ""))}
                         />
                       </IonItem>
+                      {submitted && !horaFin && <IonNote color="danger">Hora fin requerida.</IonNote>}
                     </IonCol>
                   </IonRow>
                   <IonRow>
@@ -532,6 +548,7 @@ export default function Publicar() {
                           onIonInput={(e) => setDepartamento(String(e.detail.value ?? ""))}
                         />
                       </IonItem>
+                      {submitted && !departamento.trim() && <IonNote color="danger">Requerido.</IonNote>}
                     </IonCol>
                     <IonCol size="12" sizeMd="6">
                       <IonItem className="input-item" lines="none">
@@ -542,6 +559,7 @@ export default function Publicar() {
                           onIonInput={(e) => setCiudad(String(e.detail.value ?? ""))}
                         />
                       </IonItem>
+                      {submitted && !ciudad.trim() && <IonNote color="danger">Requerido.</IonNote>}
                     </IonCol>
                   </IonRow>
                   <IonRow className="gap-row">
@@ -554,6 +572,7 @@ export default function Publicar() {
                           onIonInput={(e) => setBarrio(String(e.detail.value ?? ""))}
                         />
                       </IonItem>
+                      {submitted && !barrio.trim() && <IonNote color="danger">Requerido.</IonNote>}
                     </IonCol>
                     <IonCol size="12" sizeMd="6">
                       <IonItem className="input-item" lines="none">
@@ -579,7 +598,7 @@ export default function Publicar() {
                     <IonCol size="12">
                       <div
                         className="upload-dropzone"
-                        onDragOver={(e) => e.preventDefault()}
+                        onDragOver={(u) => u.preventDefault()}
                         onDrop={onDrop}
                         onClick={() => inputArchivoRef.current?.click()}
                         role="button"
@@ -676,4 +695,8 @@ export default function Publicar() {
         </IonContent>
       </IonPage>
   );
+}
+
+function setSubmitted(arg0: boolean) {
+  throw new Error("Function not implemented.");
 }

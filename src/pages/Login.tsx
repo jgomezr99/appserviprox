@@ -333,8 +333,8 @@ const Login: React.FC = () => {
                         required
                       />
                     </IonItem>
-                    {password !== "" && password.length < 6 && (
-                      <IonText className={styles.error}>Mínimo 6 caracteres</IonText>
+                    {password !== "" && password.length < 8 && (
+                      <IonText className={styles.error}>Mínimo 8 caracteres</IonText>
                     )}
                   </IonText>
 

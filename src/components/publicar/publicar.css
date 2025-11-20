@@ -76,3 +76,16 @@
   .desktop-only { display: block; }
   .mobile-only { display: none; }
 }
+
+/* Estilos para IonDatetime */
+.datetime-item {
+  --padding-start: 0;
+  --inner-padding-end: 0;
+}
+
+.datetime-item ion-datetime {
+  width: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 8px 12px;
+}

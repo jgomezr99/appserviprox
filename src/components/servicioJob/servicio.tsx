@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import {
   IonButton,
   IonCol,
@@ -66,21 +66,36 @@ type Service = {
   image?: string;
 };
 
+// Definición de Publicacion para leer localStorage
+type Publicacion = {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  categoriaId: string;
+  categoriaNombre: string;
+  tarifaCOP: number;
+  disponibilidad: string;
+  ubicacion: string;
+  imagenes: string[];
+  createdAt: string;
+};
+
 const CATEGORIES: Category[] = [
-  { id: "all",      label: "Todos",                          icon: sparklesOutline },
-  { id: "tech",     label: "Tecnología y\nDiseño",           icon: codeSlashOutline },
-  { id: "repair",   label: "Mantenimiento y\nReparaciones",  icon: constructOutline },
-  { id: "pets",     label: "Cuidado de mascotas",            icon: pawOutline },
-  { id: "security", label: "Servicio de\nseguridad privada", icon: shieldCheckmarkOutline },
-  { id: "photo",    label: "Foto y Video",                   icon: cameraOutline },
-  { id: "edu",      label: "Educación y\nEntrenador",           icon: schoolOutline },
+  { id: "all",               label: "Todos",                          icon: sparklesOutline },
+  { id: "tecno_diseno",      label: "Tecnología y\nDiseño",           icon: codeSlashOutline },
+  { id: "mantenimiento",     label: "Mantenimiento y\nReparaciones",  icon: constructOutline },
+  { id: "cuidado_mascota",   label: "Cuidado de mascotas",            icon: pawOutline },
+  { id: "seguridad_privada", label: "Servicio de\nseguridad privada", icon: shieldCheckmarkOutline },
+  { id: "foto_video",        label: "Foto y Video",                   icon: cameraOutline },
+  { id: "educacion_tutoria", label: "Educación y\nEntrenador",        icon: schoolOutline },
 ];
 
-const SERVICES: Service[] = [
+// Servicios estáticos
+const STATIC_SERVICES: Service[] = [
   {
     id: "s1",
     title: "Desarrollo Web Frontend",
-    categoryId: "tech",
+    categoryId: "tecno_diseno",
     categoryLabel: "Tecnología",
     price: "$75.000 por proyecto",
     professional: "Carlos Rodríguez",
@@ -92,7 +107,7 @@ const SERVICES: Service[] = [
   {
     id: "s2",
     title: "Entrenamiento Fitness Personalizado",
-    categoryId: "edu",
+    categoryId: "educacion_tutoria",
     categoryLabel: "Entrenador Personal",
     price: "$50.000 por hora",
     professional: "Ana García",
@@ -103,13 +118,13 @@ const SERVICES: Service[] = [
   {
     id: "s3",
     title: "Servicios de Contratista General",
-    categoryId: "repair",
+    categoryId: "mantenimiento",
     categoryLabel: "Contratista",
     price: "$80.000 por hora",
     professional: "Javier Gómez",
     rating: 4.5,
     location: "Bogotá y alrededores, Colombia",
-    image: "https://ibb.co/W44zjKsK"
+    image: "https://i.ibb.co/sdd1z3t3/Servicios-Generales-Olusa-Contratisas-Generales-Peru.jpg"
   },
 ];
 
@@ -120,6 +135,35 @@ const parsePrice = (price: string) => {
 };
 
 const ServicioJob: React.FC = () => {
+  // Estado para servicios combinados
+  const [allServices, setAllServices] = useState<Service[]>(STATIC_SERVICES);
+
+  // Cargar publicaciones dinámicas al montar
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("serviprox_publicaciones");
+      if (raw) {
+        const pubs = JSON.parse(raw) as Publicacion[];
+        const dynamicServices: Service[] = pubs.map((p) => ({
+          id: p.id,
+          title: p.titulo,
+          categoryId: p.categoriaId, // Asegúrate de que coincida con los IDs de CATEGORIES si quieres filtrado exacto
+          categoryLabel: p.categoriaNombre,
+          price: `$${p.tarifaCOP.toLocaleString("es-CO")}`,
+          professional: "Usuario Local", // O el nombre del usuario logueado
+          rating: 5.0, // Valor por defecto para nuevos
+          location: p.ubicacion,
+          isRemote: p.ubicacion.toLowerCase().includes("remoto"),
+          image: p.imagenes[0] || "https://via.placeholder.com/300?text=Sin+Imagen",
+        }));
+        // Mostrar publicaciones nuevas primero
+        setAllServices([...dynamicServices, ...STATIC_SERVICES]);
+      }
+    } catch (e) {
+      console.error("Error cargando publicaciones", e);
+    }
+  }, []);
+
   // Filtro por tarjeta
   const [selectedCategory, setSelectedCategory] = useState<string>(""); // "" = todas
 
@@ -152,7 +196,7 @@ const ServicioJob: React.FC = () => {
     const term = searchTerm.trim().toLowerCase();
     const loc = locationFilter.trim().toLowerCase();
 
-    return SERVICES.filter((s) => {
+    return allServices.filter((s) => {
       const byCat =
         selectedCategory === "" || selectedCategory === "all"
           ? true
@@ -176,7 +220,7 @@ const ServicioJob: React.FC = () => {
 
       return byCat && byText && byLocation && byRating && byPrice;
     });
-  }, [selectedCategory, searchTerm, locationFilter, minRating, maxPrice]);
+  }, [selectedCategory, searchTerm, locationFilter, minRating, maxPrice, allServices]);
 
   // Favoritos: ids guardados en localStorage
   const [favoritos, setFavoritos] = useState<string[]>(() => {
