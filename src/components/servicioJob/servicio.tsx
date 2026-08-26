@@ -92,16 +92,15 @@ const CATEGORIES: Category[] = [
 // Servicios estáticos
 const STATIC_SERVICES: Service[] = [
   {
-    id: "s1",
-    title: "Desarrollo Web Frontend",
-    categoryId: "tecno_diseno",
-    categoryLabel: "Tecnología",
-    price: "$75.000 por proyecto",
-    professional: "Carlos Rodríguez",
-    rating: 4.7,
-    location: "Remoto",
-    isRemote: true,
-    image: "https://images.unsplash.com/photo-1587620962725-abab7fe55159?q=80&w=2000&auto=format&fit=crop"
+     id: "s1",
+    title: "Servicio de Remodelación",
+    categoryId: "mantenimiento",
+    categoryLabel: "Contratista",
+    price: "$90.000 por hora",
+    professional: "Camilo Gómez",
+    rating: 4.1,
+    location: "Bogotá, alrededores ",
+    image: "https://client-setting-co-institucional-images.s3.amazonaws.com/credito_para_remodelar_vivienda_f2f5661138.jpg"
   },
   {
     id: "s2",
