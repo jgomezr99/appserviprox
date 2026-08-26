@@ -82,7 +82,7 @@ type Publicacion = {
 
 const CATEGORIES: Category[] = [
   { id: "all",               label: "Todos",                          icon: sparklesOutline },
-  { id: "tecno_diseno",      label: "Tecnología y\nDiseño",           icon: codeSlashOutline },
+ 
   { id: "mantenimiento",     label: "Mantenimiento y\nReparaciones",  icon: constructOutline },
   { id: "cuidado_mascota",   label: "Cuidado de mascotas",            icon: pawOutline },
  
