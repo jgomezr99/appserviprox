@@ -85,8 +85,7 @@ const CATEGORIES: Category[] = [
   { id: "tecno_diseno",      label: "Tecnología y\nDiseño",           icon: codeSlashOutline },
   { id: "mantenimiento",     label: "Mantenimiento y\nReparaciones",  icon: constructOutline },
   { id: "cuidado_mascota",   label: "Cuidado de mascotas",            icon: pawOutline },
-  { id: "seguridad_privada", label: "Servicio de\nseguridad privada", icon: shieldCheckmarkOutline },
-  { id: "foto_video",        label: "Foto y Video",                   icon: cameraOutline },
+ 
   { id: "educacion_tutoria", label: "Educación y\nEntrenador",        icon: schoolOutline },
 ];
 
