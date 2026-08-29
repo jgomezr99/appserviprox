@@ -93,12 +93,7 @@ const PAISES = [
   { value: 'CO', label: 'Colombia' },
   { value: 'AR', label: 'Argentina' },
   { value: 'CL', label: 'Chile' },
-  { value: 'PE', label: 'Perú' },
-  { value: 'BR', label: 'Brasil' },
-  { value: 'EC', label: 'Ecuador' },
-  { value: 'UY', label: 'Uruguay' },
-  { value: 'PY', label: 'Paraguay' },
-  { value: 'BO', label: 'Bolivia' },
+
 
 ];
 
@@ -111,11 +106,9 @@ export default function Publicar() {
 
   const categorias: Categoria[] = useMemo(
     () => [
-      { id: "tecno_diseno", nombre: "Tecnología y Diseño" },
+     // { id: "tecno_diseno", nombre: "Tecnología y Diseño" },
       { id: "mantenimiento", nombre: "Mantenimiento y Reparaciones" },
-      { id: "cuidado_mascota", nombre: "Cuidado mascota" },
-      { id: "seguridad_privada", nombre: "Servicio de seguridad privada" },
-      { id: "foto_video", nombre: "Foto y Video" },
+     // { id: "cuidado_mascota", nombre: "Cuidado mascota" },
       { id: "educacion_tutoria", nombre: "Educación y entrenador" }, // quitado espacio final
     ],
     []
