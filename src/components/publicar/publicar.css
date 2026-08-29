@@ -1,91 +1,465 @@
-.container { padding: 12px 12px 24px; }
+/* =========================================================
+   PÁGINA PUBLICAR SERVICIO
+   ========================================================= */
 
-.toolbar-secondary {
-  --background: #fff;
-  border-top: 1px solid rgba(0,0,0,.06);
-  border-bottom: 1px solid rgba(0,0,0,.06);
+.ps-page {
+  --background: #f5f7fb;
 }
 
-.table-wrap {
-  overflow: auto;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+.ps-content {
+  --background: #f5f7fb;
 }
 
-/* ✅ evita scroll horizontal */
-.reservas-table {
+/* Contenedor principal */
+.ps-container {
+  display: block;
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  table-layout: fixed; /* fuerzas ajuste y corte */
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 25px 30px 50px;
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   TÍTULO
+   ========================================================= */
+
+.ps-subtitle {
+  margin: 10px 0 6px;
+  font-size: 25px;
+  font-weight: 700;
+  color: #172033;
+}
+
+.ps-intro {
+  margin: 0 auto 28px;
+  color: #6b7280;
   font-size: 14px;
 }
 
-.reservas-table thead th {
-  position: sticky; top: 0; z-index: 1;
-  background: #f8fafc;
-  text-align: left; font-weight: 600;
-  padding: 12px; border-bottom: 1px solid #e5e7eb;
+/* =========================================================
+   SEGMENTOS
+   ========================================================= */
+
+.ps-segment {
+  max-width: 650px;
+  margin: 0 auto 28px;
+  padding: 5px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
 
-/* Anchos orientativos por columna */
-.col-title { width: 220px; }
-.col-lugar { width: 160px; }
-.col-email { width: 200px; }
-.col-tel { width: 130px; }
-.col-orden { width: 120px; }
-.col-pago  { width: 120px; }
-.min-col   { width: 120px; }
-
-.reservas-table tbody td {
-  padding: 12px; vertical-align: top; border-bottom: 1px solid #f1f5f9;
-}
-.reservas-table tbody tr:hover { background: #fafafa; }
-
-/* Cortes limpios para textos largos */
-.wrap-anywhere { overflow-wrap: anywhere; }
-.link { color: #2563eb; text-decoration: none; }
-.link:hover { text-decoration: underline; }
-.empty { text-align: center; color: #6b7280; padding: 24px 12px; }
-.acciones { white-space: nowrap; }
-
-/* Badges suaves para pago */
-.badge-soft { filter: saturate(.9) opacity(.95); }
-
-/* Tarjetas móviles */
-.cards { display: grid; gap: 12px; }
-.reserva-card { border-radius: 16px; }
-.card-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;
-}
-.card-title { font-size: 16px; font-weight: 700; margin: 0; }
-.badge-row { display: flex; gap: 6px; }
-.card-row {
-  display: grid; grid-template-columns: 110px 1fr; gap: 10px;
-  padding: 6px 0; border-bottom: 1px dashed #eef2f7;
-}
-.card-row:last-of-type { border-bottom: 0; }
-.label { color: #64748b; } .value { color: #0f172a; }
-.card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-
-/* Responsive: tabla en escritorio, tarjetas en móvil */
-.desktop-only { display: none; }
-.mobile-only { display: block; }
-@media (min-width: 992px) {
-  .desktop-only { display: block; }
-  .mobile-only { display: none; }
+.ps-segment ion-segment-button {
+  min-height: 45px;
+  --border-radius: 9px;
+  font-size: 13px;
 }
 
-/* Estilos para IonDatetime */
+/* =========================================================
+   FORMULARIO
+   ========================================================= */
+
+.ps-form {
+  width: 100%;
+  padding: 0;
+}
+
+/* Espaciado entre filas */
+.ps-form ion-row {
+  margin-bottom: 18px;
+}
+
+/* Columnas */
+.ps-form ion-col {
+  padding: 7px;
+}
+
+/* =========================================================
+   CAMPOS
+   ========================================================= */
+
+.input-item {
+  --background: #ffffff;
+  --border-color: #d9dfeb;
+  --border-style: solid;
+  --border-width: 1px;
+  --border-radius: 10px;
+
+  --padding-start: 17px;
+  --padding-end: 17px;
+
+  min-height: 68px;
+
+  border: 1px solid #d9dfeb;
+  border-radius: 10px;
+
+  box-shadow: 0 2px 7px rgba(20, 40, 80, 0.04);
+
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Hover */
+.input-item:hover {
+  --border-color: #aebbd3;
+  border-color: #aebbd3;
+}
+
+/* Labels */
+.input-item ion-label {
+  margin-bottom: 7px;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  color: #1f2937;
+}
+
+/* Inputs */
+.input-item ion-input,
+.input-item ion-textarea,
+.input-item ion-select {
+  --color: #1f2937;
+  --placeholder-color: #9aa6bd;
+
+  font-size: 14px;
+}
+
+/* Textarea */
+.input-item ion-textarea {
+  min-height: 80px;
+}
+
+/* =========================================================
+   NOTAS DE AYUDA
+   ========================================================= */
+
+.helper-note {
+  display: block;
+
+  margin: 7px 4px 0;
+
+  font-size: 12px;
+  line-height: 1.4;
+
+  color: #71809d;
+}
+
+/* Errores */
+ion-note[color="danger"] {
+  display: block;
+  margin: 6px 5px 0;
+  font-size: 12px;
+}
+
+/* =========================================================
+   CATEGORÍA + TARIFA
+   ========================================================= */
+
+.gap-row {
+  margin-bottom: 20px !important;
+}
+
+/* =========================================================
+   DISPONIBILIDAD
+   ========================================================= */
+
 .datetime-item {
-  --padding-start: 0;
-  --inner-padding-end: 0;
+  min-height: 150px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+
+  padding: 15px;
 }
+
+/* Label de hora */
+.datetime-item ion-label {
+  width: 100%;
+  text-align: center;
+
+  margin-bottom: 10px;
+
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   ION DATETIME
+   ========================================================= */
 
 .datetime-item ion-datetime {
   width: 100%;
-  border: 1px solid #e0e0e0;
+  max-width: 260px;
+
+  height: 95px;
+
+  --background: #ffffff;
+  --wheel-highlight-background: #eef3ff;
+  --wheel-fade-background-rgb: 255, 255, 255;
+
+  font-size: 14px;
+
   border-radius: 8px;
-  padding: 8px 12px;
+}
+
+/* Reducir tamaño visual del selector */
+.datetime-item ion-datetime::part(wheel-item) {
+  font-size: 14px;
+}
+
+/* =========================================================
+   UBICACIÓN
+   ========================================================= */
+
+.ps-form .input-item ion-select {
+  min-height: 35px;
+}
+
+/* =========================================================
+   SUBIDA DE IMÁGENES
+   ========================================================= */
+
+.upload-dropzone {
+  min-height: 150px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  padding: 25px;
+
+  background: #ffffff;
+
+  border: 2px dashed #c7d2e5;
+  border-radius: 12px;
+
+  cursor: pointer;
+
+  transition: all 0.2s ease;
+}
+
+.upload-dropzone:hover {
+  border-color: #4f6fae;
+  background: #f8faff;
+}
+
+.upload-dropzone ion-icon {
+  font-size: 38px;
+  color: #4f6fae;
+  margin-bottom: 10px;
+}
+
+.upload-text-1 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #26344d;
+}
+
+.upload-text-2 {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #7b879c;
+}
+
+/* =========================================================
+   MINIATURAS
+   ========================================================= */
+
+.thumbs {
+  display: grid;
+
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+
+  gap: 12px;
+
+  margin-top: 15px;
+}
+
+.thumb {
+  position: relative;
+
+  height: 105px;
+
+  overflow: hidden;
+
+  border-radius: 10px;
+
+  background: #ffffff;
+
+  border: 1px solid #dce2ec;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+}
+
+.thumb-remove {
+  position: absolute;
+
+  top: 5px;
+  right: 5px;
+
+  width: 25px;
+  height: 25px;
+
+  border: none;
+  border-radius: 50%;
+
+  background: rgba(0, 0, 0, 0.65);
+  color: white;
+
+  font-size: 17px;
+
+  cursor: pointer;
+}
+
+/* =========================================================
+   BOTÓN PUBLICAR
+   ========================================================= */
+
+.actions-row {
+  margin-top: 25px !important;
+}
+
+.actions-row ion-button {
+  --background: #31558f;
+  --background-hover: #274879;
+
+  --border-radius: 10px;
+
+  height: 48px;
+
+  font-size: 15px;
+  font-weight: 600;
+
+  text-transform: none;
+
+  box-shadow: 0 4px 12px rgba(49, 85, 143, 0.20);
+}
+
+/* =========================================================
+   MIS PUBLICACIONES
+   ========================================================= */
+
+.mis-publicaciones {
+  background: #ffffff;
+
+  padding: 25px;
+
+  border-radius: 14px;
+
+  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.06);
+}
+
+.mis-publicaciones h2 {
+  margin-top: 0;
+
+  font-size: 22px;
+  color: #172033;
+}
+
+.pub-item {
+  margin-bottom: 10px;
+
+  --background: #f8faff;
+
+  border: 1px solid #e0e6f0;
+
+  border-radius: 10px;
+}
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .ps-container {
+    padding: 18px 14px 40px;
+  }
+
+  .ps-subtitle {
+    font-size: 21px;
+  }
+
+  .ps-intro {
+    font-size: 13px;
+  }
+
+  .ps-segment {
+    width: 100%;
+  }
+
+  .ps-form ion-col {
+    padding: 5px 0;
+  }
+
+  .datetime-item ion-datetime {
+    max-width: 280px;
+  }
+}
+
+/* =========================================================
+   CELULAR
+   ========================================================= */
+
+@media (max-width: 480px) {
+
+  .ps-container {
+    padding: 15px 10px 35px;
+  }
+
+  .ps-subtitle {
+    font-size: 19px;
+  }
+
+  .ps-intro {
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  .ps-segment ion-label {
+    font-size: 11px;
+  }
+
+  .ps-segment ion-icon {
+    font-size: 17px;
+  }
+
+  .input-item {
+    min-height: 64px;
+
+    --padding-start: 13px;
+    --padding-end: 13px;
+  }
+
+  .datetime-item {
+    min-height: 140px;
+  }
+
+  .datetime-item ion-datetime {
+    height: 90px;
+    max-width: 250px;
+  }
+
+  .upload-dropzone {
+    min-height: 130px;
+    padding: 18px;
+  }
+
+  .upload-text-1 {
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .upload-text-2 {
+    text-align: center;
+  }
 }
