@@ -41,7 +41,7 @@ const PAISES_SURAMERICA = [
   { value: 'EC', label: 'Ecuador' },
   { value: 'UY', label: 'Uruguay' },
   { value: 'PY', label: 'Paraguay' },
-  { value: 'BO', label: 'Bolivia' },
+  //{ value: 'BO', label: 'Bolivia' },
   { value: 'VE', label: 'Venezuela' }
 ];
 
