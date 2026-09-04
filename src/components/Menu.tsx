@@ -18,12 +18,14 @@ import { useLocation } from 'react-router-dom';
 import {
   homeOutline, homeSharp,
   briefcaseOutline, briefcaseSharp,
-  cloudUploadOutline, cloudUploadSharp,
   calendarClearOutline, calendarClearSharp,
   heartOutline, heartSharp,
   settingsOutline, settingsSharp,
   arrowForwardOutline, arrowForwardSharp,
   personCircleOutline,
+  businessOutline, businessSharp,
+  constructOutline, constructSharp,
+  timeOutline, timeSharp,
 } from 'ionicons/icons';
 
 import './Menu.css';
@@ -38,13 +40,22 @@ interface AppPage {
 }
 
 
-const appPages: AppPage[] = [
-  { title: 'Inicio', url: '/folder/inbox', iosIcon: homeOutline, mdIcon: homeSharp },
-  { title: 'Servicios del hogar', url: '/servicioJob/servicio', iosIcon: briefcaseOutline, mdIcon: briefcaseSharp },
-  { title: 'Ofrecer servicios', url: '/publicar', iosIcon: cloudUploadOutline, mdIcon: cloudUploadSharp },
-  { title: 'Solicitudes', url: '/reservas', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
-  { title: 'Guardados', url: '/misfavorito', iosIcon: heartOutline, mdIcon: heartSharp },
-  { title: 'Configuración', url: '/configuracion', iosIcon: settingsOutline, mdIcon: settingsSharp },
+const clientPages: AppPage[] = [
+  { title: 'Inicio', url: '/cliente/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
+  { title: 'Servicios', url: '/cliente/servicios', iosIcon: constructOutline, mdIcon: constructSharp },
+  { title: 'Mis solicitudes', url: '/cliente/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
+  { title: 'Favoritos', url: '/cliente/favoritos', iosIcon: heartOutline, mdIcon: heartSharp },
+  { title: 'Mis viviendas', url: '/cliente/viviendas', iosIcon: businessOutline, mdIcon: businessSharp },
+  { title: 'Mi cuenta', url: '/cuenta', iosIcon: settingsOutline, mdIcon: settingsSharp },
+];
+
+const professionalPages: AppPage[] = [
+  { title: 'Inicio', url: '/profesional/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
+  { title: 'Solicitudes', url: '/profesional/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
+  { title: 'Mis trabajos', url: '/profesional/trabajos', iosIcon: briefcaseOutline, mdIcon: briefcaseSharp },
+  { title: 'Mi perfil profesional', url: '/profesional/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
+  { title: 'Disponibilidad', url: '/profesional/disponibilidad', iosIcon: timeOutline, mdIcon: timeSharp },
+  { title: 'Mi cuenta', url: '/cuenta', iosIcon: settingsOutline, mdIcon: settingsSharp },
 ];
 
 const Menu: React.FC = () => {
@@ -60,12 +71,21 @@ const Menu: React.FC = () => {
     router.push('/login');
   };
 
-  const isAuthPage =
+  const isPublicPage =
     location.pathname.startsWith('/login') ||
-    location.pathname.startsWith('/ingresar');
+    location.pathname.startsWith('/ingresar') ||
+    location.pathname.startsWith('/register');
+  const isOnboardingPage = location.pathname.startsWith('/onboarding/');
+  const menuPages =
+    user?.role === 'professional'
+      ? professionalPages
+      : user?.role === 'client'
+        ? clientPages
+        : [];
+  const menuDisabled = isPublicPage || isOnboardingPage || !isAuthenticated;
 
   return (
-    <IonMenu contentId="main" type="overlay" swipeGesture={!isAuthPage} disabled={isAuthPage} menuId="main-menu">
+    <IonMenu contentId="main" type="overlay" swipeGesture={!menuDisabled} disabled={menuDisabled} menuId="main-menu">
       <IonHeader className="menu-header-logo">
         <IonImg className="menu-logo" src={logo} alt="Logo" />
       </IonHeader>
@@ -86,7 +106,7 @@ const Menu: React.FC = () => {
             </IonMenuToggle>
           </IonListHeader>
 
-          {appPages.map((pp) => (
+          {menuPages.map((pp) => (
             <IonMenuToggle key={pp.url} autoHide={false}>
               <IonItem
                 className={isActive(pp.url) ? 'selected' : ''}
@@ -106,7 +126,7 @@ const Menu: React.FC = () => {
       <IonFooter className="menu-footer">
         <IonMenuToggle autoHide={false}>
           {/* Mostrar LOGIN solo si NO hay sesión y NO estoy en /login o /ingresar */}
-          {!isAuthenticated && !isLoading && !isAuthPage ? (
+          {!isAuthenticated && !isLoading && !isPublicPage ? (
             <IonItem
               routerLink="/login"
               routerDirection="none"
@@ -123,7 +143,7 @@ const Menu: React.FC = () => {
           {isAuthenticated ? (
             <IonItem lines="none" className="profile-item" detail={false}>
               <IonIcon slot="start" icon={personCircleOutline} />
-              <IonLabel>{user?.first_name || user?.email || 'Mi perfil'}</IonLabel>
+              <IonLabel>{user?.first_name || user?.email || 'Mi cuenta'}</IonLabel>
               <IonButton slot="end" fill="clear" onClick={onLogout}>
                 Cerrar sesión
               </IonButton>

@@ -20,6 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
             "city",
             "initials",
             "is_identity_verified",
+            "onboarding_completed",
             "created_at",
         ]
         read_only_fields = [
@@ -29,6 +30,7 @@ class UserSerializer(serializers.ModelSerializer):
             "role",
             "initials",
             "is_identity_verified",
+            "onboarding_completed",
             "created_at",
         ]
 

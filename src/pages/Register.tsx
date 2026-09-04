@@ -23,6 +23,7 @@ import { useHistory } from "react-router-dom";
 import { ApiError } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import type { PublicRegisterRole } from "../types/serviprox";
+import { getEntryRoute } from "../utils/routes";
 import logo from "../Assets/logo.png";
 import styles from "./Login.module.css";
 
@@ -76,7 +77,7 @@ const roleOptions: Array<{
 
 const Register: React.FC = () => {
   const history = useHistory();
-  const { isAuthenticated, isLoading: sessionLoading, register } = useAuth();
+  const { isAuthenticated, isLoading: sessionLoading, register, user } = useAuth();
   const [role, setRole] = useState<PublicRegisterRole>("client");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -93,9 +94,9 @@ const Register: React.FC = () => {
 
   useEffect(() => {
     if (!sessionLoading && isAuthenticated) {
-      history.replace("/folder/inbox");
+      history.replace(getEntryRoute(user));
     }
-  }, [history, isAuthenticated, sessionLoading]);
+  }, [history, isAuthenticated, sessionLoading, user]);
 
   const passwordsMatch = password === confirmPassword;
   const canSubmit =
@@ -112,7 +113,7 @@ const Register: React.FC = () => {
     setError("");
     setIsSubmitting(true);
     try {
-      await register({
+      const currentUser = await register({
         email: email.trim().toLowerCase(),
         username: username.trim(),
         first_name: firstName.trim(),
@@ -122,7 +123,7 @@ const Register: React.FC = () => {
         role,
         password,
       });
-      history.replace("/folder/inbox");
+      history.replace(getEntryRoute(currentUser));
     } catch (err) {
       setError(getRegisterErrorMessage(err));
     } finally {

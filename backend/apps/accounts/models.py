@@ -19,6 +19,7 @@ class User(AbstractUser):
     phone = models.CharField(_("telefono"), max_length=30, blank=True)
     city = models.CharField(_("ciudad"), max_length=80, blank=True)
     is_identity_verified = models.BooleanField(_("identidad verificada"), default=False)
+    onboarding_completed = models.BooleanField(_("onboarding completado"), default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     USERNAME_FIELD = "email"

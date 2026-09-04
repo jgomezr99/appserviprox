@@ -13,6 +13,7 @@ import { eyeOffOutline, eyeOutline, lockClosedOutline, mailOutline } from "ionic
 import { useHistory } from "react-router-dom";
 import { ApiError } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { getEntryRoute } from "../utils/routes";
 import logo from "../Assets/logo.png";
 import styles from "./Login.module.css";
 
@@ -30,7 +31,7 @@ const getLoginErrorMessage = (error: unknown) => {
 
 const Login: React.FC = () => {
   const history = useHistory();
-  const { isAuthenticated, isLoading: sessionLoading, login } = useAuth();
+  const { isAuthenticated, isLoading: sessionLoading, login, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -39,9 +40,9 @@ const Login: React.FC = () => {
 
   useEffect(() => {
     if (!sessionLoading && isAuthenticated) {
-      history.replace("/folder/inbox");
+      history.replace(getEntryRoute(user));
     }
-  }, [history, isAuthenticated, sessionLoading]);
+  }, [history, isAuthenticated, sessionLoading, user]);
 
   const canSubmit = emailOk(email) && password.length >= 6 && !isSubmitting;
 
@@ -52,8 +53,8 @@ const Login: React.FC = () => {
     setError("");
     setIsSubmitting(true);
     try {
-      await login({ email: email.trim().toLowerCase(), password });
-      history.replace("/folder/inbox");
+      const currentUser = await login({ email: email.trim().toLowerCase(), password });
+      history.replace(getEntryRoute(currentUser));
     } catch (err) {
       setError(getLoginErrorMessage(err));
     } finally {

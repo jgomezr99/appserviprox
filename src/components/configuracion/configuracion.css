@@ -18,3 +18,32 @@ ion-icon {
   font-size: 14px;
   margin-top: 8px;
 }
+.account-list {
+  margin: 18px;
+  border-radius: var(--sp-radius-lg);
+  overflow: hidden;
+  background: var(--sp-surface-glass);
+  border: 1px solid var(--sp-border);
+  box-shadow: var(--sp-shadow);
+  backdrop-filter: blur(var(--sp-blur));
+  -webkit-backdrop-filter: blur(var(--sp-blur));
+}
+
+.account-list ion-item {
+  --background: rgba(255, 255, 255, 0.70);
+  --border-color: rgba(11, 47, 107, 0.10);
+  --color: var(--sp-text);
+}
+
+.account-list ion-input,
+.account-list ion-select {
+  --color: var(--sp-text);
+}
+
+.account-error {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--sp-accent-soft);
+  color: #9f2232;
+}

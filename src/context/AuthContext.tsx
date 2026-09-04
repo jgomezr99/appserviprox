@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import { tokenStorage } from "../services/api";
 import { authService } from "../services/auth";
-import type { LoginPayload, RegisterPayload, User } from "../types/serviprox";
+import type { LoginPayload, RegisterPayload, UpdateMePayload, User } from "../types/serviprox";
 
 type AuthContextValue = {
   user: User | null;
@@ -18,6 +18,8 @@ type AuthContextValue = {
   register: (payload: RegisterPayload) => Promise<User>;
   logout: () => void;
   refreshSession: () => Promise<User | null>;
+  updateMe: (payload: UpdateMePayload) => Promise<User>;
+  completeOnboarding: () => Promise<User>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -72,6 +74,18 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     return currentUser;
   }, []);
 
+  const updateMe = useCallback(async (payload: UpdateMePayload) => {
+    const updatedUser = await authService.updateCurrentUser(payload);
+    setUser(updatedUser);
+    return updatedUser;
+  }, []);
+
+  const completeOnboarding = useCallback(async () => {
+    const updatedUser = await authService.completeOnboarding();
+    setUser(updatedUser);
+    return updatedUser;
+  }, []);
+
   useEffect(() => {
     void refreshSession();
   }, [refreshSession]);
@@ -89,10 +103,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       isLoading,
       login,
       register,
+      updateMe,
+      completeOnboarding,
       logout,
       refreshSession,
     }),
-    [isLoading, login, logout, refreshSession, register, user]
+    [completeOnboarding, isLoading, login, logout, refreshSession, register, updateMe, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

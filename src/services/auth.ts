@@ -4,6 +4,7 @@ import type {
   LoginPayload,
   RefreshTokenResponse,
   RegisterPayload,
+  UpdateMePayload,
   User,
 } from "../types/serviprox";
 
@@ -20,6 +21,11 @@ export const authService = {
     api.post<User>("auth/register/", payload, { auth: false }),
 
   getCurrentUser: () => api.get<User>("auth/me/"),
+
+  updateCurrentUser: (payload: UpdateMePayload) =>
+    api.patch<User>("auth/me/", payload),
+
+  completeOnboarding: () => api.post<User>("auth/onboarding/complete/"),
 
   refresh: async () => {
     const refresh = tokenStorage.getRefreshToken();

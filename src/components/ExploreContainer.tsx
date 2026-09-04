@@ -47,7 +47,7 @@ const MODALITIES: Modality[] = [
     text: "Explora servicios para tu hogar y elige la categoría adecuada antes de crear una solicitud.",
     icon: searchOutline,
     action: "Explorar servicios",
-    routerLink: "/servicioJob/servicio",
+    routerLink: "/cliente/servicios",
   },
   {
     title: "Tengo un problema",
@@ -120,9 +120,9 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
             reparaciones, mantenimiento, instalaciones y tareas domésticas con más claridad.
           </p>
           <div className="sp-hero__actions">
-            <IonButton routerLink="/servicioJob/servicio">Buscar servicio</IonButton>
-            <IonButton routerLink="/publicar" fill="outline">
-              Soy profesional
+            <IonButton routerLink="/cliente/servicios">Buscar servicio</IonButton>
+            <IonButton routerLink="/cliente/viviendas" fill="outline">
+              Mis viviendas
             </IonButton>
           </div>
         </div>

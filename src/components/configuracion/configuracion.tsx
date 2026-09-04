@@ -18,7 +18,8 @@ import {
   IonInput,
   IonToast,
   useIonRouter,
-  IonText
+  IonText,
+  IonSpinner
 } from '@ionic/react';
 import {
   moonOutline,
@@ -28,10 +29,11 @@ import {
   informationCircleOutline
 } from 'ionicons/icons';
 import { useAuth } from '../../context/AuthContext';
+import './configuracion.css';
 
 const Configuracion: React.FC = () => {
   const router = useIonRouter();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, updateMe } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [language, setLanguage] = useState('es');
@@ -40,7 +42,11 @@ const Configuracion: React.FC = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
@@ -52,14 +58,27 @@ const Configuracion: React.FC = () => {
       setFirstName(user.first_name || '');
       setLastName(user.last_name || '');
       setEmail(user.email || '');
+      setPhone(user.phone || '');
+      setCity(user.city || '');
     }
   }, [user]);
 
-  const onSaveProfile = () => {
-    localStorage.setItem('user.firstName', firstName.trim());
-    localStorage.setItem('user.lastName', lastName.trim());
-    localStorage.setItem('user.email', email.trim());
-    setSaved(true);
+  const onSaveProfile = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      await updateMe({
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        phone: phone.trim(),
+        city: city.trim(),
+      });
+      setSaved(true);
+    } catch {
+      setError('No pudimos guardar los cambios de tu cuenta.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -69,7 +88,7 @@ const Configuracion: React.FC = () => {
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle>Configuración</IonTitle>
+          <IonTitle>Mi cuenta</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -81,7 +100,7 @@ const Configuracion: React.FC = () => {
             <IonButton onClick={() => router.push('/login')}>Ir a Ingresar</IonButton>
           </IonText>
         ) : ( 
-          <IonList>
+          <IonList className="account-list">
             {/* Perfil: nombre, apellido, email */}
             <IonItem lines="full">
               <IonIcon icon={personOutline} slot="start" />
@@ -108,12 +127,34 @@ const Configuracion: React.FC = () => {
                 type="email"
                 placeholder="tucorreo@ejemplo.com"
                 value={email}
-                onIonInput={(e) => setEmail(String(e.detail.value ?? ''))}
+                readonly
+              />
+            </IonItem>
+
+            <IonItem lines="full">
+              <IonLabel position="stacked">Teléfono</IonLabel>
+              <IonInput
+                type="tel"
+                placeholder="+57 300 000 0000"
+                value={phone}
+                onIonInput={(e) => setPhone(String(e.detail.value ?? ''))}
+              />
+            </IonItem>
+
+            <IonItem lines="full">
+              <IonLabel position="stacked">Ciudad</IonLabel>
+              <IonInput
+                placeholder="Bogotá"
+                value={city}
+                onIonInput={(e) => setCity(String(e.detail.value ?? ''))}
               />
             </IonItem>
 
             <div className="ion-padding">
-              <IonButton onClick={onSaveProfile}>Guardar cambios</IonButton>
+              {error && <p className="account-error">{error}</p>}
+              <IonButton onClick={onSaveProfile} disabled={saving}>
+                {saving ? <IonSpinner name="crescent" /> : 'Guardar cambios'}
+              </IonButton>
             </div>
 
             <IonItem>

@@ -12,7 +12,15 @@ export interface User {
   city: string;
   initials: string;
   is_identity_verified: boolean;
+  onboarding_completed: boolean;
   created_at: string;
+}
+
+export interface UpdateMePayload {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  city?: string;
 }
 
 export interface LoginPayload {
@@ -72,14 +80,32 @@ export interface Household {
   neighborhood: string;
   city: string;
   country: string;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   area_m2: number | null;
   build_year: number | null;
   notes: string;
   is_default: boolean;
   short_location: string;
   created_at: string;
+}
+
+export type HouseholdPayload = Omit<
+  Household,
+  "id" | "short_location" | "created_at" | "latitude" | "longitude"
+> & {
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+export interface ProfessionalService {
+  id: number;
+  category: number;
+  category_name: string;
+  category_slug: string;
+  price_min: string | null;
+  price_max: string | null;
+  years_experience: number;
 }
 
 export interface Professional {
@@ -93,10 +119,42 @@ export interface Professional {
   accepts_urgent: boolean;
   neighborhood: string;
   city: string;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   distance_km?: number;
   categories: string[];
+}
+
+export interface ProfessionalProfile {
+  id: number;
+  display_name: string;
+  headline: string;
+  bio: string;
+  latitude: number | null;
+  longitude: number | null;
+  neighborhood: string;
+  city: string;
+  coverage_radius_km: number;
+  response_time_minutes: number;
+  accepts_urgent: boolean;
+  is_verified: boolean;
+  is_active: boolean;
+  rating_avg: string;
+  jobs_completed: number;
+  services: ProfessionalService[];
+  created_at: string;
+}
+
+export interface ProfessionalProfilePayload {
+  display_name: string;
+  headline: string;
+  bio?: string;
+  neighborhood?: string;
+  city: string;
+  coverage_radius_km?: number;
+  response_time_minutes?: number;
+  accepts_urgent?: boolean;
+  service_category_ids?: number[];
 }
 
 export interface PaginatedResponse<T> {

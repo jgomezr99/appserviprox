@@ -17,8 +17,8 @@ class ProfessionalProfile(models.Model):
     bio = models.TextField(_("descripcion"), blank=True)
 
     # Base de operacion: centro desde el que se calcula la distancia al cliente.
-    latitude = models.FloatField(_("latitud"))
-    longitude = models.FloatField(_("longitud"))
+    latitude = models.FloatField(_("latitud"), null=True, blank=True)
+    longitude = models.FloatField(_("longitud"), null=True, blank=True)
     neighborhood = models.CharField(_("barrio"), max_length=100, blank=True)
     city = models.CharField(_("ciudad"), max_length=80, default="Bogota")
     coverage_radius_km = models.FloatField(_("radio de cobertura (km)"), default=8)
