@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   IonContent,
   IonIcon,
@@ -21,7 +21,6 @@ import {
   cloudUploadOutline, cloudUploadSharp,
   calendarClearOutline, calendarClearSharp,
   heartOutline, heartSharp,
-  cardOutline, cardSharp,
   settingsOutline, settingsSharp,
   arrowForwardOutline, arrowForwardSharp,
   personCircleOutline,
@@ -29,6 +28,7 @@ import {
 
 import './Menu.css';
 import logo from '../Assets/logo.png';
+import { useAuth } from '../context/AuthContext';
 
 interface AppPage {
   url: string;
@@ -39,32 +39,24 @@ interface AppPage {
 
 
 const appPages: AppPage[] = [
-  { title: 'Home',              url: '/folder/inbox',      iosIcon: homeOutline,          mdIcon: homeSharp },
-  { title: 'Servicios Job',     url: '/servicioJob/servicio',         iosIcon: briefcaseOutline,     mdIcon: briefcaseSharp },
-  { title: ' Publicaciones', url: '/publicar',          iosIcon: cloudUploadOutline,   mdIcon: cloudUploadSharp },
-  { title: 'Mis Reservas',      url: '/reservas',          iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
-  { title: 'Mis Favoritos',     url: '/misfavorito',         iosIcon: heartOutline,         mdIcon: heartSharp },
-  { title: 'Historia de pago ', url: '/historialpago',       iosIcon: cardOutline,          mdIcon: cardSharp },
-  { title: 'Configuración',     url: '/configuracion',     iosIcon: settingsOutline,      mdIcon: settingsSharp },
+  { title: 'Inicio', url: '/folder/inbox', iosIcon: homeOutline, mdIcon: homeSharp },
+  { title: 'Servicios del hogar', url: '/servicioJob/servicio', iosIcon: briefcaseOutline, mdIcon: briefcaseSharp },
+  { title: 'Ofrecer servicios', url: '/publicar', iosIcon: cloudUploadOutline, mdIcon: cloudUploadSharp },
+  { title: 'Solicitudes', url: '/reservas', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
+  { title: 'Guardados', url: '/misfavorito', iosIcon: heartOutline, mdIcon: heartSharp },
+  { title: 'Configuración', url: '/configuracion', iosIcon: settingsOutline, mdIcon: settingsSharp },
 ];
 
 const Menu: React.FC = () => {
   const location = useLocation();
   const router = useIonRouter();
-
-  const [isAuth, setIsAuth] = useState<boolean>(false);
-
-  // Actualiza estado de sesión (puedes ajustarlo a tu lógica real)
-  useEffect(() => {
-    const hasToken = !!localStorage.getItem('authToken');
-    setIsAuth(hasToken);
-  }, [location.pathname]);
+  const { isAuthenticated, isLoading, logout, user } = useAuth();
 
   const isActive = (url: string) =>
     location.pathname === url || location.pathname.startsWith(url + '/');
 
   const onLogout = () => {
-    localStorage.removeItem('authToken'); // ajusta si usas otra clave
+    logout();
     router.push('/login');
   };
 
@@ -114,7 +106,7 @@ const Menu: React.FC = () => {
       <IonFooter className="menu-footer">
         <IonMenuToggle autoHide={false}>
           {/* Mostrar LOGIN solo si NO hay sesión y NO estoy en /login o /ingresar */}
-          {!isAuth && !isAuthPage ? (
+          {!isAuthenticated && !isLoading && !isAuthPage ? (
             <IonItem
               routerLink="/login"
               routerDirection="none"
@@ -128,10 +120,10 @@ const Menu: React.FC = () => {
           ) : null}
 
           {/* Si hay sesión, muestra perfil/acciones y oculta el login */}
-          {isAuth ? (
+          {isAuthenticated ? (
             <IonItem lines="none" className="profile-item" detail={false}>
               <IonIcon slot="start" icon={personCircleOutline} />
-              <IonLabel>Mi perfil</IonLabel>
+              <IonLabel>{user?.first_name || user?.email || 'Mi perfil'}</IonLabel>
               <IonButton slot="end" fill="clear" onClick={onLogout}>
                 Cerrar sesión
               </IonButton>

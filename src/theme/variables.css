@@ -2,24 +2,43 @@
 http://ionicframework.com/docs/theming/ */
 
 :root {
-	/* Marca principal (azul marino) */
-	--ion-color-primary:#1373f1;
-	--ion-color-primary-rgb: 15, 39, 70;
+	--sp-primary: #0B2F6B;
+	--sp-primary-dark: #071E45;
+	--sp-primary-soft: #EAF2FF;
+	--sp-accent: #D9364A;
+	--sp-accent-soft: #FFECEF;
+	--sp-bg: #F6F8FC;
+	--sp-background: var(--sp-bg);
+	--sp-surface: #ffffff;
+	--sp-surface-glass: rgba(255, 255, 255, 0.74);
+	--sp-text: #101828;
+	--sp-text-muted: #667085;
+	--sp-border: rgba(11, 47, 107, 0.14);
+	--sp-radius-sm: 14px;
+	--sp-radius-md: 20px;
+	--sp-radius-lg: 28px;
+	--sp-radius-xl: 32px;
+	--sp-shadow: 0 18px 45px rgba(16, 24, 40, 0.10);
+	--sp-blur: 18px;
+
+	/* Ionic usa los mismos tokens para evitar dos sistemas visuales. */
+	--ion-color-primary: var(--sp-primary);
+	--ion-color-primary-rgb: 11, 47, 107;
 	--ion-color-primary-contrast: #ffffff;
 	--ion-color-primary-contrast-rgb: 255, 255, 255;
-	--ion-color-primary-shade: #1373f1;
-	--ion-color-primary-tint: #1373f1;
+	--ion-color-primary-shade: #0a295e;
+	--ion-color-primary-tint: #234477;
 
-	/* Opcional: tono de marca para seleccionados */
-	--brand-soft-bg: #2c97d4; /* azul marino más suave */
-	--brand-soft-bg-rgb: 20, 153, 142; /* corrige valores RGB */
+	--ion-color-danger: var(--sp-accent);
+	--ion-background-color: var(--sp-bg);
+	--ion-text-color: var(--sp-text);
 
-		/* Colores del menú (puedes cambiarlos para ajustar el fondo) */
-		--menu-bg:#0c80a3;           /* fondo base del panel lateral */
-		--menu-footer-bg: #0c80a3;    /* fondo del footer del menú */
-		--menu-header-bg: #0c80a3;    /* fondo del header del menú */
+	--brand-soft-bg: rgba(255, 255, 255, 0.18);
+	--brand-soft-bg-rgb: 255, 255, 255;
 
-	/* Colores del encabezado de lista del menú */
-	--menu-list-header-bg: transparent; /* o suave: #eef5ff */
+	--menu-bg: #0B2F6B;
+	--menu-footer-bg: #0B2F6B;
+	--menu-header-bg: #0B2F6B;
+	--menu-list-header-bg: transparent;
 	--menu-list-header-fg: var(--ion-color-primary);
 }

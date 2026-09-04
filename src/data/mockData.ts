@@ -19,18 +19,18 @@ export type Favorito = {
 
 export const DATA: Favorito[] = [
   {
-    id: "svc-frontend",
+    id: "svc-plomeria-fuga",
     tipo: "servicio",
-    titulo: "Desarrollo Web Frontend",
-    categoria: "Tecnología",
-    descripcion: "Creación de interfaces de usuario interactivas y responsivas para tu sitio web.",
-    profesional: "Carlos Rodrígueez",
-    remoto: true,
-    tarifa: 75000,
-    unidad: "por hora",
-    rating: 4.7,
-    ciudad: "Remoto",
-    img: "https://images.unsplash.com/photo-1518779578993-ec3579fee39f?q=80&w=1200&auto=format&fit=crop"
+    titulo: "Reparación de fuga",
+    categoria: "Plomería",
+    descripcion: "Atención de fugas y goteos en baños y cocinas.",
+    profesional: "Marcela Gómez",
+    remoto: false,
+    tarifa: 90000,
+    unidad: "por visita",
+    rating: 4.8,
+    ciudad: "Bogotá",
+    ubicacion: "Kennedy",
+    img: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?q=80&w=1200&auto=format&fit=crop"
   },
-  // ...resto de los datos...
 ];

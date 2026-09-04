@@ -1,250 +1,219 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  IonGrid,
-  IonRow,
-  IonCol,
+  IonBadge,
+  IonButton,
   IonCard,
+  IonCardContent,
   IonCardHeader,
   IonCardTitle,
-  IonCardContent,
+  IonCol,
+  IonGrid,
   IonIcon,
+  IonRow,
+  IonSpinner,
   IonText,
-  IonButton
-} from '@ionic/react';
+} from "@ionic/react";
 import {
-  shieldCheckmarkOutline,
-  flashOutline,
-  peopleCircleOutline,
-  cardOutline,
-  personAddOutline,
-  searchOutline,
-  checkmarkCircleOutline,
-  starOutline,
-  homeOutline,
-  laptopOutline,
-  restaurantOutline,
   buildOutline,
-  
-  briefcaseOutline,
-  carOutline,
-  cameraOutline,
-  shieldOutline,
-  terminalOutline,
-  pawOutline
-} from 'ionicons/icons';
+  checkmarkCircleOutline,
+  flashOutline,
+  helpCircleOutline,
+  homeOutline,
+  locationOutline,
+  searchOutline,
+  shieldCheckmarkOutline,
+} from "ionicons/icons";
 
-import './ExploreContainer.css';
+import { api } from "../services/api";
+import type { PaginatedResponse, ServiceCategory } from "../types/serviprox";
+import "./ExploreContainer.css";
 
 interface ContainerProps {
-  name: string; // no lo usamos, pero se mantiene por compatibilidad
+  name: string;
 }
 
-type Feature = { title: string; text: string; icon: string };
-type HowTo = { title: string; text: string; icon: string; step: number };
-type Category = { title: string; sub: string; icon: string };
+type Modality = {
+  title: string;
+  text: string;
+  icon: string;
+  action: string;
+  routerLink?: string;
+  status?: string;
+};
 
-const FEATURES: Feature[] = [
+const MODALITIES: Modality[] = [
   {
-    title: '100% Gratuito',
-    text: 'Regístrate, explora y publica servicios sin costos. Solo pagamos cuando efectivamente se contrata.',
-    icon: shieldCheckmarkOutline
-  },
-  {
-    title: 'Proceso Rápido',
-    text: 'Encuentra y contrata profesionales en minutos. Sistema de órdenes con seguimiento en tiempo real.',
-    icon: flashOutline
-  },
-  {
-    title: 'Profesionales Verificados',
-    text: 'Perfiles con reseñas reales y calificaciones de clientes anteriores.',
-    icon: peopleCircleOutline
-  },
-  {
-    title: 'Pagos Seguros',
-    text: 'Integración con tarjetas de crédito, débito y PSE. Comisiones justas solo sobre servicios completados.',
-    icon: cardOutline
-  }
-];
-
-const HOWTO: HowTo[] = [
-  {
-    title: 'Regístrate Gratis',
-    text: 'Crea tu cuenta sin costos. Completa tu perfil y verifica tu identidad.',
-    icon: personAddOutline,
-    step: 1
-  },
-  {
-    title: 'Busca o Publica',
-    text: 'Explora por categoría, ubicación y precio, o publica tu servicio.',
+    title: "Sé qué servicio necesito",
+    text: "Explora servicios para tu hogar y elige la categoría adecuada antes de crear una solicitud.",
     icon: searchOutline,
-    step: 2
+    action: "Explorar servicios",
+    routerLink: "/servicioJob/servicio",
   },
   {
-    title: 'Conecta y Contrata',
-    text: 'Recibe propuestas, negocia detalles y acepta la orden.',
-    icon: checkmarkCircleOutline,
-    step: 3
+    title: "Tengo un problema",
+    text: "Te orientamos para encontrar el tipo de servicio adecuado. La decisión final siempre será tuya.",
+    icon: helpCircleOutline,
+    action: "Orientación guiada",
+    status: "Preparado para conectar con diagnosis",
   },
   {
-    title: 'Califica la Experiencia',
-    text: 'Al finalizar, califica el servicio y construye reputación.',
-    icon: starOutline,
-    step: 4
-  }
+    title: "Profesionales cerca de mí",
+    text: "Explora profesionales disponibles según la ubicación donde necesitas el servicio.",
+    icon: locationOutline,
+    action: "Proximidad",
+    status: "Mapa pendiente para la siguiente fase",
+  },
 ];
 
-const CATEGORIA: Category[] = [
-  //{ title: 'Hogar y Limpieza', sub: '120+ servicios', icon: homeOutline },
-  { title: 'Tecnología y Diseño', sub: '95+ servicios', icon: terminalOutline,},
-  
-  { title: 'Mantenimiento y Reparaciones', sub: '110+ servicios', icon: buildOutline },
-  { title: 'Cuidado mascota ', sub: '70+ servicios', icon: pawOutline },
-  { title: 'Servicio de segurida privada', sub: '50+ servicios', icon:shieldOutline},
-  { title: 'Foto y Video', sub: '40+ servicios', icon: cameraOutline },
-  {title:'Educacion y Entrenador', sub: '80+ servicios', icon: peopleCircleOutline}
+const TRUST_POINTS = [
+  { label: "Servicios residenciales", icon: homeOutline },
+  { label: "Profesionales verificados", icon: shieldCheckmarkOutline },
+  { label: "Solicitudes claras", icon: checkmarkCircleOutline },
+  { label: "Atención oportuna", icon: flashOutline },
 ];
+
+const formatCount = (count: number) =>
+  count === 1 ? "1 profesional" : `${count} profesionales`;
 
 const ExploreContainer: React.FC<ContainerProps> = () => {
-  // favoritos por título (puede cambiar a id si añades uno)
-  const [favs, setFavs] = useState<Set<string>>(() => {
-    try {
-      const raw = localStorage.getItem("explore_favs");
-      return raw ? new Set<string>(JSON.parse(raw)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [apiState, setApiState] = useState<"ready" | "offline">("offline");
 
   useEffect(() => {
-    try {
-      localStorage.setItem("explore_favs", JSON.stringify(Array.from(favs)));
-    } catch { /* ignore */ }
-  }, [favs]);
+    let active = true;
 
-  const toggleFav = (key: string) => {
-    setFavs(prev => {
-      const copy = new Set(prev);
-      if (copy.has(key)) copy.delete(key); else copy.add(key);
-      return copy;
-    });
-  };
+    api
+      .get<PaginatedResponse<ServiceCategory> | ServiceCategory[]>("categories/")
+      .then((payload) => {
+        if (!active) return;
+        const nextCategories = Array.isArray(payload) ? payload : payload.results;
+        setCategories(nextCategories);
+        setApiState("ready");
+      })
+      .catch(() => {
+        if (active) {
+          setApiState("offline");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingCategories(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const visibleCategories = useMemo(() => categories.slice(0, 6), [categories]);
 
   return (
-    <div className="landing-wrapper">
-      {/* ===== Why ===== */}
-      <section className="section light">
-        <IonText color="dark">
-          <h2 className="section-title">¿Por Qué Elegir  Serviprox?</h2>
-        </IonText>
-        <IonText color="medium">
-          <p className="section-subtitle">
-            Creamos una plataforma justa y transparente donde tanto profesionales como clientes
-            pueden crecer sin limitaciones económicas injustas.
+    <div className="sp-home">
+      <section className="sp-hero">
+        <div className="sp-hero__content">
+          <IonBadge className="sp-kicker">Servicios para el hogar</IonBadge>
+          <h1>Encuentra ayuda confiable para tu hogar</h1>
+          <p>
+            Serviprox conecta clientes con profesionales residenciales para resolver
+            reparaciones, mantenimiento, instalaciones y tareas domésticas con más claridad.
           </p>
-        </IonText>
+          <div className="sp-hero__actions">
+            <IonButton routerLink="/servicioJob/servicio">Buscar servicio</IonButton>
+            <IonButton routerLink="/publicar" fill="outline">
+              Soy profesional
+            </IonButton>
+          </div>
+        </div>
 
-        <IonGrid fixed>
-          <IonRow className="cards-row">
-            {FEATURES.map((f, idx) => {
-              const key = `feature-${f.title}`;
-              const isFav = favs.has(key);
-              return (
-                <IonCol key={idx} size="12" sizeMd="6">
-                  <IonCard className="info-card">
-                    <div className="icon-badge">
-                      <IonIcon icon={f.icon} />
-                    </div>
-
-                    {/* favorito desactivado (removido) */}
-
-                    <IonCardHeader>
-                      <IonText color="dark">
-                        <IonCardTitle>{f.title}</IonCardTitle>
-                      </IonText>
-                    </IonCardHeader>
-                    <IonCardContent>
-                      <IonText color="medium">{f.text}</IonText>
-                    </IonCardContent>
-                  </IonCard>
-                </IonCol>
-              );
-            })}
-          </IonRow>
-        </IonGrid>
+        <div className="sp-hero__panel" aria-label="Resumen de servicios del hogar">
+          {TRUST_POINTS.map((item) => (
+            <div className="sp-trust-item" key={item.label}>
+              <IonIcon icon={item.icon} />
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
       </section>
 
-      {/* ===== Cómo Funciona ===== */}
-      <section className="section">
-        <IonText color="dark">
-          <h2 className="section-title">Cómo Funciona</h2>
+      <section className="sp-section">
+        <IonText>
+          <h2>Elige cómo quieres empezar</h2>
         </IonText>
-        <IonText color="medium">
-          <p className="section-subtitle">
-            Cuatro pasos simples para conectar profesionales con clientes de manera segura y eficiente.
-          </p>
-        </IonText>
-
         <IonGrid fixed>
-          <IonRow className="how-row">
-            {HOWTO.map((h, idx) => (
-              <IonCol key={idx} size="12" sizeMd="6" className="how-item">
-                <div className="how-icon">
-                  <IonIcon icon={h.icon} />
-               
-                  
-                  <span className="how-step">{h.step}</span>
-                </div>
-                <IonText color="dark">
-                  <h3>{h.title}</h3>
-                </IonText>
-                <IonText color="medium">
-                  <p>{h.text}</p>
-                </IonText>
+          <IonRow className="sp-card-row">
+            {MODALITIES.map((modality) => (
+              <IonCol size="12" sizeMd="4" key={modality.title}>
+                <IonCard className="sp-glass-card sp-modality-card">
+                  <IonCardHeader>
+                    <div className="sp-icon-badge">
+                      <IonIcon icon={modality.icon} />
+                    </div>
+                    <IonCardTitle>{modality.title}</IonCardTitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    <p>{modality.text}</p>
+                    {modality.routerLink ? (
+                      <IonButton routerLink={modality.routerLink} fill="clear">
+                        {modality.action}
+                      </IonButton>
+                    ) : (
+                      <IonButton fill="clear" disabled>
+                        {modality.action}
+                      </IonButton>
+                    )}
+                    {modality.status && <small>{modality.status}</small>}
+                  </IonCardContent>
+                </IonCard>
               </IonCol>
             ))}
           </IonRow>
         </IonGrid>
       </section>
 
-      {/* ===== Categoria ===== */}
-      <section className="section light">
-        <IonText color="dark">
-          <h2 className="section-title">Explora Nuestras Categorías</h2>
-        </IonText>
-        <IonText color="medium">
-          <p className="section-subtitle">
-            Desde servicios para el hogar hasta consultoría profesional, encuentra exactamente lo que necesitas.
-          </p>
-        </IonText>
+      <section className="sp-section sp-section--soft">
+        <div className="sp-section-heading">
+          <div>
+            <h2>Categorías del hogar</h2>
+            <p>Catálogo conectado al backend Django cuando la API está disponible.</p>
+          </div>
+          <IonBadge className={apiState === "ready" ? "sp-api-badge is-ready" : "sp-api-badge"}>
+            API {apiState === "ready" ? "conectada" : "pendiente"}
+          </IonBadge>
+        </div>
 
-        <IonGrid fixed>
-          <IonRow className="cards-row">
-            {CATEGORIA.map((c, idx) => {
-              const key = `cat-${c.title}`;
-              const isFav = favs.has(key);
-              return (
-                <IonCol key={idx} size="12" sizeMd="6" sizeLg="4">
-                  <IonCard className="category-card">
-                    <div className="icon-badge">
-                      <IonIcon icon={c.icon} />
-                    </div>
-
-                    {/* favorito desactivado (removido) */}
-
+        {loadingCategories ? (
+          <div className="sp-loading">
+            <IonSpinner name="crescent" />
+            <span>Cargando categorías...</span>
+          </div>
+        ) : visibleCategories.length > 0 ? (
+          <IonGrid fixed>
+            <IonRow className="sp-card-row">
+              {visibleCategories.map((category) => (
+                <IonCol size="12" sizeMd="6" sizeLg="4" key={category.id}>
+                  <IonCard className="sp-glass-card sp-category-card">
                     <IonCardHeader>
-                      <IonText color="dark">
-                        <IonCardTitle>{c.title}</IonCardTitle>
-                      </IonText>
+                      <div className="sp-icon-badge sp-icon-badge--red">
+                        <IonIcon icon={buildOutline} />
+                      </div>
+                      <IonCardTitle>{category.name}</IonCardTitle>
                     </IonCardHeader>
-                    <IonCardContent className="muted">
-                      <IonText color="medium">{c.sub}</IonText>
+                    <IonCardContent>
+                      <p>{category.description}</p>
+                      <span>{formatCount(category.professionals_count)}</span>
                     </IonCardContent>
                   </IonCard>
                 </IonCol>
-              );
-            })}
-          </IonRow>
-        </IonGrid>
+              ))}
+            </IonRow>
+          </IonGrid>
+        ) : (
+          <div className="sp-empty-state">
+            Levanta Django y carga los datos demo para ver las categorías reales del hogar.
+          </div>
+        )}
       </section>
     </div>
   );

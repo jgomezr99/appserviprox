@@ -30,12 +30,7 @@ import {
 } from "@ionic/react";
 import {
   funnelOutline,
-  codeSlashOutline,
   constructOutline,
-  pawOutline,
-  shieldCheckmarkOutline,
-  cameraOutline,
-  schoolOutline,
   sparklesOutline,
   star,
   pinOutline,
@@ -81,48 +76,47 @@ type Publicacion = {
 };
 
 const CATEGORIES: Category[] = [
-  { id: "all",               label: "Todos",                          icon: sparklesOutline },
- 
-  { id: "mantenimiento",     label: "Mantenimiento y\nReparaciones",  icon: constructOutline },
- // { id: "cuidado_mascota",   label: "Cuidado de mascotas",            icon: pawOutline },
- 
-  { id: "educacion_tutoria", label: "Educación y\nEntrenador",        icon: schoolOutline },
+  { id: "all", label: "Todos", icon: sparklesOutline },
+  { id: "plomeria", label: "Plomería", icon: constructOutline },
+  { id: "electricidad", label: "Electricidad", icon: constructOutline },
+  { id: "limpieza", label: "Limpieza", icon: constructOutline },
+  { id: "mantenimiento", label: "Mantenimiento y\nReparaciones", icon: constructOutline },
 ];
 
 // Servicios estáticos
 const STATIC_SERVICES: Service[] = [
   {
-     id: "s1",
-    title: "Servicio de Remodelación",
-    categoryId: "mantenimiento",
-    categoryLabel: "Contratista",
-    price: "$90.000 por hora",
-    professional: "Camilo Gómez",
-    rating: 4.1,
-    location: "Bogotá, alrededores ",
-    image: "https://client-setting-co-institucional-images.s3.amazonaws.com/credito_para_remodelar_vivienda_f2f5661138.jpg"
+    id: "s1",
+    title: "Reparación de fuga de agua",
+    categoryId: "plomeria",
+    categoryLabel: "Plomería",
+    price: "$90.000 por visita",
+    professional: "Marcela Gómez",
+    rating: 4.8,
+    location: "Kennedy, Bogotá",
+    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?q=80&w=1600&auto=format&fit=crop"
   },
   {
     id: "s2",
-    title: "Entrenamiento Fitness Personalizado",
-    categoryId: "educacion_tutoria",
-    categoryLabel: "Entrenador Personal",
-    price: "$50.000 por hora",
-    professional: "Ana García",
-    rating: 4.9,
-    location: "Bogotá",
-    image: "https://images.unsplash.com/photo-1549060279-7e168fcee0c2?q=80&w=2000&auto=format&fit=crop"
+    title: "Revisión eléctrica residencial",
+    categoryId: "electricidad",
+    categoryLabel: "Electricidad",
+    price: "$120.000 por visita",
+    professional: "Diego Salcedo",
+    rating: 4.7,
+    location: "Timiza, Bogotá",
+    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1600&auto=format&fit=crop"
   },
   {
     id: "s3",
-    title: "Servicios de Contratista General",
+    title: "Mantenimiento general del hogar",
     categoryId: "mantenimiento",
-    categoryLabel: "Contratista",
-    price: "$80.000 por hora",
-    professional: "Javier Gómez",
-    rating: 4.5,
+    categoryLabel: "Mantenimiento",
+    price: "$140.000 por visita",
+    professional: "Andrés Ruiz",
+    rating: 4.9,
     location: "Bogotá y alrededores, Colombia",
-    image: "https://i.ibb.co/sdd1z3t3/Servicios-Generales-Olusa-Contratisas-Generales-Peru.jpg"
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1600&auto=format&fit=crop"
   },
 ];
 
@@ -248,7 +242,7 @@ const ServicioJob: React.FC = () => {
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
 
-          <IonTitle>Servicios Profesionales</IonTitle>
+            <IonTitle>Servicios del hogar</IonTitle>
 
           <IonButtons slot="end">
             <IonButton fill="clear" onClick={() => setShowFilters(true)}>
@@ -264,7 +258,7 @@ const ServicioJob: React.FC = () => {
           {/* Buscador */}
           <div className="search-row">
             <IonSearchbar
-              placeholder="Buscar servicios..."
+              placeholder="Buscar plomería, electricidad, limpieza..."
               value={searchTerm}
               onIonInput={(e) => setSearchTerm(e.detail.value ?? "")}
               inputmode="search"

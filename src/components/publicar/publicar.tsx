@@ -106,10 +106,13 @@ export default function Publicar() {
 
   const categorias: Categoria[] = useMemo(
     () => [
-     // { id: "tecno_diseno", nombre: "Tecnología y Diseño" },
+      { id: "plomeria", nombre: "Plomería" },
+      { id: "electricidad", nombre: "Electricidad" },
+      { id: "limpieza", nombre: "Limpieza" },
+      { id: "cerrajeria", nombre: "Cerrajería" },
+      { id: "pintura", nombre: "Pintura" },
       { id: "mantenimiento", nombre: "Mantenimiento y Reparaciones" },
-     // { id: "cuidado_mascota", nombre: "Cuidado mascota" },
-      { id: "educacion_tutoria", nombre: "Educación y entrenador" }, // quitado espacio final
+      { id: "instalaciones", nombre: "Instalaciones" },
     ],
     []
   );
@@ -331,7 +334,7 @@ export default function Publicar() {
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle>Publicar Servicio</IonTitle>
+          <IonTitle>Ofrecer servicios</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -359,10 +362,10 @@ export default function Publicar() {
 
             {segment === "publicar" && (
               <>
-                <h2 className="ps-subtitle ion-text-center">Publicar Servicio Independiente</h2>
+                <h2 className="ps-subtitle ion-text-center">Publicar servicio para el hogar</h2>
                 <p className="ps-intro ion-text-center">
-                  Describe tus servicios profesionales para que los clientes puedan
-                  contactarte.
+                  Describe los servicios residenciales que atiendes para que los clientes
+                  puedan encontrarte.
                 </p>
     
                 <IonGrid className="ps-form">
@@ -372,7 +375,7 @@ export default function Publicar() {
                       <IonItem className="input-item" lines="none">
                         <IonLabel position="stacked">Título del Servicio</IonLabel>
                         <IonInput
-                          placeholder="Ej: Desarrollo Web Frontend Avanzado"
+                          placeholder="Ej: Reparación de fugas en baños y cocina"
                           value={titulo}
                           onIonInput={(e) => setTitulo(String(e.detail.value ?? ""))}
                         />

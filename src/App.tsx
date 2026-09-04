@@ -1,6 +1,7 @@
 import { IonApp, IonRouterOutlet, IonSplitPane, setupIonicReact } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import { Redirect, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import Menu from './components/Menu';
 import Page from './pages/Page';
 
@@ -8,7 +9,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ServicioJob from './components/servicioJob/servicio';
 import Publicar from './components/publicar/publicar';
-import Reservas from './components/misreservas/misreserva' ;
+import Reservas from './components/misreservas/misreserva';
 import HistorialPago from './components/historiadepago/historiapago';
 import Misfavorito from './components/misfavorito/misfavorito';
 import Configuracion from './components/configuracion/configuracion';
@@ -49,60 +50,55 @@ setupIonicReact();
 const App: React.FC = () => {
   return (
     <IonApp>
-      <IonReactRouter>
-  <IonSplitPane contentId="main" when="false">
-          <Menu />
-          <IonRouterOutlet id="main">
-            {/* Auth routes */}
-            <Route path="/login" exact={true}>
-              <Login />
-            </Route>
-            {/* alternate entry path used by the Menu */}
-            <Route path="/ingresar" exact={true}>
-              <Login />
-            </Route>
-            <Route path="/register" exact={true}>
-              <Register />
-            </Route>
+      <AuthProvider>
+        <IonReactRouter>
+          <IonSplitPane contentId="main" when="false">
+            <Menu />
+            <IonRouterOutlet id="main">
+              {/* Auth routes */}
+              <Route path="/login" exact={true}>
+                <Login />
+              </Route>
+              {/* alternate entry path used by the Menu */}
+              <Route path="/ingresar" exact={true}>
+                <Redirect to="/login" />
+              </Route>
+              <Route path="/register" exact={true}>
+                <Register />
+              </Route>
 
-            {/* Main pages */}
-            <Route path="/folder/:name" exact={true}>
-              <Page />
-            </Route>
-            {/* Main pages *<Route path="/pages/PerfilUsuario" exact={true}>
-              <PerfilUsuario />
-            </Route>
-            <Route path="/pages/PerfilProfesional" exact={true}>
-              <PerfilProfesional />
-            </Route>/}
+              <Route path="/folder/:name" exact={true}>
+                <Page />
+              </Route>
 
-            {/* Feature routes */}
-            <Route path="/servicioJob/servicio" exact={true}>
-              <ServicioJob />
-            </Route>
-            <Route path="/reservas" exact={true}>
-              <Reservas />
-            </Route>
-            <Route path="/publicar" exact={true}>
-              <Publicar />
-            </Route>
-            <Route path="/historialpago" exact={true}>
-              <HistorialPago />
-            </Route>
-            <Route path="/misfavorito" exact={true}>
-              <Misfavorito />
-            </Route>
-            <Route path="/configuracion" exact={true}>
-              <Configuracion />
-            </Route>
+              {/* Feature routes */}
+              <Route path="/servicioJob/servicio" exact={true}>
+                <ServicioJob />
+              </Route>
+              <Route path="/reservas" exact={true}>
+                <Reservas />
+              </Route>
+              <Route path="/publicar" exact={true}>
+                <Publicar />
+              </Route>
+              <Route path="/historialpago" exact={true}>
+                <HistorialPago />
+              </Route>
+              <Route path="/misfavorito" exact={true}>
+                <Misfavorito />
+              </Route>
+              <Route path="/configuracion" exact={true}>
+                <Configuracion />
+              </Route>
 
-            {/* Default redirect */}
-            <Route path="/" exact={true}>
-              <Redirect to="/folder/inbox" />
-            </Route>
-          </IonRouterOutlet>
-        </IonSplitPane>
-      </IonReactRouter>
+              {/* Default redirect */}
+              <Route path="/" exact={true}>
+                <Redirect to="/folder/inbox" />
+              </Route>
+            </IonRouterOutlet>
+          </IonSplitPane>
+        </IonReactRouter>
+      </AuthProvider>
     </IonApp>
   );
 };

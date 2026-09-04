@@ -23,9 +23,9 @@ type Factura = {
 
 /* Datos demo */
 const FACTURAS: Factura[] = [
-  {  id: "FACT-00123", fecha: "2024-08-15", servicio: "Entrenamiento", montoCOP: 180000, estado: "Pagada", metodoPago: "Nequi" },
-  { id: "FACT-00124", fecha: "2025-05-17", servicio: "Clases", montoCOP: 120000, estado: "Pago Rechazado", metodoPago: "Bancolombia" },
-  { id: "FACT-00125", fecha: "2025-02-01", servicio: "Desarrollo Web", montoCOP: 1500000, estado: "Pagada", metodoPago: "Efectivo" },
+  { id: "FACT-00123", fecha: "2024-08-15", servicio: "Reparación de fuga", montoCOP: 180000, estado: "Pagada", metodoPago: "Nequi" },
+  { id: "FACT-00124", fecha: "2025-05-17", servicio: "Revisión eléctrica", montoCOP: 120000, estado: "Pago Rechazado", metodoPago: "Bancolombia" },
+  { id: "FACT-00125", fecha: "2025-02-01", servicio: "Pintura de habitación", montoCOP: 520000, estado: "Pagada", metodoPago: "Efectivo" },
 ];
 
 /* Helpers */

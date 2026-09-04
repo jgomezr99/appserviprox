@@ -27,13 +27,14 @@ import {
   personOutline,
   informationCircleOutline
 } from 'ionicons/icons';
+import { useAuth } from '../../context/AuthContext';
 
 const Configuracion: React.FC = () => {
   const router = useIonRouter();
+  const { isAuthenticated, user } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [language, setLanguage] = useState('es');
-  const [isAuth, setIsAuth] = useState<boolean>(false);
 
   // Datos de perfil
   const [firstName, setFirstName] = useState('');
@@ -47,16 +48,12 @@ const Configuracion: React.FC = () => {
   };
 
   useEffect(() => {
-    const hasToken = !!localStorage.getItem('authToken');
-    setIsAuth(hasToken);
-
-    if (hasToken) {
-      // Cargar perfil almacenado
-      setFirstName(localStorage.getItem('user.firstName') || '');
-      setLastName(localStorage.getItem('user.lastName') || '');
-      setEmail(localStorage.getItem('user.email') || '');
+    if (user) {
+      setFirstName(user.first_name || '');
+      setLastName(user.last_name || '');
+      setEmail(user.email || '');
     }
-  }, []);
+  }, [user]);
 
   const onSaveProfile = () => {
     localStorage.setItem('user.firstName', firstName.trim());
@@ -77,7 +74,7 @@ const Configuracion: React.FC = () => {
       </IonHeader>
 
       <IonContent fullscreen>
-        {!isAuth ? (
+        {!isAuthenticated ? (
           <IonText className="ion-padding">
             <h2>Necesitas iniciar sesión</h2>
             <p>Ingresa a tu cuenta para ver y editar tu configuración.</p>
@@ -150,11 +147,6 @@ const Configuracion: React.FC = () => {
                 <IonSelectOption value="es">Español</IonSelectOption>
                 <IonSelectOption value="en">English</IonSelectOption>
               </IonSelect>
-            </IonItem>
-
-            <IonItem button routerLink="/perfil">
-              <IonIcon icon={personOutline} slot="start" />
-              <IonLabel>Perfil</IonLabel>
             </IonItem>
 
             <IonItem className="ion-margin-top">
