@@ -11,8 +11,16 @@ class OrderEventInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("id", "client", "professional", "status", "scheduled_for", "final_price")
-    list_filter = ("status",)
+    list_display = (
+        "id",
+        "client",
+        "professional",
+        "status",
+        "payment_status",
+        "scheduled_for",
+        "final_price",
+    )
+    list_filter = ("status", "payment_status")
     search_fields = ("client__email", "professional__display_name")
     inlines = [OrderEventInline]
 

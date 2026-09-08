@@ -262,11 +262,15 @@ def seed_client() -> User:
             "role": UserRole.CLIENT,
             "phone": "+57 300 000 0000",
             "city": "Bogotá",
+            "onboarding_completed": True,
         },
     )
     if created:
         client.set_password(DEMO_PASSWORD)
         client.save()
+    elif not client.onboarding_completed:
+        client.onboarding_completed = True
+        client.save(update_fields=["onboarding_completed"])
 
     Household.objects.update_or_create(
         owner=client,
@@ -294,13 +298,20 @@ def seed_professionals(categories: dict[str, ServiceCategory]) -> None:
                 "first_name": data["first_name"],
                 "last_name": data["last_name"],
                 "role": UserRole.PROFESSIONAL,
+                "phone": "+57 300 000 0000",
                 "city": "Bogotá",
                 "is_identity_verified": data["verified"],
+                "onboarding_completed": True,
             },
         )
         if created:
             user.set_password(DEMO_PASSWORD)
             user.save()
+        elif not user.onboarding_completed:
+            user.onboarding_completed = True
+            if not user.phone:
+                user.phone = "+57 300 000 0000"
+            user.save(update_fields=["onboarding_completed", "phone"])
 
         profile, _ = ProfessionalProfile.objects.update_or_create(
             user=user,
@@ -321,18 +332,29 @@ def seed_professionals(categories: dict[str, ServiceCategory]) -> None:
             },
         )
 
+        selected_service_ids = []
         for slug in data["categories"]:
             category = categories[slug]
-            reference = category.services.first()
-            ProfessionalService.objects.update_or_create(
-                profile=profile,
-                category=category,
-                defaults={
-                    "price_min": reference.price_min if reference else None,
-                    "price_max": reference.price_max if reference else None,
-                    "years_experience": 5,
-                },
-            )
+            category_services = list(category.services.filter(is_active=True))
+            selected_service_ids.extend(service.id for service in category_services)
+            for service in category_services:
+                ProfessionalService.objects.update_or_create(
+                    profile=profile,
+                    service=service,
+                    defaults={
+                        "price_min": service.price_min,
+                        "price_max": service.price_max,
+                        "observations": (
+                            f"Tarifa base por {service.name.lower()}; "
+                            "materiales y alcance final se confirman con el cliente."
+                        ),
+                        "years_experience": 5,
+                    },
+                )
+
+        ProfessionalService.objects.filter(profile=profile).exclude(
+            service_id__in=selected_service_ids
+        ).delete()
 
         profile.availability.all().delete()
         AvailabilitySlot.objects.bulk_create(

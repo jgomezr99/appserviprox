@@ -12,7 +12,7 @@ import { useHistory } from "react-router-dom";
 import { ApiError } from "../services/api";
 import { catalogService, professionalProfileService } from "../services/serviprox";
 import { useAuth } from "../context/AuthContext";
-import type { ServiceCategory } from "../types/serviprox";
+import type { Service, ServiceCategory } from "../types/serviprox";
 import "./RolePages.css";
 
 const ProfessionalOnboarding: React.FC = () => {
@@ -31,7 +31,8 @@ const ProfessionalOnboarding: React.FC = () => {
   const [coverageRadiusKm, setCoverageRadiusKm] = useState(8);
   const [acceptsUrgent, setAcceptsUrgent] = useState(false);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
-  const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [selectedServices, setSelectedServices] = useState<number[]>([]);
   const [profileExists, setProfileExists] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -41,12 +42,16 @@ const ProfessionalOnboarding: React.FC = () => {
     let active = true;
     Promise.allSettled([
       catalogService.listCategories(),
+      catalogService.listServices(),
       professionalProfileService.getMine(),
     ])
-      .then(([categoryResult, profileResult]) => {
+      .then(([categoryResult, serviceResult, profileResult]) => {
         if (!active) return;
         if (categoryResult.status === "fulfilled") {
           setCategories(categoryResult.value);
+        }
+        if (serviceResult.status === "fulfilled") {
+          setServices(serviceResult.value);
         }
         if (profileResult.status === "fulfilled") {
           const profile = profileResult.value;
@@ -58,7 +63,7 @@ const ProfessionalOnboarding: React.FC = () => {
           setCity(profile.city);
           setCoverageRadiusKm(profile.coverage_radius_km);
           setAcceptsUrgent(profile.accepts_urgent);
-          setSelectedCategories(profile.services.map((service) => service.category));
+          setSelectedServices(profile.services.map((service) => service.service));
         }
       })
       .finally(() => {
@@ -69,13 +74,15 @@ const ProfessionalOnboarding: React.FC = () => {
     };
   }, []);
 
-  const toggleCategory = (categoryId: number) => {
-    setSelectedCategories((current) =>
-      current.includes(categoryId)
-        ? current.filter((id) => id !== categoryId)
-        : [...current, categoryId]
+  const toggleService = (serviceId: number) => {
+    setSelectedServices((current) =>
+      current.includes(serviceId)
+        ? current.filter((id) => id !== serviceId)
+        : [...current, serviceId]
     );
   };
+
+  const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
 
   const canSubmit =
     firstName.trim() &&
@@ -84,7 +91,7 @@ const ProfessionalOnboarding: React.FC = () => {
     city.trim() &&
     displayName.trim() &&
     headline.trim() &&
-    selectedCategories.length > 0 &&
+    selectedServices.length > 0 &&
     !saving;
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -109,7 +116,7 @@ const ProfessionalOnboarding: React.FC = () => {
         city: city.trim(),
         coverage_radius_km: coverageRadiusKm,
         accepts_urgent: acceptsUrgent,
-        service_category_ids: selectedCategories,
+        service_ids: selectedServices,
       };
 
       if (profileExists) {
@@ -253,25 +260,25 @@ const ProfessionalOnboarding: React.FC = () => {
                   <div className="sp-card-header">
                     <div className="sp-card-title">
                       <h2>Servicios que ofreces</h2>
-                      <p>Selecciona categorías reales del catálogo Serviprox.</p>
+                      <p>Selecciona servicios reales del catálogo Serviprox.</p>
                     </div>
                   </div>
 
-                  {categories.length ? (
+                  {services.length ? (
                     <div className="sp-choice-list">
-                      {categories.map((category) => {
-                        const selected = selectedCategories.includes(category.id);
+                      {services.map((service) => {
+                        const selected = selectedServices.includes(service.id);
                         return (
                           <button
                             className={`sp-choice-card ${selected ? "is-selected" : ""}`}
                             type="button"
-                            key={category.id}
-                            onClick={() => toggleCategory(category.id)}
+                            key={service.id}
+                            onClick={() => toggleService(service.id)}
                             aria-pressed={selected}
                           >
                             <span>
-                              <strong>{category.name}</strong>
-                              <small>{category.description}</small>
+                              <strong>{service.name}</strong>
+                              <small>{categoryNameById.get(service.category) || service.category_slug}</small>
                             </span>
                             <span>{selected ? "Seleccionado" : "Agregar"}</span>
                           </button>

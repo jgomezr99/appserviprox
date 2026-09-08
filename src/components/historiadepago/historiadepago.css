@@ -1,32 +1,23 @@
-/* Styles for Historiadepago favorite button and list */
+.sp-payment-list {
+  display: grid;
+  gap: 14px;
+}
 
-.ion-page .fav-btn {
-  --padding-start: 6px;
-  --padding-end: 6px;
-  --padding-top: 6px;
-  --padding-bottom: 6px;
-  color: var(--ion-color-medium);
+.sp-payment-card {
+  display: grid;
+  gap: 14px;
+}
+
+.sp-payment-demo {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(217, 54, 74, 0.14);
   border-radius: 18px;
+  background: var(--sp-accent-soft);
 }
 
-/* Make the icon larger and centered */
-.fav-btn ion-icon {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
-}
-
-/* Active state: red heart */
-.fav-btn[aria-pressed="true"] {
-  color: var(--ion-color-danger);
-}
-
-/* Ensure buttons are visible in the list end slot */
-ion-item .fav-btn, ion-item ion-button[slot="end"] {
-  margin-left: 6px;
-}
-
-/* small responsive tweaks */
-@media (max-width: 640px) {
-  .fav-btn ion-icon { font-size: 16px; }
+.sp-payment-demo p {
+  color: #8f1f2f;
+  font-weight: 720;
 }

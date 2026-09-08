@@ -100,11 +100,15 @@ export type HouseholdPayload = Omit<
 
 export interface ProfessionalService {
   id: number;
+  service: number;
+  service_name: string;
+  service_slug: string;
   category: number;
   category_name: string;
   category_slug: string;
   price_min: string | null;
   price_max: string | null;
+  observaciones: string;
   years_experience: number;
 }
 
@@ -123,6 +127,7 @@ export interface Professional {
   longitude: number | null;
   distance_km?: number;
   categories: string[];
+  matching_service: ProfessionalService | null;
 }
 
 export interface ProfessionalProfile {
@@ -145,6 +150,31 @@ export interface ProfessionalProfile {
   created_at: string;
 }
 
+export interface AvailabilitySlot {
+  id: number;
+  weekday: number;
+  weekday_label: string;
+  start_time: string;
+  end_time: string;
+}
+
+export interface PortfolioItem {
+  id: number;
+  image_url: string;
+  caption: string;
+  sort_order: number;
+}
+
+export interface ProfessionalDetail extends Professional {
+  bio: string;
+  coverage_radius_km: number;
+  response_time_minutes: number;
+  services: ProfessionalService[];
+  availability: AvailabilitySlot[];
+  portfolio: PortfolioItem[];
+  created_at: string;
+}
+
 export interface ProfessionalProfilePayload {
   display_name: string;
   headline: string;
@@ -154,7 +184,117 @@ export interface ProfessionalProfilePayload {
   coverage_radius_km?: number;
   response_time_minutes?: number;
   accepts_urgent?: boolean;
-  service_category_ids?: number[];
+  service_ids?: number[];
+  service_offerings?: ProfessionalServicePayload[];
+  custom_services?: CustomProfessionalServicePayload[];
+}
+
+export interface ProfessionalServicePayload {
+  service: number;
+  price_min?: string | null;
+  price_max?: string | null;
+  observaciones?: string;
+  years_experience?: number;
+}
+
+export interface CustomProfessionalServicePayload {
+  category: number;
+  name: string;
+  description?: string;
+  price_min?: string | null;
+  price_max?: string | null;
+  observaciones?: string;
+  years_experience?: number;
+}
+
+export type ServiceRequestStatus =
+  | "draft"
+  | "open"
+  | "matched"
+  | "accepted"
+  | "rejected"
+  | "closed"
+  | "cancelled";
+
+export type ServiceRequestUrgency = "flexible" | "this_week" | "urgent";
+
+export interface RequestClient {
+  id: number;
+  first_name: string;
+  last_name: string;
+  initials: string;
+  city: string;
+}
+
+export interface RequestOrder {
+  id: number;
+  status: string;
+  status_label: string;
+  payment_status: OrderPaymentStatus;
+  payment_status_label: string;
+  payment_confirmed_at: string | null;
+}
+
+export type OrderPaymentStatus = "pending" | "paid";
+
+export interface Order {
+  id: number;
+  service_request: number;
+  professional: Professional;
+  status: string;
+  status_label: string;
+  payment_status: OrderPaymentStatus;
+  payment_status_label: string;
+  payment_confirmed_at: string | null;
+  payment_reference: string;
+  scheduled_for: string | null;
+  estimate_min: string | null;
+  estimate_max: string | null;
+  final_price: string | null;
+  client_notes: string;
+  events: Array<{
+    id: number;
+    status: string;
+    status_label: string;
+    note: string;
+    created_at: string;
+  }>;
+  created_at: string;
+}
+
+export interface ServiceRequestImage {
+  id: number;
+  image_url: string;
+  created_at: string;
+}
+
+export interface ServiceRequest {
+  id: number;
+  client: RequestClient;
+  household: Household;
+  diagnostic_session: number | null;
+  suggested_category: ServiceCategory | null;
+  selected_category: ServiceCategory;
+  selected_service: Service | null;
+  professional: Professional | null;
+  followed_suggestion: boolean | null;
+  description: string;
+  urgency: ServiceRequestUrgency;
+  search_radius_km: number;
+  status: ServiceRequestStatus;
+  status_label: string;
+  order: RequestOrder | null;
+  images: ServiceRequestImage[];
+  created_at: string;
+}
+
+export interface ServiceRequestPayload {
+  household: number;
+  selected_service: number;
+  professional: number;
+  description: string;
+  urgency?: ServiceRequestUrgency;
+  search_radius_km?: number;
 }
 
 export interface PaginatedResponse<T> {

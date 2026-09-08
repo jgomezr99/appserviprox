@@ -6,6 +6,7 @@ import Menu from './components/Menu';
 import Page from './pages/Page';
 import ClientHome from './pages/ClientHome';
 import ClientOnboarding from './pages/ClientOnboarding';
+import ClientProfessionalDetail from './pages/ClientProfessionalDetail';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -13,11 +14,12 @@ import ServicioJob from './components/servicioJob/servicio';
 import Reservas from './components/misreservas/misreserva';
 import HistorialPago from './components/historiadepago/historiapago';
 import Misfavorito from './components/misfavorito/misfavorito';
-import Configuracion from './components/configuracion/configuracion';
 import HouseholdsPage from './pages/HouseholdsPage';
 import ProfessionalDashboard from './pages/ProfessionalDashboard';
 import ProfessionalOnboarding from './pages/ProfessionalOnboarding';
 import ProfessionalProfilePage from './pages/ProfessionalProfilePage';
+import ProfessionalRequestDetailPage from './pages/ProfessionalRequestDetailPage';
+import ProfessionalRequestsPage from './pages/ProfessionalRequestsPage';
 import RolePlaceholderPage from './pages/RolePlaceholderPage';
 import StaffHome from './pages/StaffHome';
 import { RequireAuth, RootRedirect } from './components/routing/RouteGuards';
@@ -101,6 +103,11 @@ const App: React.FC = () => {
                   <ServicioJob />
                 </RequireAuth>
               </Route>
+              <Route path="/cliente/profesionales/:id" exact={true}>
+                <RequireAuth role="client">
+                  <ClientProfessionalDetail />
+                </RequireAuth>
+              </Route>
               <Route path="/cliente/solicitudes" exact={true}>
                 <RequireAuth role="client">
                   <Reservas />
@@ -118,17 +125,21 @@ const App: React.FC = () => {
                 </RequireAuth>
               </Route>
               <Route path="/profesional/perfil" exact={true}>
-                <RequireAuth role="professional">
+                <Redirect to="/perfil" />
+              </Route>
+              <Route path="/perfil" exact={true}>
+                <RequireAuth onboarding="any">
                   <ProfessionalProfilePage />
                 </RequireAuth>
               </Route>
               <Route path="/profesional/solicitudes" exact={true}>
                 <RequireAuth role="professional">
-                  <RolePlaceholderPage
-                    kicker="PROFESIONAL"
-                    title="Solicitudes recibidas"
-                    description="Las solicitudes reales se conectarán cuando integremos el flujo de solicitudes del próximo Sprint."
-                  />
+                  <ProfessionalRequestsPage />
+                </RequireAuth>
+              </Route>
+              <Route path="/profesional/solicitudes/:id" exact={true}>
+                <RequireAuth role="professional">
+                  <ProfessionalRequestDetailPage />
                 </RequireAuth>
               </Route>
               <Route path="/profesional/trabajos" exact={true}>
@@ -151,9 +162,7 @@ const App: React.FC = () => {
               </Route>
 
               <Route path="/cuenta" exact={true}>
-                <RequireAuth onboarding="any">
-                  <Configuracion />
-                </RequireAuth>
+                <Redirect to="/perfil" />
               </Route>
 
               <Route path="/staff" exact={true}>
@@ -176,7 +185,7 @@ const App: React.FC = () => {
                 <Redirect to="/cliente/solicitudes" />
               </Route>
               <Route path="/publicar" exact={true}>
-                <Redirect to="/profesional/perfil" />
+                <Redirect to="/perfil" />
               </Route>
               <Route path="/historialpago" exact={true}>
                 <RequireAuth onboarding="any">
@@ -187,7 +196,7 @@ const App: React.FC = () => {
                 <Redirect to="/cliente/favoritos" />
               </Route>
               <Route path="/configuracion" exact={true}>
-                <Redirect to="/cuenta" />
+                <Redirect to="/perfil" />
               </Route>
 
               {/* Default redirect */}

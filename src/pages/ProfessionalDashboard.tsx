@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   IonButtons,
+  IonButton,
   IonContent,
   IonHeader,
   IonIcon,
@@ -122,13 +123,16 @@ const ProfessionalDashboard: React.FC = () => {
               <article className="sp-card">
                 <div className="sp-card-header">
                   <div className="sp-card-title">
-                    <h2>Solicitudes pendientes</h2>
-                    <p>Sin solicitudes pendientes.</p>
+                    <h2>Solicitudes recibidas</h2>
+                    <p>Revisa solicitudes reales dirigidas a tu perfil.</p>
                   </div>
                   <span className="sp-icon-tile sp-icon-tile--accent">
                     <IonIcon icon={briefcaseOutline} />
                   </span>
                 </div>
+                <IonButton routerLink="/profesional/solicitudes" fill="outline">
+                  Ver solicitudes
+                </IonButton>
               </article>
 
               <article className="sp-card">

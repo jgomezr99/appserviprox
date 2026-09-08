@@ -1,218 +1,194 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
-  IonList, IonItem, IonLabel, IonButton, IonIcon,
-  IonSelect, IonSelectOption, IonInput, IonRow, IonCol,
+  IonBadge,
+  IonButton,
   IonButtons,
-  IonMenuButton
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonMenuButton,
+  IonPage,
+  IonSpinner,
+  IonTitle,
+  IonToast,
+  IonToolbar,
 } from "@ionic/react";
-import { downloadOutline, searchOutline } from "ionicons/icons";
-import { Capacitor, registerPlugin } from "@capacitor/core";
+import { useLocation } from "react-router-dom";
+import { cardOutline, checkmarkCircleOutline, refreshOutline } from "ionicons/icons";
+import { useAuth } from "../../context/AuthContext";
+import { orderService } from "../../services/serviprox";
+import type { Order } from "../../types/serviprox";
+import "../../pages/RolePages.css";
+import "../misreservas/misreserva.css";
+import "./historiadepago.css";
 
-/* Tipos */
-type Estado = "Pagada" | "Pendiente" | "Pago Rechazado";
-type MetodoPago = "Nequi" | "Bancolombia" | "Efectivo" | "Otro";
-type Factura = {
-  id: string;
-  fecha: string;
-  servicio: string;
-  montoCOP: number;
-  estado: Estado;
-  metodoPago: MetodoPago;
+const formatMoney = (value: string | null) => {
+  if (!value) return "Monto por definir";
+  const amount = Number(value);
+  if (Number.isNaN(amount)) return "Monto por definir";
+  return amount.toLocaleString("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  });
 };
 
-/* Datos demo */
-const FACTURAS: Factura[] = [
-  { id: "FACT-00123", fecha: "2024-08-15", servicio: "Reparación de fuga", montoCOP: 180000, estado: "Pagada", metodoPago: "Nequi" },
-  { id: "FACT-00124", fecha: "2025-05-17", servicio: "Revisión eléctrica", montoCOP: 120000, estado: "Pago Rechazado", metodoPago: "Bancolombia" },
-  { id: "FACT-00125", fecha: "2025-02-01", servicio: "Pintura de habitación", montoCOP: 520000, estado: "Pagada", metodoPago: "Efectivo" },
-];
+const paymentColor = (paymentStatus: Order["payment_status"]) =>
+  paymentStatus === "paid" ? "success" : "warning";
 
-/* Helpers */
-const formatFecha = (iso: string) => new Date(iso).toLocaleDateString();
-const formatCOP = (n: number) => n.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+const PaymentPage: React.FC = () => {
+  const location = useLocation();
+  const { user } = useAuth();
+  const orderId = useMemo(() => new URLSearchParams(location.search).get("order"), [location.search]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
 
-/* Generar PDF (carga dinámica) */
-const descargarComprobante = async (f: Factura) => {
-  if (f.estado !== "Pagada") {
-    alert("Sólo puede descargar comprobante de pagos marcados como 'Pagada'.");
-    return;
-  }
-
-  let mod: any;
-  try {
-    mod = await import("jspdf");
-  } catch {
-    alert("Funcionalidad PDF no disponible. Instala 'jspdf' con: npm install jspdf");
-    return;
-  }
-
-  const jsPDF = mod?.jsPDF ?? mod?.default ?? mod;
-  if (!jsPDF) {
-    alert("No se pudo cargar jsPDF.");
-    return;
-  }
-
-  try {
-    // @ts-ignore
-    const doc = new (jsPDF as any)();
-    doc.setFontSize(20);
-    doc.text("Comprobante de Pago", 20, 20);
-    doc.setFontSize(11);
-    doc.text(`Nº Factura: ${f.id}`, 20, 34);
-    doc.text(`Fecha: ${formatFecha(f.fecha)}`, 20, 42);
-    doc.text(`Servicio: ${f.servicio}`, 20, 50);
-    doc.text(`Monto: ${formatCOP(f.montoCOP)}`, 20, 58);
-    doc.text(`Método de Pago: ${f.metodoPago}`, 20, 66);
-    doc.text(`Estado: ${f.estado}`, 20, 74);
-
-    const filename = `${f.id}-comprobante.pdf`;
-    const platform = Capacitor.getPlatform?.() ?? "web";
-
-    // Web: descarga directa
-    if (platform === "web") {
-      doc.save(filename);
-      return;
-    }
-
-    // Nativo: guardar y compartir usando plugins registrados dinámicamente
-    const Filesystem: any = registerPlugin("Filesystem");
-    const Share: any = registerPlugin("Share");
-
-    // Si plugins no están disponibles, abrir en nueva pestaña como fallback
-    if (!Filesystem?.writeFile || !Share?.share) {
-      const blobUrl = doc.output("bloburl");
-      window.open(blobUrl, "_blank");
-      return;
-    }
-
-    // Verificar capacidad de compartir (si está disponible en el plugin)
+  const loadOrders = async () => {
+    setLoading(true);
+    setError("");
     try {
-      if (typeof Share.canShare === "function") {
-        const can = await Share.canShare();
-        if (can && can.value === false) {
-          const blobUrl = doc.output("bloburl");
-          window.open(blobUrl, "_blank");
-          return;
-        }
+      if (orderId) {
+        const order = await orderService.get(orderId);
+        setSelectedOrder(order);
+        setOrders([order]);
+      } else {
+        const payload = await orderService.list();
+        setOrders(payload);
+        setSelectedOrder(payload[0] || null);
       }
     } catch {
-      // Ignorar si canShare no está soportado
+      setError("No pudimos cargar la información de pago.");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Guardar PDF en Documents
-    const dataUri = doc.output("datauristring") as string;
-    const base64 = dataUri.split(",")[1];
-    const path = `comprobantes/${filename}`;
+  useEffect(() => {
+    void loadOrders();
+  }, [orderId]);
 
-    const writeRes = await Filesystem.writeFile({
-      path,
-      data: base64,
-      directory: "DOCUMENTS", // equivalente a Directory.Documents
-      recursive: true,
-    });
-
-    // Resolver URL compartible
-    let shareUrl: string | undefined = writeRes?.uri || (writeRes as any)?.uriPath;
-
-    // En Android, convertir a content://
-    if (platform === "android" && typeof Filesystem.getUri === "function") {
-      const r = await Filesystem.getUri({ directory: "DOCUMENTS", path });
-      shareUrl = r?.uri || shareUrl;
+  const confirmPayment = async () => {
+    if (!selectedOrder || processing) return;
+    setProcessing(true);
+    setError("");
+    try {
+      const nextOrder = await orderService.confirmDemoPayment(selectedOrder.id);
+      setSelectedOrder(nextOrder);
+      setOrders((current) =>
+        current.map((order) => (order.id === nextOrder.id ? nextOrder : order))
+      );
+      setToast("Pago confirmado en modo desarrollo");
+    } catch {
+      setError("No pudimos confirmar el pago de esta orden.");
+    } finally {
+      setProcessing(false);
     }
+  };
 
-    if (shareUrl) {
-      await Share.share({
-        title: "Comprobante de Pago",
-        text: `Comprobante ${f.id}`,
-        url: shareUrl,
-      });
-    } else {
-      const blobUrl = doc.output("bloburl");
-      window.open(blobUrl, "_blank");
-    }
-  } catch (e) {
-    console.error(e);
-    alert("Error generando o compartiendo el PDF.");
-  }
-};
-
-/* Componente principal */
-const Historiapago: React.FC = () => {
-  const [q, setQ] = useState("");
-  const [estado, setEstado] = useState<Estado | "Todos">("Todos");
-  const [metodo, setMetodo] = useState<MetodoPago | "Todos">("Todos");
-  
-
-  const filtradas = useMemo(() => {
-    return FACTURAS.filter(f => {
-      if (estado !== "Todos" && f.estado !== estado) return false;
-      if (metodo !== "Todos" && f.metodoPago !== metodo) return false;
-      const s = q.trim().toLowerCase();
-      if (!s) return true;
-      return f.id.toLowerCase().includes(s) || f.servicio.toLowerCase().includes(s);
-    });
-  }, [q, estado, metodo]);
+  const renderOrder = (order: Order) => (
+    <article className="sp-card sp-payment-card" key={order.id}>
+      <div className="sp-card-header">
+        <div className="sp-card-title">
+          <h2>Orden #{order.id}</h2>
+          <p>{order.client_notes || "Servicio aceptado por el profesional."}</p>
+        </div>
+        <IonBadge color={paymentColor(order.payment_status)}>
+          {order.payment_status_label}
+        </IonBadge>
+      </div>
+      <div className="sp-request-meta">
+        <span>
+          <IonIcon icon={cardOutline} />
+          {formatMoney(order.final_price || order.estimate_max || order.estimate_min)}
+        </span>
+        <span>
+          <IonIcon icon={checkmarkCircleOutline} />
+          {order.status_label}
+        </span>
+      </div>
+      {order.payment_status === "pending" ? (
+        <div className="sp-payment-demo">
+          <p>
+            Confirmación simulada para desarrollo/demo. No representa una pasarela
+            real ni un cobro externo.
+          </p>
+          <IonButton
+            className="sp-primary-button"
+            onClick={confirmPayment}
+            disabled={processing || selectedOrder?.id !== order.id}
+          >
+            {processing && selectedOrder?.id === order.id ? (
+              <IonSpinner name="crescent" />
+            ) : (
+              "Confirmar pago demo"
+            )}
+          </IonButton>
+        </div>
+      ) : (
+        <p className="sp-muted">
+          Referencia: {order.payment_reference || "Confirmación registrada"}
+        </p>
+      )}
+    </article>
+  );
 
   return (
     <IonPage>
       <IonHeader>
         <IonToolbar>
-           <IonButtons slot="start">
-              <IonMenuButton autoHide={false} menu="main-menu" />
-            </IonButtons>
-          <IonTitle>Historial de Pagos</IonTitle>
+          <IonButtons slot="start">
+            <IonMenuButton autoHide={false} menu="main-menu" />
+          </IonButtons>
+          <IonTitle>Pago de orden</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="ion-padding">
-        <IonRow style={{ marginBottom: 12, gap: 8 }}>
-          <IonCol size="12" sizeMd="4">
-            <IonItem>
-              <IonIcon slot="start" icon={searchOutline} />
-              <IonInput placeholder="Buscar Nº o servicio" value={q} onIonInput={e => setQ(e.detail.value ?? "")} />
-            </IonItem>
-          </IonCol>
-          <IonCol size="6" sizeMd="4">
-            <IonItem>
-              <IonSelect value={estado} onIonChange={e => setEstado(e.detail.value as any)}>
-                <IonSelectOption value="Todos">Todos</IonSelectOption>
-                <IonSelectOption value="Pagada">Pagadas</IonSelectOption>
-                <IonSelectOption value="Pendiente">Pendientes</IonSelectOption>
-                <IonSelectOption value="Pago Rechazado">Pago Rechazado</IonSelectOption>
-              </IonSelect>
-            </IonItem>
-          </IonCol>
-          <IonCol size="6" sizeMd="4">
-            <IonItem>
-              <IonSelect value={metodo} onIonChange={e => setMetodo(e.detail.value as any)}>
-                <IonSelectOption value="Todos">Todos los métodos</IonSelectOption>
-                <IonSelectOption value="Nequi">Nequi</IonSelectOption>
-                <IonSelectOption value="Bancolombia">Bancolombia</IonSelectOption>
-                <IonSelectOption value="Efectivo">Efectivo</IonSelectOption>
-                <IonSelectOption value="Otro">Otro</IonSelectOption>
-              </IonSelect>
-            </IonItem>
-          </IonCol>
-        </IonRow>
 
-        <IonList>
-          {filtradas.map(f => (
-            <IonItem key={f.id}>
-              <IonLabel>
-                <h3>{f.id} — {formatFecha(f.fecha)}</h3>
-                <p>{f.servicio}</p>
-                <p>{formatCOP(f.montoCOP)} • {f.metodoPago} • <strong>{f.estado}</strong></p>
-              </IonLabel>
-              <IonButton slot="end" color="primary" onClick={() => descargarComprobante(f)} title="Descargar comprobante" disabled={f.estado !== "Pagada"}>
-                <IonIcon slot="icon-only" icon={downloadOutline} />
+      <IonContent fullscreen className="sp-role-content">
+        <main className="sp-role-page">
+          <header className="sp-role-header">
+            <span className="sp-role-kicker">CLIENTE</span>
+            <h1>Pago de orden</h1>
+            <p>El pago se registra sobre la orden aceptada, separado del estado de la solicitud.</p>
+          </header>
+
+          {user?.role !== "client" ? (
+            <section className="sp-card sp-empty">
+              Solo el cliente de la orden puede confirmar pagos.
+            </section>
+          ) : loading ? (
+            <div className="sp-card sp-route-loading">
+              <IonSpinner name="crescent" />
+              <span>Cargando orden...</span>
+            </div>
+          ) : error ? (
+            <section className="sp-card">
+              <p className="sp-error">{error}</p>
+              <IonButton onClick={() => void loadOrders()}>
+                <IonIcon slot="start" icon={refreshOutline} />
+                Reintentar
               </IonButton>
-            </IonItem>
-          ))}
-          {filtradas.length === 0 && <IonItem><IonLabel>No hay resultados.</IonLabel></IonItem>}
-        </IonList>
+            </section>
+          ) : selectedOrder ? (
+            <section className="sp-payment-list">
+              {orders.map(renderOrder)}
+            </section>
+          ) : (
+            <section className="sp-card sp-empty">No tienes órdenes aceptadas para pagar.</section>
+          )}
+        </main>
+        <IonToast
+          isOpen={!!toast}
+          message={toast}
+          duration={1800}
+          onDidDismiss={() => setToast("")}
+        />
       </IonContent>
     </IonPage>
   );
 };
 
-export default Historiapago;
+export default PaymentPage;

@@ -19,8 +19,8 @@ class ServiceCategoryViewSet(viewsets.ReadOnlyModelViewSet):
             ServiceCategory.objects.filter(is_active=True)
             .annotate(
                 professionals_count=Count(
-                    "professional_services",
-                    filter=Q(professional_services__profile__is_active=True),
+                    "services__professional_services",
+                    filter=Q(services__professional_services__profile__is_active=True),
                     distinct=True,
                 )
             )

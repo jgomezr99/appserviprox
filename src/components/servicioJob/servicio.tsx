@@ -1,238 +1,199 @@
-import React, { useMemo, useState, useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  IonBadge,
   IonButton,
-  IonCol,
+  IonButtons,
   IonContent,
-  IonGrid,
   IonHeader,
   IonIcon,
-  IonItem,
-  IonLabel,
-  IonList,
+  IonInput,
+  IonMenuButton,
   IonPage,
-  IonRow,
-  IonSearchbar,
+  IonSpinner,
   IonTitle,
   IonToolbar,
-  IonCard,
-  IonCardHeader,
-  IonCardTitle,
-  IonCardContent,
-  IonBadge,
-  IonButtons,
-  IonModal,
-  IonSelect,
-  IonSelectOption,
-  IonRange,
-  IonInput,
-  IonNote,
-  IonMenuButton,
 } from "@ionic/react";
+import { useHistory } from "react-router-dom";
 import {
-  funnelOutline,
-  constructOutline,
-  sparklesOutline,
-  star,
-  pinOutline,
-  globeOutline,
-  searchOutline,
-  closeOutline,
-  heart,
-  heartOutline
+  arrowBackOutline,
+  briefcaseOutline,
+  buildOutline,
+  checkmarkCircleOutline,
+  homeOutline,
+  locationOutline,
+  shieldCheckmarkOutline,
 } from "ionicons/icons";
-import "../servicioJob/ServicioJob.css";
+import {
+  catalogService,
+  householdService,
+  professionalSearchService,
+} from "../../services/serviprox";
+import type {
+  Household,
+  Professional,
+  Service,
+  ServiceCategory,
+} from "../../types/serviprox";
+import "./ServicioJob.css";
 
-type Category = {
-  id: string;
-  label: string;
-  icon: string;
+type FlowStep = "category" | "service" | "location" | "professional";
+
+const stepOrder: FlowStep[] = ["category", "service", "location", "professional"];
+
+const stepMeta: Record<FlowStep, { label: string; title: string }> = {
+  category: { label: "Paso 1 de 4", title: "Qué necesitas" },
+  service: { label: "Paso 2 de 4", title: "Tipo de trabajo" },
+  location: { label: "Paso 3 de 4", title: "Dónde necesitas el servicio" },
+  professional: { label: "Paso 4 de 4", title: "Profesionales compatibles" },
 };
 
-type Service = {
-  id: string;
-  title: string;
-  categoryId: string;
-  categoryLabel: string;
-  price: string;
-  professional: string;
-  rating: number;
-  location: string;
-  isRemote?: boolean;
-  image?: string;
+const formatMoney = (value: string | null) => {
+  if (!value) return "";
+  const amount = Number(value);
+  if (Number.isNaN(amount)) return "";
+  return amount.toLocaleString("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  });
 };
 
-// Definición de Publicacion para leer localStorage
-type Publicacion = {
-  id: string;
-  titulo: string;
-  descripcion: string;
-  categoriaId: string;
-  categoriaNombre: string;
-  tarifaCOP: number;
-  disponibilidad: string;
-  ubicacion: string;
-  imagenes: string[];
-  createdAt: string;
+const formatServicePrice = (service: Service) => {
+  const min = formatMoney(service.price_min);
+  const max = formatMoney(service.price_max);
+  if (min && max) return `${min} - ${max}`;
+  if (min) return `Desde ${min}`;
+  if (max) return `Hasta ${max}`;
+  return "Tarifa por definir con el profesional";
 };
 
-const CATEGORIES: Category[] = [
-  { id: "all", label: "Todos", icon: sparklesOutline },
-  { id: "plomeria", label: "Plomería", icon: constructOutline },
-  { id: "electricidad", label: "Electricidad", icon: constructOutline },
-  { id: "limpieza", label: "Limpieza", icon: constructOutline },
-  { id: "mantenimiento", label: "Mantenimiento y\nReparaciones", icon: constructOutline },
-];
-
-// Servicios estáticos
-const STATIC_SERVICES: Service[] = [
-  {
-    id: "s1",
-    title: "Reparación de fuga de agua",
-    categoryId: "plomeria",
-    categoryLabel: "Plomería",
-    price: "$90.000 por visita",
-    professional: "Marcela Gómez",
-    rating: 4.8,
-    location: "Kennedy, Bogotá",
-    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?q=80&w=1600&auto=format&fit=crop"
-  },
-  {
-    id: "s2",
-    title: "Revisión eléctrica residencial",
-    categoryId: "electricidad",
-    categoryLabel: "Electricidad",
-    price: "$120.000 por visita",
-    professional: "Diego Salcedo",
-    rating: 4.7,
-    location: "Timiza, Bogotá",
-    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1600&auto=format&fit=crop"
-  },
-  {
-    id: "s3",
-    title: "Mantenimiento general del hogar",
-    categoryId: "mantenimiento",
-    categoryLabel: "Mantenimiento",
-    price: "$140.000 por visita",
-    professional: "Andrés Ruiz",
-    rating: 4.9,
-    location: "Bogotá y alrededores, Colombia",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1600&auto=format&fit=crop"
-  },
-];
-
-// Convierte "$75.000 por proyecto" -> 75000
-const parsePrice = (price: string) => {
-  const digits = price.replace(/[^\d]/g, "");
-  return digits ? parseInt(digits, 10) : 0;
+const formatProfessionalRating = (professional: Professional) => {
+  const rating = Number(professional.rating_avg);
+  return rating > 0 ? rating.toFixed(1) : "Sin calificaciones";
 };
+
+const hasCoordinates = (household: Household | null) =>
+  household?.latitude != null && household?.longitude != null;
 
 const ServicioJob: React.FC = () => {
-  // Estado para servicios combinados
-  const [allServices, setAllServices] = useState<Service[]>(STATIC_SERVICES);
+  const history = useHistory();
+  const [step, setStep] = useState<FlowStep>("category");
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [households, setHouseholds] = useState<Household[]>([]);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedHousehold, setSelectedHousehold] = useState<Household | null>(null);
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [loadingProfessionals, setLoadingProfessionals] = useState(false);
+  const [error, setError] = useState("");
 
-  // Cargar publicaciones dinámicas al montar
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("serviprox_publicaciones");
-      if (raw) {
-        const pubs = JSON.parse(raw) as Publicacion[];
-        const dynamicServices: Service[] = pubs.map((p) => ({
-          id: p.id,
-          title: p.titulo,
-          categoryId: p.categoriaId, // Asegúrate de que coincida con los IDs de CATEGORIES si quieres filtrado exacto
-          categoryLabel: p.categoriaNombre,
-          price: `$${p.tarifaCOP.toLocaleString("es-CO")}`,
-          professional: "Usuario Local", // O el nombre del usuario logueado
-          rating: 5.0, // Valor por defecto para nuevos
-          location: p.ubicacion,
-          isRemote: p.ubicacion.toLowerCase().includes("remoto"),
-          image: p.imagenes[0] || "https://via.placeholder.com/300?text=Sin+Imagen",
-        }));
-        // Mostrar publicaciones nuevas primero
-        setAllServices([...dynamicServices, ...STATIC_SERVICES]);
-      }
-    } catch (e) {
-      console.error("Error cargando publicaciones", e);
-    }
+    let active = true;
+    setLoadingInitial(true);
+    Promise.all([catalogService.listCategories(), householdService.list()])
+      .then(([categoryList, householdList]) => {
+        if (!active) return;
+        setCategories(categoryList);
+        setHouseholds(householdList);
+      })
+      .catch(() => {
+        if (active) setError("No pudimos cargar el catálogo o tus viviendas.");
+      })
+      .finally(() => {
+        if (active) setLoadingInitial(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // Filtro por tarjeta
-  const [selectedCategory, setSelectedCategory] = useState<string>(""); // "" = todas
+  const selectedStepIndex = stepOrder.indexOf(step);
+  const selectedHouseholdHasCoordinates = hasCoordinates(selectedHousehold);
 
-  // Buscador rápido
-  const [searchTerm, setSearchTerm] = useState<string>("");
-
-  // Modal de filtros avanzados
-  const [showFilters, setShowFilters] = useState(false);
-  const [minRating, setMinRating] = useState<number>(0);
-  const [maxPrice, setMaxPrice] = useState<number>(200000);
-  const [locationFilter, setLocationFilter] = useState<string>("");
-
-  const carouselRef = useRef<HTMLDivElement | null>(null);
-
-  const scrollNext = () => {
-    const el = carouselRef.current;
-    if (!el) return;
-    const amount = el.clientWidth * 0.7;
-    el.scrollBy({ left: amount, behavior: "smooth" });
-  };
-
-  const scrollPrev = () => {
-    const el = carouselRef.current;
-    if (!el) return;
-    const amount = el.clientWidth * 0.7;
-    el.scrollBy({ left: -amount, behavior: "smooth" });
-  };
-
-  const filteredServices = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    const loc = locationFilter.trim().toLowerCase();
-
-    return allServices.filter((s) => {
-      const byCat =
-        selectedCategory === "" || selectedCategory === "all"
-          ? true
-          : s.categoryId === selectedCategory;
-
-      const byText =
-        term.length === 0 ||
-        s.title.toLowerCase().includes(term) ||
-        s.professional.toLowerCase().includes(term) ||
-        s.categoryLabel.toLowerCase().includes(term) ||
-        s.price.toLowerCase().includes(term) ||
-        s.location.toLowerCase().includes(term);
-
-      const byLocation =
-        loc.length === 0 ||
-        s.location.toLowerCase().includes(loc) ||
-        (loc.includes("remoto") && !!s.isRemote);
-
-      const byRating = s.rating >= minRating;
-      const byPrice = parsePrice(s.price) <= maxPrice;
-
-      return byCat && byText && byLocation && byRating && byPrice;
-    });
-  }, [selectedCategory, searchTerm, locationFilter, minRating, maxPrice, allServices]);
-
-  // Favoritos: ids guardados en localStorage
-  const [favoritos, setFavoritos] = useState<string[]>(() => {
+  const loadServices = async (category: ServiceCategory) => {
+    setSelectedCategory(category);
+    setSelectedService(null);
+    setSelectedHousehold(null);
+    setProfessionals([]);
+    setStep("service");
+    setLoadingServices(true);
+    setError("");
     try {
-      return JSON.parse(localStorage.getItem("mis_favoritos") || "[]");
+      setServices(await catalogService.listServices({ category: category.id }));
     } catch {
-      return [];
+      setError("No pudimos cargar los servicios de esta categoría.");
+      setServices([]);
+    } finally {
+      setLoadingServices(false);
     }
-  });
-
-  const toggleFavorito = (id: string) => {
-    setFavoritos(prev => {
-      const existe = prev.includes(id);
-      const nuevos = existe ? prev.filter(f => f !== id) : [...prev, id];
-      localStorage.setItem("mis_favoritos", JSON.stringify(nuevos));
-      return nuevos;
-    });
   };
 
-  const esFavorito = (id: string) => favoritos.includes(id);
+  const selectService = (service: Service) => {
+    setSelectedService(service);
+    setSelectedHousehold(null);
+    setPriceMin("");
+    setPriceMax("");
+    setProfessionals([]);
+    setStep("location");
+  };
+
+  const loadProfessionals = async (household: Household) => {
+    if (!selectedService) return;
+    setSelectedHousehold(household);
+    setProfessionals([]);
+    setStep("professional");
+    setLoadingProfessionals(true);
+    setError("");
+    try {
+      const params = {
+        service: selectedService.id,
+        lat: household.latitude ?? undefined,
+        lng: household.longitude ?? undefined,
+        radius_km: hasCoordinates(household) ? 10 : undefined,
+        price_min: priceMin || undefined,
+        price_max: priceMax || undefined,
+      };
+      setProfessionals(await professionalSearchService.list(params));
+    } catch {
+      setError("No pudimos cargar profesionales compatibles.");
+    } finally {
+      setLoadingProfessionals(false);
+    }
+  };
+
+  const goBack = () => {
+    if (step === "professional") {
+      setStep("location");
+      return;
+    }
+    if (step === "location") {
+      setStep("service");
+      return;
+    }
+    if (step === "service") {
+      setStep("category");
+      return;
+    }
+    history.goBack();
+  };
+
+const progressLabel = useMemo(() => stepMeta[step], [step]);
+
+  const formatProfessionalServicePrice = (professional: Professional) => {
+    if (!professional.matching_service) return "Tarifa por acordar";
+    const min = formatMoney(professional.matching_service.price_min);
+    const max = formatMoney(professional.matching_service.price_max);
+    if (min && max) return `${min} - ${max}`;
+    if (min) return `Desde ${min}`;
+    if (max) return `Hasta ${max}`;
+    return "Tarifa por acordar";
+  };
 
   return (
     <IonPage>
@@ -241,256 +202,263 @@ const ServicioJob: React.FC = () => {
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-
-            <IonTitle>Servicios del hogar</IonTitle>
-
-          <IonButtons slot="end">
-            <IonButton fill="clear" onClick={() => setShowFilters(true)}>
-              <IonIcon slot="start" icon={funnelOutline} />
-              Filtros
-            </IonButton>
-          </IonButtons>
+          <IonTitle>Selección directa</IonTitle>
         </IonToolbar>
       </IonHeader>
 
-      <IonContent fullscreen>
-        <div className="container">
-          {/* Buscador */}
-          <div className="search-row">
-            <IonSearchbar
-              placeholder="Buscar plomería, electricidad, limpieza..."
-              value={searchTerm}
-              onIonInput={(e) => setSearchTerm(e.detail.value ?? "")}
-              inputmode="search"
-              enterkeyhint="search"
-              showClearButton="always"
-              searchIcon={searchOutline}
-            />
-          </div>
+      <IonContent fullscreen className="sp-direct-content">
+        <main className="sp-direct-page">
+          <header className="sp-direct-header">
+            <IonBadge className="sp-direct-kicker">CLIENTE</IonBadge>
+            <h1>Sé qué servicio necesito</h1>
+            <p>
+              Elige una categoría, un servicio real del catálogo y la vivienda donde
+              necesitas atención.
+            </p>
+          </header>
 
-          {/* CARRUSEL DE CATEGORÍAS */}
-          <section aria-label="Categorías de servicios">
-            <div className="cat-carousel-wrap">
-              <button className="carousel-nav prev" aria-label="Anterior" onClick={scrollPrev}>‹</button>
-
-              <div className="cat-carousel" ref={carouselRef} role="list">
-                {CATEGORIES.map((c) => {
-                  const isActive =
-                    c.id === "all"
-                      ? selectedCategory === "" || selectedCategory === "all"
-                      : selectedCategory === c.id;
-
-                  return (
-                    <div key={c.id} className={`cat-card ${isActive ? "active" : ""}`} role="listitem">
-                      <button
-                        className="cat-card-btn"
-                        onClick={() =>
-                          setSelectedCategory((prev) =>
-                            c.id === "all" ? "" : prev === c.id ? "" : c.id
-                          )
-                        }
-                        aria-pressed={isActive}
-                        aria-label={`Filtrar por categoría ${c.label.replace("\n", " ")}`}
-                      >
-                        <span className="icon-wrap" aria-hidden="true">
-                          <IonIcon icon={c.icon} />
-                        </span>
-                        <div className="cat-text">
-                          <h3 className="cat-title">
-                            {c.label.split("\n").map((line, i) => (
-                              <span key={i}>
-                                {line}
-                                <br />
-                              </span>
-                            ))}
-                          </h3>
-                        </div>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <button className="carousel-nav next" aria-label="Siguiente" onClick={scrollNext}>›</button>
-            </div>
-          </section>
-
-          {/* LISTA DE SERVICIOS */}
-          <IonGrid fixed>
-            <IonRow className="cards-row">
-              {filteredServices.map((s) => (
-                <IonCol size="12" sizeMd="6" sizeLg="4" key={s.id}>
-                  <IonCard className="service-card">
-                    <div
-                      className="hero"
-                      style={{ 
-                        backgroundImage: `url(${s.image})`,
-                        height: '200px',
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        position: 'relative',
-                        borderTopLeftRadius: '12px',
-                        borderTopRightRadius: '12px',
-                      }}
-                      role="img"
-                      aria-label={s.title}
-                    >
-                      <IonButton
-                        className="like-btn"
-                        fill="clear"
-                        size="small"
-                        onClick={e => { e.stopPropagation(); toggleFavorito(s.id); }}
-                        aria-pressed={esFavorito(s.id)}
-                        aria-label={esFavorito(s.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
-                        style={{ position: "absolute", top: 10, right: 8, zIndex: 10, background: "rgba(255,255,255,.7)", borderRadius: 999 }}
-                      >
-                        <IonIcon icon={esFavorito(s.id) ? heart : heartOutline} style={{ fontSize: 22, color: esFavorito(s.id) ? "#e53935" : "#1976d2" }} />
-                      </IonButton>
-                    </div>
-                    <IonCardHeader>
-                      <IonBadge color="secondary">{s.categoryLabel}</IonBadge>
-                      <IonCardTitle className="title">{s.title}</IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                      <IonList lines="none" className="specs">
-                        <IonItem>
-                          <IonLabel>
-                            <strong>Tarifa:</strong> {s.price}
-                          </IonLabel>
-                        </IonItem>
-                        <IonItem>
-                          <IonLabel>
-                            <strong>Profesional:</strong> {s.professional}
-                          </IonLabel>
-                        </IonItem>
-                        <IonItem className="meta">
-                          <IonIcon icon={star} className="star" />
-                          <span className="rating">{s.rating.toFixed(1)}</span>
-                          <span className="dot">•</span>
-                          {s.isRemote ? (
-                            <>
-                              <IonIcon icon={globeOutline} />
-                              <span>Remoto</span>
-                            </>
-                          ) : (
-                            <>
-                              <IonIcon icon={pinOutline} />
-                              <span>{s.location}</span>
-                            </>
-                          )}
-                        </IonItem>
-                      </IonList>
-                      <IonButton expand="block">Reservar Servicio</IonButton>
-                    </IonCardContent>
-                  </IonCard>
-                </IonCol>
+          <section className="sp-direct-shell">
+            <div className="sp-direct-progress" aria-label={progressLabel.label}>
+              {stepOrder.map((item, index) => (
+                <span
+                  key={item}
+                  className={index <= selectedStepIndex ? "is-active" : ""}
+                />
               ))}
-            </IonRow>
-          </IonGrid>
-
-          {filteredServices.length === 0 && (
-            <div className="empty">
-              No hay resultados para tu filtro. Prueba otra categoría o búsqueda.
             </div>
-          )}
-        </div>
 
-        {/* MODAL FILTROS */}
-        <IonModal isOpen={showFilters} onDidDismiss={() => setShowFilters(false)}>
-          <IonHeader>
-            <IonButtons slot="start">
-          <IonMenuButton autoHide={false}></IonMenuButton>
-        </IonButtons>
-            <IonToolbar>
-              <IonTitle>Filtrar Servicios</IonTitle>
-              <IonButtons slot="end">
-                <IonButton onClick={() => setShowFilters(false)}>
-                  <IonIcon icon={closeOutline} />
-                </IonButton>
-              </IonButtons>
-            </IonToolbar>
-          </IonHeader>
+            <div className="sp-direct-step-head">
+              <button type="button" onClick={goBack} aria-label="Volver">
+                <IonIcon icon={arrowBackOutline} />
+              </button>
+              <div>
+                <span>{progressLabel.label}</span>
+                <h2>{progressLabel.title}</h2>
+              </div>
+            </div>
 
-          <IonContent className="ion-padding">
-            {/* Categoría */}
-            <IonItem>
-              <IonLabel>Categoría del Servicio</IonLabel>
-            </IonItem>
-            <IonItem>
-              <IonSelect
-                interface="popover"
-                value={selectedCategory || "all"}
-                onIonChange={(e) =>
-                  setSelectedCategory(e.detail.value === "all" ? "" : e.detail.value)
-                }
-              >
-                {CATEGORIES.map((c) => (
-                  <IonSelectOption key={c.id} value={c.id}>
-                    {c.label.replace(/\n/g, " ")}
-                  </IonSelectOption>
-                ))}
-              </IonSelect>
-            </IonItem>
+            {error && <p className="sp-direct-error">{error}</p>}
 
-            {/* Ubicación / Modalidad */}
-            <IonItem>
-              <IonLabel>Ubicación / Modalidad</IonLabel>
-            </IonItem>
-            <IonItem>
-              <IonInput
-                placeholder="Ej: Remoto, Bogotá"
-                value={locationFilter}
-                onIonChange={(e) => setLocationFilter(e.detail.value ?? "")}
-              />
-            </IonItem>
+            {loadingInitial ? (
+              <div className="sp-direct-loading">
+                <IonSpinner name="crescent" />
+                <span>Cargando datos reales...</span>
+              </div>
+            ) : null}
 
-            {/* Valoración mínima */}
-            <IonItem lines="none" className="ion-margin-top">
-              <IonLabel>Valoración mínima</IonLabel>
-            </IonItem>
-            <IonItem>
-              <IonIcon slot="start" icon={star} />
-              <IonRange
-                min={0}
-                max={5}
-                step={0.1}
-                pin={true}
-                value={minRating}
-                onIonChange={(e) => setMinRating(Number(e.detail.value))}
-              />
-              <IonLabel slot="end">{minRating.toFixed(1)}</IonLabel>
-            </IonItem>
+            {!loadingInitial && step === "category" ? (
+              categories.length ? (
+                <div className="sp-direct-grid">
+                  {categories.map((category) => (
+                    <button
+                      type="button"
+                      className="sp-direct-card"
+                      key={category.id}
+                      onClick={() => void loadServices(category)}
+                    >
+                      <span className="sp-direct-icon">
+                        <IonIcon icon={buildOutline} />
+                      </span>
+                      <strong>{category.name}</strong>
+                      <small>{category.description}</small>
+                      <em>
+                        {category.professionals_count === 1
+                          ? "1 profesional"
+                          : `${category.professionals_count} profesionales`}
+                      </em>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="sp-direct-empty">No encontramos categorías activas.</div>
+              )
+            ) : null}
 
-            {/* Tarifa máxima */}
-            <IonItem lines="none" className="ion-margin-top">
-              <IonLabel>Tarifa máxima</IonLabel>
-            </IonItem>
-            <IonItem>
-              <IonRange
-                min={0}
-                max={200000}
-                step={5000}
-                pin={true}
-                value={maxPrice}
-                onIonChange={(e) => setMaxPrice(Number(e.detail.value))}
-              />
-              <IonLabel slot="end">
-                ${maxPrice.toLocaleString("es-CO")}
-              </IonLabel>
-            </IonItem>
-            <IonNote className="ion-padding-start ion-padding-bottom" color="medium">
-              La tarifa puede ser por hora o por proyecto, según el servicio.
-            </IonNote>
+            {step === "service" ? (
+              loadingServices ? (
+                <div className="sp-direct-loading">
+                  <IonSpinner name="crescent" />
+                  <span>Cargando servicios...</span>
+                </div>
+              ) : services.length ? (
+                <div className="sp-direct-grid">
+                  {services.map((service) => (
+                    <button
+                      type="button"
+                      className="sp-direct-card"
+                      key={service.id}
+                      onClick={() => selectService(service)}
+                    >
+                      <span className="sp-direct-icon">
+                        <IonIcon icon={briefcaseOutline} />
+                      </span>
+                      <strong>{service.name}</strong>
+                      <small>{service.description || selectedCategory?.name}</small>
+                      <em>{formatServicePrice(service)}</em>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="sp-direct-empty">
+                  No encontramos servicios activos para esta categoría.
+                </div>
+              )
+            ) : null}
 
-            <IonButton
-              expand="block"
-              className="ion-margin-vertical"
-              onClick={() => setShowFilters(false)}
-            >
-              Mostrar resultados
-            </IonButton>
-          </IonContent>
-        </IonModal>
+            {step === "location" ? (
+              <div className="sp-direct-stack">
+                <div className="sp-direct-summary">
+                  <IonIcon icon={checkmarkCircleOutline} />
+                  <span>
+                    {selectedCategory?.name} / {selectedService?.name}
+                  </span>
+                </div>
+
+                {households.length ? (
+                  <div className="sp-direct-grid">
+                    {households.map((household) => (
+                      <button
+                        type="button"
+                        className="sp-direct-card"
+                        key={household.id}
+                        onClick={() => void loadProfessionals(household)}
+                      >
+                        <span className="sp-direct-icon">
+                          <IonIcon icon={homeOutline} />
+                        </span>
+                        <strong>{household.label}</strong>
+                        <small>{household.address_line || "Dirección pendiente"}</small>
+                        <em>{household.short_location || household.city}</em>
+                        {!hasCoordinates(household) ? (
+                          <span className="sp-direct-note">
+                            Sin coordenadas: se buscará sin distancia.
+                          </span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="sp-direct-empty">
+                    <p>No tienes viviendas registradas.</p>
+                    <IonButton routerLink="/cliente/viviendas">Agregar vivienda</IonButton>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {step === "professional" ? (
+              <div className="sp-direct-stack">
+                <div className="sp-direct-summary">
+                  <IonIcon icon={locationOutline} />
+                  <span>
+                    {selectedHousehold?.label} / {selectedService?.name}
+                  </span>
+                </div>
+                {!selectedHouseholdHasCoordinates ? (
+                  <p className="sp-direct-soft-note">
+                    Esta vivienda todavía no tiene ubicación geográfica asociada.
+                    Mostramos profesionales que ofrecen el servicio, sin ordenar por distancia.
+                  </p>
+                ) : null}
+
+                <div className="sp-price-filter" aria-label="Filtro por precio">
+                  <label>
+                    Precio mínimo
+                    <IonInput
+                      type="number"
+                      inputmode="numeric"
+                      min="0"
+                      value={priceMin}
+                      placeholder="0"
+                      onIonInput={(event) => setPriceMin(String(event.detail.value ?? ""))}
+                    />
+                  </label>
+                  <label>
+                    Precio máximo
+                    <IonInput
+                      type="number"
+                      inputmode="numeric"
+                      min="0"
+                      value={priceMax}
+                      placeholder="250000"
+                      onIonInput={(event) => setPriceMax(String(event.detail.value ?? ""))}
+                    />
+                  </label>
+                  <IonButton
+                    fill="outline"
+                    disabled={!selectedHousehold || loadingProfessionals}
+                    onClick={() =>
+                      selectedHousehold ? void loadProfessionals(selectedHousehold) : undefined
+                    }
+                  >
+                    Aplicar filtro
+                  </IonButton>
+                </div>
+
+                {loadingProfessionals ? (
+                  <div className="sp-direct-loading">
+                    <IonSpinner name="crescent" />
+                    <span>Buscando profesionales...</span>
+                  </div>
+                ) : professionals.length ? (
+                  <div className="sp-professional-list">
+                    {professionals.map((professional) => (
+                      <article className="sp-professional-card" key={professional.id}>
+                        <div className="sp-professional-avatar" aria-hidden="true">
+                          {professional.initials}
+                        </div>
+                        <div className="sp-professional-body">
+                          <div>
+                            <h3>{professional.display_name}</h3>
+                            <p>{professional.headline}</p>
+                          </div>
+                          <div className="sp-professional-meta">
+                            <span>{formatProfessionalRating(professional)}</span>
+                            <span>{professional.jobs_completed} servicios completados</span>
+                            <span>{formatProfessionalServicePrice(professional)}</span>
+                            {professional.distance_km != null ? (
+                              <span>{professional.distance_km.toFixed(1)} km</span>
+                            ) : null}
+                          </div>
+                          {professional.matching_service?.observaciones ? (
+                            <p className="sp-professional-note">
+                              {professional.matching_service.observaciones}
+                            </p>
+                          ) : null}
+                          <div className="sp-professional-badges">
+                            {professional.is_verified ? (
+                              <IonBadge>
+                                <IonIcon icon={shieldCheckmarkOutline} />
+                                Verificado
+                              </IonBadge>
+                            ) : null}
+                            {professional.accepts_urgent ? (
+                              <IonBadge color="danger">Acepta urgencias</IonBadge>
+                            ) : null}
+                          </div>
+                        </div>
+                        <IonButton
+                          fill="outline"
+                          onClick={() =>
+                            history.push(
+                              `/cliente/profesionales/${professional.id}?service=${selectedService?.id}&household=${selectedHousehold?.id}`
+                            )
+                          }
+                        >
+                          Ver perfil
+                        </IonButton>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="sp-direct-empty">
+                    No encontramos profesionales compatibles para este servicio.
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </section>
+        </main>
       </IonContent>
     </IonPage>
   );

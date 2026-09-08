@@ -5,7 +5,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.catalog.models import ServiceCategory
+from apps.catalog.models import Service
 
 
 class ProfessionalProfile(models.Model):
@@ -54,16 +54,17 @@ class ProfessionalProfile(models.Model):
 
 
 class ProfessionalService(models.Model):
-    """Categoria que atiende un profesional, con su rango de tarifa propio."""
+    """Servicio concreto que atiende un profesional, con su rango de tarifa propio."""
 
     profile = models.ForeignKey(
         ProfessionalProfile, related_name="services", on_delete=models.CASCADE
     )
-    category = models.ForeignKey(
-        ServiceCategory, related_name="professional_services", on_delete=models.CASCADE
+    service = models.ForeignKey(
+        Service, related_name="professional_services", on_delete=models.CASCADE
     )
     price_min = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     price_max = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    observations = models.TextField(_("observaciones"), blank=True)
     years_experience = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
@@ -71,12 +72,12 @@ class ProfessionalService(models.Model):
         verbose_name_plural = _("servicios del profesional")
         constraints = [
             models.UniqueConstraint(
-                fields=["profile", "category"], name="unique_category_per_professional"
+                fields=["profile", "service"], name="unique_service_per_professional"
             )
         ]
 
     def __str__(self) -> str:
-        return f"{self.profile.display_name} · {self.category.name}"
+        return f"{self.profile.display_name} · {self.service.name}"
 
 
 class AvailabilitySlot(models.Model):

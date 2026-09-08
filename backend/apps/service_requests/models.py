@@ -2,10 +2,14 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.catalog.models import ServiceCategory
+from apps.catalog.models import Service, ServiceCategory
 from apps.diagnosis.models import DiagnosticSession
 from apps.households.models import Household
 from apps.professionals.models import ProfessionalProfile
+
+
+def service_request_image_path(instance, filename: str) -> str:
+    return f"service_requests/{instance.service_request_id}/evidence/{filename}"
 
 
 class ServiceRequest(models.Model):
@@ -21,6 +25,8 @@ class ServiceRequest(models.Model):
         DRAFT = "draft", _("Borrador")
         OPEN = "open", _("Publicada")
         MATCHED = "matched", _("Con profesional asignado")
+        ACCEPTED = "accepted", _("Aceptada")
+        REJECTED = "rejected", _("Rechazada")
         CLOSED = "closed", _("Cerrada")
         CANCELLED = "cancelled", _("Cancelada")
 
@@ -56,6 +62,22 @@ class ServiceRequest(models.Model):
         related_name="requests_selected",
         on_delete=models.PROTECT,
         verbose_name=_("categoria confirmada por el cliente"),
+    )
+    selected_service = models.ForeignKey(
+        Service,
+        related_name="requests_selected",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name=_("servicio confirmado por el cliente"),
+    )
+    professional = models.ForeignKey(
+        ProfessionalProfile,
+        related_name="direct_requests",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name=_("profesional destinatario"),
     )
 
     description = models.TextField(_("descripcion"), blank=True)
@@ -113,3 +135,28 @@ class RequestCandidate(models.Model):
 
     def __str__(self) -> str:
         return f"{self.professional} a {self.distance_km:.1f} km"
+
+
+class ServiceRequestImage(models.Model):
+    """Evidencia visual adjunta a una solicitud concreta."""
+
+    service_request = models.ForeignKey(
+        ServiceRequest, related_name="images", on_delete=models.CASCADE
+    )
+    image = models.FileField(upload_to=service_request_image_path)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="service_request_images",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("imagen de solicitud")
+        verbose_name_plural = _("imagenes de solicitud")
+        ordering = ["created_at", "id"]
+
+    def __str__(self) -> str:
+        return f"Imagen #{self.pk} · solicitud #{self.service_request_id}"

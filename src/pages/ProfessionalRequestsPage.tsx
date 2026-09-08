@@ -14,18 +14,16 @@ import {
   IonToolbar,
 } from "@ionic/react";
 import {
-  briefcaseOutline,
   calendarClearOutline,
-  cardOutline,
   homeOutline,
   personCircleOutline,
   refreshOutline,
 } from "ionicons/icons";
-import { serviceRequestService } from "../../services/serviprox";
-import type { ServiceRequest, ServiceRequestStatus } from "../../types/serviprox";
-import RequestImageGallery from "../serviprox/RequestImageGallery";
-import "../../pages/RolePages.css";
-import "./misreserva.css";
+import { serviceRequestService } from "../services/serviprox";
+import type { ServiceRequest, ServiceRequestStatus } from "../types/serviprox";
+import RequestImageGallery from "../components/serviprox/RequestImageGallery";
+import "./RolePages.css";
+import "../components/misreservas/misreserva.css";
 
 const statusColor: Record<ServiceRequestStatus, string> = {
   draft: "medium",
@@ -37,27 +35,23 @@ const statusColor: Record<ServiceRequestStatus, string> = {
   cancelled: "medium",
 };
 
-const statusCopy = (request: ServiceRequest) => {
-  if (request.status === "accepted" && request.professional) {
-    return `Aceptada por ${request.professional.display_name}`;
-  }
-  if (request.status === "rejected") return "Solicitud rechazada";
-  return request.status_label;
-};
-
-const paymentCopy = (request: ServiceRequest) => {
-  if (!request.order || request.status !== "accepted") return null;
-  if (request.order.payment_status === "paid") return "Pago confirmado";
-  return "Pago pendiente";
-};
-
 const formatDate = (iso: string) =>
   new Intl.DateTimeFormat("es-CO", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(iso));
 
-const ClientRequestsPage: React.FC = () => {
+const clientName = (request: ServiceRequest) =>
+  [request.client.first_name, request.client.last_name].filter(Boolean).join(" ") ||
+  request.client.initials ||
+  "Cliente";
+
+const statusWithPayment = (request: ServiceRequest) => {
+  if (request.status !== "accepted" || !request.order) return request.status_label;
+  return `${request.status_label} · ${request.order.payment_status_label}`;
+};
+
+const ProfessionalRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -69,7 +63,7 @@ const ClientRequestsPage: React.FC = () => {
     try {
       setRequests(await serviceRequestService.list());
     } catch {
-      setError("No pudimos cargar tus solicitudes.");
+      setError("No pudimos cargar tus solicitudes recibidas.");
     } finally {
       setLoading(false);
     }
@@ -86,7 +80,7 @@ const ClientRequestsPage: React.FC = () => {
       [
         request.selected_service?.name,
         request.selected_category.name,
-        request.professional?.display_name,
+        clientName(request),
         request.household.label,
         request.household.short_location,
         request.status_label,
@@ -106,23 +100,23 @@ const ClientRequestsPage: React.FC = () => {
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle>Mis solicitudes</IonTitle>
+          <IonTitle>Solicitudes recibidas</IonTitle>
         </IonToolbar>
       </IonHeader>
 
       <IonContent fullscreen className="sp-role-content">
         <main className="sp-role-page">
           <header className="sp-role-header">
-            <span className="sp-role-kicker">CLIENTE</span>
-            <h1>Mis solicitudes</h1>
-            <p>Consulta el estado real de las solicitudes enviadas a profesionales.</p>
+            <span className="sp-role-kicker">PROFESIONAL</span>
+            <h1>Solicitudes recibidas</h1>
+            <p>Estas son las solicitudes reales dirigidas a tu perfil profesional.</p>
           </header>
 
           <div className="sp-actions sp-actions--spaced">
             <IonSearchbar
               className="sp-request-search"
               value={query}
-              placeholder="Buscar por servicio, profesional o vivienda"
+              placeholder="Buscar por servicio, cliente o vivienda"
               onIonInput={(event) => setQuery(event.detail.value ?? "")}
             />
             <IonButton fill="outline" onClick={() => void loadRequests()} disabled={loading}>
@@ -151,21 +145,21 @@ const ClientRequestsPage: React.FC = () => {
                       <p>{request.description}</p>
                     </div>
                     <IonBadge color={statusColor[request.status]}>
-                      {statusCopy(request)}
+                      {statusWithPayment(request)}
                     </IonBadge>
                   </div>
 
                   <div className="sp-request-meta">
                     <span>
                       <IonIcon icon={personCircleOutline} />
-                      {request.professional?.display_name || "Sin profesional asignado"}
+                      {clientName(request)}
                     </span>
                     <span>
                       <IonIcon icon={homeOutline} />
-                      {request.household.label}
+                      {request.household.address_line || request.household.label}
                     </span>
                     <span>
-                      <IonIcon icon={briefcaseOutline} />
+                      <IonIcon icon={homeOutline} />
                       {request.household.short_location || request.household.city}
                     </span>
                     <span>
@@ -178,37 +172,17 @@ const ClientRequestsPage: React.FC = () => {
                     <RequestImageGallery images={request.images} />
                   ) : null}
 
-                  {paymentCopy(request) ? (
-                    <div className="sp-payment-strip">
-                      <span>
-                        <IonIcon icon={cardOutline} />
-                        {paymentCopy(request)}
-                      </span>
-                      {request.order?.payment_status === "pending" ? (
-                        <IonButton
-                          routerLink={`/historialpago?order=${request.order.id}`}
-                          className="sp-primary-button"
-                        >
-                          Realizar pago
-                        </IonButton>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {request.status === "rejected" ? (
-                    <div className="sp-actions">
-                      <IonButton routerLink="/cliente/servicios" fill="outline">
-                        Buscar otro profesional
-                      </IonButton>
-                    </div>
-                  ) : null}
+                  <div className="sp-actions">
+                    <IonButton routerLink={`/profesional/solicitudes/${request.id}`}>
+                      Ver solicitud
+                    </IonButton>
+                  </div>
                 </article>
               ))}
             </section>
           ) : (
             <section className="sp-card sp-empty">
-              Aún no has solicitado ningún servicio.
-              <IonButton routerLink="/cliente/servicios">Solicitar servicio</IonButton>
+              Aún no tienes solicitudes nuevas.
             </section>
           )}
         </main>
@@ -217,4 +191,4 @@ const ClientRequestsPage: React.FC = () => {
   );
 };
 
-export default ClientRequestsPage;
+export default ProfessionalRequestsPage;

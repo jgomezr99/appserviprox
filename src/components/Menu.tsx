@@ -20,7 +20,6 @@ import {
   briefcaseOutline, briefcaseSharp,
   calendarClearOutline, calendarClearSharp,
   heartOutline, heartSharp,
-  settingsOutline, settingsSharp,
   arrowForwardOutline, arrowForwardSharp,
   personCircleOutline,
   businessOutline, businessSharp,
@@ -46,16 +45,15 @@ const clientPages: AppPage[] = [
   { title: 'Mis solicitudes', url: '/cliente/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
   { title: 'Favoritos', url: '/cliente/favoritos', iosIcon: heartOutline, mdIcon: heartSharp },
   { title: 'Mis viviendas', url: '/cliente/viviendas', iosIcon: businessOutline, mdIcon: businessSharp },
-  { title: 'Mi cuenta', url: '/cuenta', iosIcon: settingsOutline, mdIcon: settingsSharp },
+  { title: 'Mi perfil', url: '/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
 ];
 
 const professionalPages: AppPage[] = [
   { title: 'Inicio', url: '/profesional/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
   { title: 'Solicitudes', url: '/profesional/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
   { title: 'Mis trabajos', url: '/profesional/trabajos', iosIcon: briefcaseOutline, mdIcon: briefcaseSharp },
-  { title: 'Mi perfil profesional', url: '/profesional/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
+  { title: 'Mi perfil', url: '/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
   { title: 'Disponibilidad', url: '/profesional/disponibilidad', iosIcon: timeOutline, mdIcon: timeSharp },
-  { title: 'Mi cuenta', url: '/cuenta', iosIcon: settingsOutline, mdIcon: settingsSharp },
 ];
 
 const Menu: React.FC = () => {

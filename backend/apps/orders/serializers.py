@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
 from apps.professionals.serializers import ProfessionalListSerializer
+from apps.service_requests.models import ServiceRequest
+from apps.service_requests.services import professional_offers_service
 
 from .models import Order, OrderEvent, Review
 from .services import refresh_rating
@@ -38,6 +40,7 @@ class OrderSerializer(serializers.ModelSerializer):
     events = OrderEventSerializer(many=True, read_only=True)
     review = ReviewSerializer(read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    payment_status_label = serializers.CharField(source="get_payment_status_display", read_only=True)
 
     class Meta:
         model = Order
@@ -47,6 +50,10 @@ class OrderSerializer(serializers.ModelSerializer):
             "professional",
             "status",
             "status_label",
+            "payment_status",
+            "payment_status_label",
+            "payment_confirmed_at",
+            "payment_reference",
             "scheduled_for",
             "estimate_min",
             "estimate_max",
@@ -74,7 +81,25 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def validate_service_request(self, service_request):
         if service_request.client_id != self.context["request"].user.id:
             raise serializers.ValidationError("La solicitud no pertenece a este usuario.")
+        if service_request.status not in {ServiceRequest.Status.OPEN, ServiceRequest.Status.MATCHED}:
+            raise serializers.ValidationError("La solicitud ya no permite crear una orden.")
         return service_request
+
+    def validate(self, attrs):
+        service_request = attrs["service_request"]
+        professional = attrs["professional"]
+
+        if service_request.selected_service_id and not professional_offers_service(
+            professional, service_request.selected_service_id
+        ):
+            raise serializers.ValidationError(
+                {"professional": "El profesional no ofrece el servicio seleccionado."}
+            )
+        if Order.objects.filter(
+            service_request=service_request, professional=professional
+        ).exists():
+            raise serializers.ValidationError("Ya existe una orden para esta solicitud.")
+        return attrs
 
     def create(self, validated_data):
         order = Order.objects.create(client=self.context["request"].user, **validated_data)

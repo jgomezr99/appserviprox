@@ -1,4 +1,7 @@
+from decimal import Decimal, InvalidOperation
+
 from django.conf import settings
+from django.db.models import Exists, OuterRef, Q
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status, viewsets
@@ -9,7 +12,7 @@ from rest_framework.response import Response
 from apps.accounts.models import UserRole
 
 from .geo import annotate_distance, within_radius
-from .models import ProfessionalProfile
+from .models import ProfessionalProfile, ProfessionalService
 from .serializers import (
     ProfessionalDetailSerializer,
     ProfessionalListSerializer,
@@ -24,12 +27,22 @@ def _as_float(value, name):
         raise ValidationError({name: "Debe ser un numero decimal."})
 
 
+def _as_decimal(value, name):
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValidationError({name: "Debe ser un numero decimal."})
+
+
 @extend_schema(
     parameters=[
         OpenApiParameter("lat", OpenApiTypes.FLOAT, description="Latitud del cliente."),
         OpenApiParameter("lng", OpenApiTypes.FLOAT, description="Longitud del cliente."),
         OpenApiParameter("radius_km", OpenApiTypes.FLOAT, description="Radio de busqueda."),
         OpenApiParameter("category", OpenApiTypes.STR, description="Slug de la categoria."),
+        OpenApiParameter("service", OpenApiTypes.STR, description="ID o slug del servicio."),
+        OpenApiParameter("price_min", OpenApiTypes.NUMBER, description="Presupuesto minimo."),
+        OpenApiParameter("price_max", OpenApiTypes.NUMBER, description="Presupuesto maximo."),
     ]
 )
 class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
@@ -56,12 +69,45 @@ class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = (
             ProfessionalProfile.objects.filter(is_active=True)
             .select_related("user")
-            .prefetch_related("services__category", "availability", "portfolio")
+            .prefetch_related("services__service__category", "availability", "portfolio")
         )
 
         category = params.get("category")
-        if category:
-            queryset = queryset.filter(services__category__slug=category).distinct()
+        service = params.get("service")
+        price_min = params.get("price_min")
+        price_max = params.get("price_max")
+
+        if price_min and price_max and _as_decimal(price_min, "price_min") > _as_decimal(price_max, "price_max"):
+            raise ValidationError({"price_max": "El precio maximo debe ser mayor o igual al minimo."})
+
+        if category or service or price_min or price_max:
+            offered_services = ProfessionalService.objects.filter(
+                profile=OuterRef("pk"),
+                service__is_active=True,
+                service__category__is_active=True,
+            )
+            if category:
+                offered_services = offered_services.filter(service__category__slug=category)
+            if service:
+                service_filter = (
+                    {"service_id": int(service)}
+                    if service.isdigit()
+                    else {"service__slug": service}
+                )
+                offered_services = offered_services.filter(**service_filter)
+            if price_min or price_max:
+                offered_services = offered_services.exclude(
+                    price_min__isnull=True, price_max__isnull=True
+                )
+            if price_max:
+                offered_services = offered_services.filter(
+                    Q(price_min__isnull=True) | Q(price_min__lte=_as_decimal(price_max, "price_max"))
+                )
+            if price_min:
+                offered_services = offered_services.filter(
+                    Q(price_max__isnull=True) | Q(price_max__gte=_as_decimal(price_min, "price_min"))
+                )
+            queryset = queryset.filter(Exists(offered_services))
 
         if params.get("accepts_urgent") in {"1", "true", "True"}:
             queryset = queryset.filter(accepts_urgent=True)

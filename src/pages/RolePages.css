@@ -253,6 +253,35 @@
   border: 1px solid var(--sp-border);
 }
 
+.sp-settings-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.sp-settings-list label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 54px;
+  padding: 12px 14px;
+  border: 1px solid rgba(11, 47, 107, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--sp-text);
+  font-weight: 780;
+}
+
+.sp-settings-list ion-select {
+  flex: 0 1 180px;
+  --padding-start: 12px;
+  --padding-end: 12px;
+  --background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(11, 47, 107, 0.13);
+  border-radius: 16px;
+}
+
 @supports not ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) {
   .sp-card {
     background: #ffffff;

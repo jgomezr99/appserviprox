@@ -110,8 +110,12 @@ async function request<T>(
 
   const init: RequestInit = { method, headers };
   if (body !== undefined) {
-    headers.set("Content-Type", "application/json");
-    init.body = JSON.stringify(body);
+    if (body instanceof FormData) {
+      init.body = body;
+    } else {
+      headers.set("Content-Type", "application/json");
+      init.body = JSON.stringify(body);
+    }
   }
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
@@ -142,6 +146,41 @@ async function request<T>(
   return payload as T;
 }
 
+async function blobRequest(
+  path: string,
+  options: RequestOptions = {}
+): Promise<Blob> {
+  const shouldAttachAuth = options.auth !== false;
+  const token = options.token ?? (shouldAttachAuth ? tokenStorage.getAccessToken() : null);
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(buildUrl(path), { method: "GET", headers });
+  if (
+    response.status === 401 &&
+    shouldAttachAuth &&
+    options.retryOnUnauthorized !== false
+  ) {
+    const nextAccess = await refreshAccessToken();
+    if (nextAccess) {
+      return blobRequest(path, {
+        ...options,
+        token: nextAccess,
+        retryOnUnauthorized: false,
+      });
+    }
+  }
+
+  if (!response.ok) {
+    const payload = await parseResponse(response);
+    throw new ApiError(response.status, getErrorMessage(response.status, payload), payload);
+  }
+
+  return response.blob();
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestOptions) =>
     request<T>("GET", path, undefined, options),
@@ -151,4 +190,5 @@ export const api = {
     request<T>("PATCH", path, body, options),
   delete: <T>(path: string, options?: RequestOptions) =>
     request<T>("DELETE", path, undefined, options),
+  blob: (path: string, options?: RequestOptions) => blobRequest(path, options),
 };

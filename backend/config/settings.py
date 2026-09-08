@@ -20,6 +20,13 @@ def env_list(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
 
 
+def env_int(name: str, default: int = 0) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-inseguro-cambiar-en-produccion")
 DEBUG = env_bool("DJANGO_DEBUG", True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,backend")
@@ -46,6 +53,10 @@ INSTALLED_APPS = [
     "apps.service_requests",
     "apps.orders",
 ]
+
+MEDIA_STORAGE = os.getenv("SERVIPROX_MEDIA_STORAGE", "filesystem").strip().lower()
+if MEDIA_STORAGE == "s3":
+    INSTALLED_APPS.append("storages")
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -81,6 +92,11 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 if os.getenv("POSTGRES_DB"):
+    postgres_options = {}
+    postgres_sslmode = os.getenv("POSTGRES_SSLMODE")
+    if postgres_sslmode:
+        postgres_options["sslmode"] = postgres_sslmode
+
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -92,6 +108,8 @@ if os.getenv("POSTGRES_DB"):
             "CONN_MAX_AGE": 60,
         }
     }
+    if postgres_options:
+        DATABASES["default"]["OPTIONS"] = postgres_options
 else:
     # Fallback local sin Docker: SQLite, para levantar el proyecto en segundos.
     DATABASES = {
@@ -124,7 +142,34 @@ STORAGES = {
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+if MEDIA_STORAGE == "s3":
+    s3_options = {
+        "bucket_name": os.getenv("SERVIPROX_S3_BUCKET_NAME"),
+        "location": os.getenv("SERVIPROX_S3_LOCATION", "media"),
+        "querystring_auth": True,
+        "file_overwrite": False,
+    }
+    optional_s3_options = {
+        "access_key": os.getenv("SERVIPROX_S3_ACCESS_KEY_ID"),
+        "secret_key": os.getenv("SERVIPROX_S3_SECRET_ACCESS_KEY"),
+        "region_name": os.getenv("SERVIPROX_S3_REGION_NAME"),
+        "endpoint_url": os.getenv("SERVIPROX_S3_ENDPOINT_URL"),
+        "addressing_style": os.getenv("SERVIPROX_S3_ADDRESSING_STYLE"),
+    }
+    s3_options.update(
+        {key: value for key, value in optional_s3_options.items() if value}
+    )
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": s3_options,
+    }
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
+SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", False)
+CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", False)
+SECURE_HSTS_SECONDS = env_int("DJANGO_SECURE_HSTS_SECONDS", 0)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

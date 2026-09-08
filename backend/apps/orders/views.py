@@ -4,7 +4,7 @@ from rest_framework.response import Response
 
 from .models import Order, Review
 from .serializers import OrderCreateSerializer, OrderSerializer, ReviewSerializer
-from .services import InvalidTransition, transition
+from .services import InvalidTransition, confirm_development_payment, transition
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -15,7 +15,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = Order.objects.select_related("professional", "service_request").prefetch_related(
-            "events", "professional__services__category"
+            "events", "professional__services__service__category"
         )
         if getattr(user, "is_professional", False):
             return queryset.filter(professional__user=user)
@@ -35,10 +35,21 @@ class OrderViewSet(viewsets.ModelViewSet):
                 {"status": "Estado desconocido."}, status=status.HTTP_400_BAD_REQUEST
             )
         try:
-            transition(order, new_status, user=request.user, note=request.data.get("note", ""))
+            order = transition(order, new_status, user=request.user, note=request.data.get("note", ""))
         except InvalidTransition as exc:
             return Response({"status": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(OrderSerializer(order).data)
+        return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"], url_path="confirm-demo-payment")
+    def confirm_demo_payment(self, request, pk=None):
+        order = self.get_object()
+        if order.client_id != request.user.id:
+            return Response(
+                {"detail": "Solo el cliente de la orden puede confirmar el pago."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        order = confirm_development_payment(order, user=request.user)
+        return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
 
 
 class ReviewViewSet(

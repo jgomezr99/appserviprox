@@ -18,6 +18,10 @@ class Order(models.Model):
         COMPLETED = "completed", _("Completada")
         CANCELLED = "cancelled", _("Cancelada")
 
+    class PaymentStatus(models.TextChoices):
+        PENDING = "pending", _("Pendiente de pago")
+        PAID = "paid", _("Pagado")
+
     service_request = models.ForeignKey(
         ServiceRequest, related_name="orders", on_delete=models.PROTECT
     )
@@ -29,6 +33,13 @@ class Order(models.Model):
     )
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.REQUESTED)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.PENDING,
+    )
+    payment_confirmed_at = models.DateTimeField(null=True, blank=True)
+    payment_reference = models.CharField(max_length=80, blank=True)
     scheduled_for = models.DateTimeField(_("visita agendada"), null=True, blank=True)
     estimate_min = models.DecimalField(
         _("estimado minimo"), max_digits=12, decimal_places=2, null=True, blank=True
