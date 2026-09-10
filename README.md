@@ -1,3 +1,4 @@
+
 Hecho por JUAN PALO GOMEZ ROBLES
 PROYECTO DE LA UNIVERSIDAD 
 1. Clonar el repositorio
@@ -16,3 +17,4 @@ ionic serve
 Tu app se abrirá en:
 👉 http://localhost:8100/
 <img width="819" height="304" alt="image-removebg-preview" src="https://github.com/user-attachments/assets/feeea22d-489d-4e8c-b609-b7f142db7d37" />
+<img width="2056" height="765" alt="image" src="https://github.com/user-attachments/assets/4915fc92-bb99-4232-870f-7c424c0b6d6e" />
