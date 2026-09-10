@@ -15,5 +15,4 @@ ionic --version
 ionic serve
 Tu app se abrirá en:
 👉 http://localhost:8100/
-
-<img width="256" height="77" alt="{F9655774-3A64-432B-8B74-7F3FDFA3A389}" src="https://github.com/user-attachments/assets/d3646bd6-b09d-4d83-8e3b-5ba52c5a4b45" />
+<img width="819" height="304" alt="image-removebg-preview" src="https://github.com/user-attachments/assets/feeea22d-489d-4e8c-b609-b7f142db7d37" />
