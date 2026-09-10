@@ -16,4 +16,5 @@ ionic serve
 Tu app se abrirá en:
 👉 http://localhost:8100/
 
-<img width="256" height="77" alt="{F9655774-3A64-432B-8B74-7F3FDFA3A389}" src="https://github.com/user-attachments/assets/d3646bd6-b09d-4d83-8e3b-5ba52c5a4b45" />
+
+<img width="2056" height="765" alt="image" src="https://github.com/user-attachments/assets/4915fc92-bb99-4232-870f-7c424c0b6d6e" />
