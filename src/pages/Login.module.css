@@ -7,7 +7,7 @@
   --background:
     radial-gradient(circle at 16% 12%, rgba(11, 47, 107, 0.18), transparent 26rem),
     radial-gradient(circle at 92% 8%, rgba(217, 54, 74, 0.12), transparent 24rem),
-    linear-gradient(180deg, #ffffff 0%, var(--sp-background) 62%, #ffffff 100%);
+    linear-gradient(180deg, #ce0909 0%, var(--sp-background) 62%, #ffffff 100%);
 }
 
 .authShell {
@@ -28,24 +28,24 @@
 }
 
 .brandMark {
-  width: 92px;
-  height: 92px;
+  width: 370px;
+  height: 150px;
   display: grid;
   place-items: center;
   overflow: hidden;
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.70);
+ 
   border: 1px solid var(--sp-border);
   box-shadow: var(--sp-shadow);
   backdrop-filter: blur(var(--sp-blur));
   -webkit-backdrop-filter: blur(var(--sp-blur));
 }
 
-.brandMark ion-img {
+/*.brandMark ion-img {
   width: 78px;
   height: 78px;
   object-fit: contain;
-}
+}*/
 
 .kicker,
 .cardEyebrow {
@@ -223,6 +223,36 @@
 
 .divider small {
   font-weight: 700;
+}
+
+.demoAccounts {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.demoTitle {
+  color: var(--sp-text-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.demoButtons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.demoButton {
+  min-height: 42px;
+  margin: 0;
+  --border-radius: 14px;
+  --border-color: rgba(11, 47, 107, 0.24);
+  --color: var(--sp-primary);
+  text-transform: none;
+  font-size: 0.83rem;
+  font-weight: 800;
 }
 
 .footerPrompt {
