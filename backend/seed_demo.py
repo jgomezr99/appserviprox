@@ -268,16 +268,17 @@ def seed_client() -> User:
     if created:
         client.set_password(DEMO_PASSWORD)
         client.save()
-    elif not client.onboarding_completed:
+    else:
+        client.set_password(DEMO_PASSWORD)
         client.onboarding_completed = True
-        client.save(update_fields=["onboarding_completed"])
+        client.save(update_fields=["password", "onboarding_completed"])
 
     Household.objects.update_or_create(
         owner=client,
         label="Mi apartamento",
         defaults={
-            "address_line": "Calle 40 Sur #78-20",
-            "neighborhood": "Kennedy",
+            "address_line": "Calle 80# 91-20",
+            "neighborhood": "Chapinero",
             "city": "Bogotá",
             "latitude": HOME_LAT,
             "longitude": HOME_LNG,
@@ -307,11 +308,12 @@ def seed_professionals(categories: dict[str, ServiceCategory]) -> None:
         if created:
             user.set_password(DEMO_PASSWORD)
             user.save()
-        elif not user.onboarding_completed:
+        else:
+            user.set_password(DEMO_PASSWORD)
             user.onboarding_completed = True
             if not user.phone:
                 user.phone = "+57 300 000 0000"
-            user.save(update_fields=["onboarding_completed", "phone"])
+            user.save(update_fields=["password", "onboarding_completed", "phone"])
 
         profile, _ = ProfessionalProfile.objects.update_or_create(
             user=user,
