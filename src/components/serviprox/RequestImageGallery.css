@@ -1,0 +1,61 @@
+.sp-request-images,
+.sp-evidence-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+
+.sp-request-image,
+.sp-evidence-preview {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--sp-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.sp-request-image img,
+.sp-evidence-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sp-evidence-preview button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(11, 47, 107, 0.88);
+  color: #fff;
+  cursor: pointer;
+}
+
+.sp-evidence-input {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px dashed var(--sp-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.sp-evidence-input input {
+  width: 100%;
+  color: var(--sp-text);
+}
+
+.sp-request-images-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sp-primary);
+  font-weight: 750;
+}

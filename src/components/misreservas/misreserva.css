@@ -1,0 +1,122 @@
+/* Estilos para Mis Reservas / Mis Solicitudes */
+.sp-reservas-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 16px;
+}
+
+.sp-reservas-header {
+  margin-bottom: 20px;
+}
+
+.sp-reservas-header h1 {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--sp-text, #0f172a);
+  margin: 4px 0 8px;
+}
+
+.sp-reservas-header p {
+  color: var(--sp-text-muted, #64748b);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.sp-reservas-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.sp-reservas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sp-reserva-card {
+  margin: 0 0 16px 0;
+  border-radius: 20px;
+  background: var(--sp-surface, #ffffff);
+  border: 1px solid rgba(11, 47, 107, 0.1);
+  box-shadow: 0 4px 16px rgba(11, 47, 107, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sp-reserva-card:hover {
+  box-shadow: 0 8px 24px rgba(11, 47, 107, 0.1);
+}
+
+.sp-reserva-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.sp-reserva-category {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--sp-primary, #0056b3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sp-reserva-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--sp-text, #0f172a);
+  margin: 4px 0;
+}
+
+.sp-reserva-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.88rem;
+  color: var(--sp-text-muted, #64748b);
+  margin: 12px 0;
+}
+
+.sp-reserva-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sp-reserva-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.sp-empty-reservas {
+  text-align: center;
+  padding: 48px 20px;
+  background: var(--sp-surface, #ffffff);
+  border-radius: 24px;
+  border: 1px dashed rgba(11, 47, 107, 0.2);
+  margin-top: 16px;
+}
+
+.sp-empty-reservas ion-icon {
+  font-size: 48px;
+  color: var(--sp-text-muted, #94a3b8);
+  margin-bottom: 12px;
+}
+
+.sp-empty-reservas h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--sp-text, #0f172a);
+  margin: 0 0 8px;
+}
+
+.sp-empty-reservas p {
+  color: var(--sp-text-muted, #64748b);
+  font-size: 0.92rem;
+  margin: 0 0 20px;
+}

@@ -1,0 +1,1091 @@
+.tracking-content {
+  --background: #f8fafc;
+}
+
+.tracking-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 14px 44px;
+  color: #13d6ac;
+}
+
+/* Header principal */
+.tracking-header {
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  border-radius: 20px;
+  padding: 20px 20px 24px;
+  color: #ffffff;
+  box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.35);
+  margin-bottom: 16px;
+}
+
+.tracking-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.tracking-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #ffffff;
+}
+
+.tracking-order-num {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+}
+
+.tracking-header h1 {
+  margin: 8px 0 6px;
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+.tracking-header p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* Tarjeta del Mapa de Ruta */
+.tracking-map-container-card {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+  margin-bottom: 16px;
+}
+
+.tracking-map-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.tracking-map-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: #1e293b;
+}
+
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  background-color: #22c55e;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  animation: pulse-green 1.8s infinite;
+}
+
+@keyframes pulse-green {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+.tracking-map-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sp-map-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sp-map-btn:hover {
+  background: #e2e8f0;
+}
+
+.sp-map-btn.primary {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+.sp-map-btn.primary:hover {
+  background: #1d4ed8;
+}
+
+/* El lienzo del mapa Leaflet */
+.sp-tracking-map {
+  width: 100%;
+  height: 350px;
+  background: #e2e8f0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Barra inferior de datos de ruta */
+.sp-route-info-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-top: 1px solid #f1f5f9;
+}
+
+.sp-route-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sp-stat-icon {
+  font-size: 1.5rem;
+  padding: 8px;
+  border-radius: 12px;
+}
+
+.sp-stat-icon.time {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.sp-stat-icon.dist {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.sp-stat-icon.code {
+  background: #fefce8;
+  color: #ca8a04;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+
+.stat-value {
+  display: block;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.code-pill {
+  font-family: monospace;
+  background: #fef08a;
+  color: #854d0e;
+  padding: 2px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.1em;
+}
+
+.sp-route-divider {
+  width: 1px;
+  height: 32px;
+  background: #e2e8f0;
+}
+
+/* Marcadores personalizados Leaflet */
+.sp-track-marker-prof-wrap {
+  position: relative;
+}
+
+.sp-track-prof-bubble {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sp-track-pulse-ring {
+  position: absolute;
+  top: -8px;
+  left: 2px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.35);
+  animation: pulse-blue 1.6s infinite;
+  z-index: 1;
+}
+
+@keyframes pulse-blue {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.sp-track-car-icon {
+  position: relative;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45);
+  border: 2.5px solid #ffffff;
+}
+
+.sp-track-name-badge {
+  position: relative;
+  z-index: 2;
+  margin-top: 4px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.sp-track-marker-home-wrap {
+  position: relative;
+  overflow: visible !important;
+}
+
+.sp-gmaps-pin-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.sp-gmaps-pin-badge {
+  position: absolute;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ea4335;
+  color: #ffffff;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  border: 1.5px solid #ffffff;
+  text-align: center;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+  z-index: 10;
+}
+
+.sp-gmaps-pin-badge::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #ea4335 transparent transparent transparent;
+}
+
+.sp-gmaps-pin-svg-wrap {
+  width: 34px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: 17px 44px;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
+  cursor: pointer;
+}
+
+.sp-gmaps-pin-svg-wrap:hover {
+  transform: scale(1.15);
+}
+
+.sp-track-home-bubble {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  width: max-content;
+  transform: translateX(-50%);
+  left: 50%;
+}
+
+.sp-track-home-pin {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #ea4335;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  box-shadow: 0 4px 12px rgba(234, 67, 53, 0.45);
+  border: 2.5px solid #ffffff;
+}
+
+.sp-track-home-badge {
+  margin-top: 4px;
+  background: #ea4335;
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+  border: 1.5px solid #ffffff;
+  text-align: center;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+/* Tarjeta del Profesional */
+.tracking-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+.tracking-person {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tracking-avatar {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.tracking-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tracking-person-info {
+  flex: 1;
+  display: grid;
+  gap: 3px;
+}
+
+.tracking-person-info strong {
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.tracking-person-info span {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.tracking-verified-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #16a34a;
+  background: #dcfce7;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.tracking-person-rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.88rem;
+  margin-top: 2px;
+}
+
+/* Código de seguridad */
+.tracking-code-box {
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border-color: #bbf7d0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+}
+
+.tracking-code-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tracking-code-icon {
+  font-size: 2rem;
+  color: #16a34a;
+}
+
+.tracking-code-header strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #065f46;
+}
+
+.tracking-code-header span {
+  display: block;
+  font-size: 0.8rem;
+  color: #047857;
+  margin-top: 2px;
+}
+
+.tracking-code-display {
+  background: #ffffff;
+  border: 2px dashed #16a34a;
+  padding: 8px 16px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.tracking-code-digit {
+  font-family: monospace;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  color: #15803d;
+}
+
+/* Evidencias */
+.tracking-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.tracking-card-heading span {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #334155;
+}
+
+.tracking-card-heading small {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.tracking-evidence {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.tracking-evidence img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+/* Selector de estados profesional */
+.tracking-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tracking-status {
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tracking-status.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+.tracking-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+@media (max-width: 540px) {
+  .sp-route-info-bar {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .sp-route-divider {
+    display: none;
+  }
+  .tracking-code-box {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Tarjeta interactiva de cálculo de demora */
+.sp-calc-delay-card {
+  background: #ffffff;
+  border-left: 5px solid #2563eb;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.sp-calc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.sp-calc-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sp-calc-title-icon {
+  font-size: 1.6rem;
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 8px;
+  border-radius: 12px;
+}
+
+.sp-calc-title strong {
+  display: block;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.sp-calc-title span {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.sp-recalc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sp-recalc-btn:hover {
+  background: #dbeafe;
+}
+
+.sp-calc-progress-wrap {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.sp-calc-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.sp-calc-eta-badge {
+  background: #fef08a;
+  color: #854d0e;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+}
+
+.sp-calc-progress-bar {
+  width: 100%;
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  position: relative;
+  overflow: visible;
+}
+
+.sp-calc-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  border-radius: 999px;
+  position: relative;
+}
+
+.sp-calc-car-thumb {
+  position: absolute;
+  right: -12px;
+  top: -10px;
+  font-size: 1.1rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.sp-calc-summary-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.sp-calc-chip {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+.sp-calc-chip span {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.sp-calc-chip b {
+  display: block;
+  font-size: 0.95rem;
+  color: #0f172a;
+  margin-top: 2px;
+}
+
+/* Tarjeta de Ubicación Registrada en el Formulario */
+.sp-destination-address-card {
+  background: #ffffff;
+  border-left: 5px solid #2563eb;
+  border-radius: 18px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sp-destination-address-card:hover {
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.1);
+}
+
+.sp-dest-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.sp-dest-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 1.55rem;
+  flex-shrink: 0;
+  border: 1px solid #bfdbfe;
+}
+
+.sp-dest-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-dest-tag-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.sp-dest-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.sp-dest-pill-label {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.sp-dest-address {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
+
+.sp-dest-details {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 0.82rem;
+}
+
+.sp-dest-neighborhood {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.sp-dest-neighborhood ion-icon {
+  color: #dc2626;
+  font-size: 0.95rem;
+}
+
+.sp-dest-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #16a34a;
+  font-weight: 700;
+  background: #f0fdf4;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.sp-dest-verified ion-icon {
+  font-size: 0.95rem;
+}
+
+/* Popup en el marcador de Leaflet */
+.sp-track-popup-content {
+  padding: 4px 2px;
+  font-family: inherit;
+  color: #0f172a;
+  min-width: 170px;
+}
+
+.sp-popup-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #dc2626;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.sp-popup-address {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.sp-popup-sub {
+  display: block;
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.sp-popup-note {
+  display: block;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 0.7rem;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* Botón Cambiar Hogar */
+.sp-change-home-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  color: #1e293b;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.sp-change-home-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.sp-change-home-btn ion-icon {
+  font-size: 1rem;
+  color: #2563eb;
+}
+
+/* Modal Cambiar Hogar */
+.sp-change-home-modal {
+  --border-radius: 20px;
+}
+
+.sp-change-home-modal-content {
+  background: #ffffff;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.sp-change-home-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sp-change-home-modal-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.sp-modal-close-btn {
+  background: #f1f5f9;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #64748b;
+  font-size: 1.2rem;
+}
+
+.sp-modal-close-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.sp-field-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.sp-households-quick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.sp-household-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.sp-household-chip:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.sp-household-chip.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.sp-household-chip strong {
+  font-size: 0.88rem;
+  color: #0f172a;
+}
+
+.sp-household-chip span {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.sp-text-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: #0f172a;
+  outline: none;
+  background: #ffffff;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.sp-text-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.sp-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.sp-btn-cancel {
+  flex: 1;
+  padding: 12px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+}
+
+.sp-btn-cancel:hover {
+  background: #e2e8f0;
+}
+
+.sp-btn-confirm {
+  flex: 2;
+  padding: 12px;
+  background: #2563eb;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.sp-btn-confirm:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.sp-btn-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

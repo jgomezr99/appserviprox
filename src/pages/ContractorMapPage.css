@@ -1,0 +1,1438 @@
+/* ==========================================================================
+   ContractorMapPage.css - Serviprox Interactive Contractor Map (Bogotá)
+   ========================================================================== */
+
+.sp-map-page-content {
+  --background: #f8fafc;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sp-map-layout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+/* Map Canvas */
+.sp-map-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+@media (min-width: 861px) {
+  .sp-map-container {
+    left: 482px;
+    right: 0;
+    width: auto;
+    border-left: 1px solid #e2e8f0;
+  }
+
+  .sp-map-sidebar {
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 462px;
+    max-width: 462px;
+    border-radius: 0;
+    box-shadow: 8px 0 24px rgba(15, 23, 42, 0.08);
+  }
+
+  .sp-map-layer-tag {
+    left: 496px;
+  }
+}
+
+/* Leaflet Tile Layer Overrides */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+  background-color: #e5e7eb;
+}
+
+/* Map Top Floating Header Controls */
+.sp-map-top-bar {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  pointer-events: auto;
+}
+
+.sp-map-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+/* Row 1 Pills */
+.sp-top-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.sp-top-pill--osm {
+  background: #ffffff;
+  border: 1.5px solid #d1fae5;
+  color: #065f46;
+}
+
+.sp-top-pill--osm .sp-pill-globe {
+  font-size: 14px;
+}
+
+.sp-top-pill--city {
+  background: #18181b;
+  color: #ffffff;
+  border: 1.5px solid #27272a;
+}
+
+.sp-top-pill--city .sp-pill-pin {
+  color: #f59e0b;
+}
+
+.sp-top-pill--available {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1.5px solid #6ee7b7;
+}
+
+.sp-top-pill--available .sp-pill-dot {
+  color: #10b981;
+  font-size: 10px;
+}
+
+/* Row 2 Buttons */
+.sp-map-top-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1f2937;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sp-map-top-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.sp-map-top-pill--closest {
+  border-color: #fde68a;
+  color: #78350f;
+}
+
+.sp-map-top-pill--closest ion-icon {
+  color: #f59e0b;
+  font-size: 16px;
+}
+
+.sp-map-top-pill--count ion-icon {
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.sp-map-top-pill--radius {
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.sp-map-top-pill--radius.is-active {
+  background: #fff7ed;
+  border-color: #090cb8;
+}
+
+.sp-map-top-pill--radius ion-icon {
+  color: #090cb8;
+  font-size: 16px;
+}
+
+.sp-map-layer-tag {
+  position: absolute;
+  top: 96px;
+  left: 480px;
+  z-index: 500;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid #e5e7eb;
+  border-radius: 9999px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Bottom Right Map Action Controls */
+.sp-map-bottom-controls {
+  position: absolute;
+  bottom: 24px;
+  right: 20px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sp-map-ctrl-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #3b82f6;
+  font-size: 20px;
+}
+
+.sp-map-ctrl-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  background: #f8fafc;
+}
+
+.sp-map-ctrl-btn--expand {
+  color: #0c86ea;
+  border-radius: 12px;
+}
+
+.sp-map-ctrl-btn--center {
+  border-radius: 50%;
+  color: #2563eb;
+}
+
+/* ==========================================================================
+   Side Panel (Buscador, Filtros y Lista)
+   ========================================================================== */
+.sp-map-sidebar {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  bottom: 16px;
+  width: 450px;
+  max-width: calc(100vw - 32px);
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  z-index: 600;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Search Box */
+.sp-sidebar-header {
+  padding: 16px 16px 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.sp-search-bar-wrap {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 4px 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sp-search-bar-wrap:focus-within {
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+}
+
+.sp-search-icon {
+  font-size: 19px;
+  color: #64748b;
+  margin-right: 8px;
+}
+
+.sp-search-input {
+  border: none;
+  outline: none;
+  width: 100%;
+  font-size: 13.5px;
+  color: #1e293b;
+  background: transparent;
+  padding: 8px 0;
+}
+
+.sp-search-input::placeholder {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.sp-search-clear {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Filter Sections in Sidebar */
+.sp-sidebar-filters {
+  padding: 12px 16px 14px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+}
+
+.sp-filter-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #0c4cfc;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.sp-filter-section-title--dark {
+  color: #475569;
+}
+
+.sp-filter-section-title ion-icon {
+  font-size: 14px;
+  color: #0038ee;
+}
+
+/* Horizontal Chip Scrollers */
+.sp-chip-scroll-row {
+  display: flex;
+  align-items: center;
+  position: relative;
+  gap: 4px;
+}
+
+.sp-chip-scroll-container {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  padding: 2px 2px 6px 2px;
+  width: 100%;
+}
+
+.sp-chip-scroll-container::-webkit-scrollbar {
+  height: 4px;
+}
+
+.sp-chip-scroll-container::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 9999px;
+}
+
+.sp-chip-arrow {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: color 0.15s;
+}
+
+.sp-chip-arrow:hover {
+  color: #0f172a;
+}
+
+.sp-chip-pill {
+  white-space: nowrap;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #10078f;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.sp-chip-pill:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* Orange Active Chip for Localities */
+.sp-chip-pill--orange-active {
+  background: #092be9;
+  border-color: #ff0000;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 5px 8px rgba(249, 115, 22, 0.3);
+}
+
+.sp-chip-pill--orange-active:hover {
+  background: #0a78df;
+}
+
+/* Black Active Chip for Specialties */
+.sp-chip-pill--black-active {
+  background: #0707ff;
+  border-color: #f10909;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(6, 6, 255, 0.25);
+}
+
+.sp-chip-pill--black-active:hover {
+  background: #0505ff;
+}
+
+/* Toggle Pills Row & Radio Selector */
+.sp-toggles-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.sp-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.sp-toggle-pill:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.sp-toggle-pill.is-active {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #065f46;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2);
+}
+
+.sp-toggle-pill--urgent.is-active {
+  background: #fff1f2;
+  border-color: #f43f5e;
+  color: #9f1239;
+  box-shadow: 0 2px 6px rgba(244, 63, 94, 0.2);
+}
+
+.sp-toggle-pill--policy.is-active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1e40af;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.2);
+}
+
+.sp-radio-dropdown-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.sp-radio-select {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Contractors Results Header */
+.sp-results-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 12px 16px 8px 16px;
+  background: #fafaf9;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.sp-results-count {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1c1917;
+}
+
+.sp-results-sort {
+  font-size: 11.5px;
+  color: #78716c;
+  font-weight: 500;
+}
+
+/* Quick Actions Strip */
+.sp-quick-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.sp-quick-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sp-quick-action-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.sp-quick-action-btn ion-icon {
+  color: #0c5aea;
+  font-size: 15px;
+}
+
+.sp-quick-action-btn--primary {
+  background: #0713bb;
+  border-color: #0c2dea;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 3px 10px rgba(249, 115, 22, 0.35);
+  margin-left: auto;
+}
+
+.sp-quick-action-btn--primary ion-icon {
+  color: #ffffff;
+}
+
+.sp-quick-action-btn--primary:hover {
+  background: #0870e7;
+}
+
+/* Contractor Cards Scroll List */
+.sp-contractors-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #f8fafc;
+}
+
+.sp-contractor-card {
+  background: #ffffff;
+  border: 1px solid #fef3c7;
+  border-left: 2px solid #fa0101;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.22s ease;
+  position: relative;
+}
+
+.sp-contractor-card:hover,
+.sp-contractor-card.is-selected {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.09);
+  border-left-color: #f70606;
+  border-left-width: 5px;
+}
+
+.sp-contractor-card-top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.sp-contractor-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.sp-contractor-avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1.5px solid #f1f5f9;
+}
+
+.sp-contractor-avatar--fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #dbeafe, #bfdbfe 55%, #93c5fd);
+  color: #1e3a8a;
+  font-size: 17px;
+  font-weight: 850;
+}
+
+.sp-contractor-avatar--image {
+  position: absolute;
+  inset: 0;
+}
+
+.sp-contractor-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-contractor-location-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.sp-contractor-zone {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-rating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 9999px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.sp-rating-badge ion-icon {
+  color: #f00909;
+  font-size: 12px;
+}
+
+.sp-contractor-name {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+  margin: 2px 0 3px 0;
+}
+
+.sp-contractor-sub {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+
+/* Badges list */
+.sp-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.sp-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 3px 9px;
+  line-height: 1;
+}
+
+.sp-badge-pill--green {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.sp-badge-pill--green-dot {
+  width: 6px;
+  height: 6px;
+  background: #10b981;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.sp-badge-pill--gray {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.sp-badge-pill--teal {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+/* Card Footer */
+.sp-contractor-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #f8fafc;
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.sp-contractor-card-actions {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.sp-card-action {
+  min-width: 0;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 6px 12px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.sp-card-action:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.sp-card-action ion-icon {
+  font-size: 15px;
+}
+
+.sp-card-action--map ion-icon {
+  color: #0f6699;
+}
+
+.sp-card-action--quote {
+  background: #0931e6;
+  border-color: #ff0303;
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(249, 115, 22, 0.25);
+}
+
+.sp-card-action--quote:hover {
+  background: #e40505;
+  border-color: #04eeff;
+}
+
+.sp-footer-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.sp-distance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.sp-distance-pill ion-icon {
+  color: #0f6699;
+}
+
+.sp-time-pill {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.sp-price-box {
+  text-align: right;
+}
+
+.sp-price-label {
+  font-size: 10.5px;
+  color: #64748b;
+  display: block;
+}
+
+.sp-price-val {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.sp-price-val--pending {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Empty Results in List */
+.sp-empty-contractors {
+  text-align: center;
+  padding: 32px 16px;
+  color: #64748b;
+}
+
+.sp-empty-contractors ion-icon {
+  font-size: 40px;
+  color: #cbd5e1;
+  margin-bottom: 8px;
+}
+
+.sp-empty-contractors h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 6px 0;
+}
+
+.sp-empty-contractors p {
+  font-size: 12.5px;
+  margin: 0 0 14px 0;
+}
+
+/* Mobile Toggle Bar (Only on small screens) */
+.sp-mobile-view-toggle {
+  display: none;
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 700;
+  background: #18181b;
+  border-radius: 9999px;
+  padding: 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.sp-mobile-view-btn {
+  border: none;
+  background: transparent;
+  color: #a1a1aa;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 8px 18px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.sp-mobile-view-btn.is-active {
+  background: #ffffff;
+  color: #18181b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* ==========================================================================
+   Custom HTML Leaflet Markers (Rendered via L.divIcon)
+   ========================================================================== */
+.sp-custom-marker-wrapper {
+  background: transparent;
+  border: none;
+}
+
+.sp-map-marker-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.sp-map-marker-item:hover,
+.sp-map-marker-item.is-selected {
+  transform: translate(-50%, -103%) scale(1.08);
+  z-index: 9999 !important;
+}
+
+/* White Pill Capsule on Top */
+.sp-marker-bubble-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ffffff;
+  border: 2px solid #00a878;
+  border-radius: 9999px;
+  padding: 3px 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+  white-space: nowrap;
+  margin-bottom: -5px;
+  z-index: 2;
+  position: relative;
+}
+
+.sp-marker-name {
+  font-size: 12px;
+  font-weight: 850;
+  color: #111827;
+}
+
+.sp-marker-star {
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 800;
+  margin-right: -2px;
+}
+
+.sp-marker-rating-num {
+  font-size: 11px;
+  font-weight: 800;
+  color: #d97706;
+}
+
+.sp-marker-zone-tag {
+  background: #00a878;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 800;
+  border-radius: 9999px;
+  padding: 2px 7px;
+  line-height: 1.2;
+}
+
+/* Pin Head */
+.sp-marker-pin-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.sp-technician-pin-svg {
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2));
+  display: block;
+}
+
+/* Purple Tag under Mendoza */
+.sp-marker-purple-bubble {
+  position: absolute;
+  top: 100%;
+  margin-top: 4px;
+  background: #6d28d9;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.4);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  z-index: 10;
+  animation: sp-pulse-tag 2s infinite ease-in-out;
+}
+
+@keyframes sp-pulse-tag {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.sp-bubble-wrench {
+  font-size: 12px;
+}
+
+/* "Tu Obra" Marker */
+.sp-tu-obra-marker-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.sp-tu-obra-capsule {
+  background: #0c79df;
+  color: #f7eeee;
+  font-size: 12.5px;
+  font-weight: 800;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  border: 4px solid #05c1da;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.45);
+  white-space: nowrap;
+  margin-bottom: -4px;
+  z-index: 2;
+}
+
+.sp-tu-obra-pin-icon {
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25));
+  z-index: 1;
+}
+
+
+/* ==========================================================================
+   Responsive Adaptations
+   ========================================================================== */
+@media (max-width: 860px) {
+  .sp-map-layout,
+  .sp-map-container {
+    min-height: 100%;
+  }
+
+  .sp-map-container {
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
+
+  .sp-map-layer-tag {
+    display: none;
+  }
+
+  .sp-map-top-bar {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .sp-map-top-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sp-map-top-pill {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    font-size: 11.5px;
+  }
+
+  .sp-mobile-view-toggle {
+    display: flex;
+  }
+
+  .sp-map-sidebar {
+    width: 100%;
+    max-width: 100%;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    height: 72vh;
+    max-height: calc(100% - 76px);
+    padding-bottom: env(safe-area-inset-bottom);
+    border-radius: 24px 24px 0 0;
+    transform: translateY(0);
+  }
+
+  .sp-map-sidebar.is-minimized {
+    transform: translateY(calc(100% - 70px));
+  }
+
+  .sp-map-sidebar.is-map-view {
+    display: none;
+  }
+
+  .sp-sidebar-header {
+    padding: 12px 12px 8px;
+  }
+
+  .sp-sidebar-filters {
+    padding: 10px 12px 12px;
+  }
+
+  .sp-results-header {
+    padding: 10px 12px 7px;
+  }
+
+  .sp-results-sort {
+    max-width: 42%;
+    text-align: right;
+  }
+
+  .sp-contractors-list {
+    padding: 10px 10px 148px;
+    scroll-padding-bottom: 148px;
+  }
+
+  .sp-contractor-card {
+    padding: 12px;
+  }
+
+  .sp-contractor-card-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sp-card-action--map {
+    grid-column: span 2;
+  }
+
+  .sp-mobile-view-toggle {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    padding: 3px;
+  }
+
+  .sp-mobile-view-btn {
+    min-width: 104px;
+    padding: 9px 14px;
+  }
+}
+
+@media (max-width: 430px) {
+  .sp-map-top-pill--closest span {
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sp-contractor-card-top {
+    gap: 9px;
+  }
+
+  .sp-contractor-avatar,
+  .sp-contractor-avatar--fallback {
+    width: 50px;
+    height: 50px;
+  }
+
+  .sp-contractor-location-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sp-rating-badge {
+    align-self: flex-start;
+  }
+
+  .sp-contractor-name {
+    font-size: 13.5px;
+  }
+}
+
+/* ==========================================================================
+   Leaflet Custom Popup Card (Design matching mockup)
+   ========================================================================== */
+.leaflet-popup.sp-leaflet-custom-popup {
+  margin-bottom: 6px;
+}
+
+.sp-leaflet-custom-popup .leaflet-popup-content-wrapper {
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  box-shadow: 0 14px 36px -4px rgba(15, 23, 42, 0.22), 0 6px 16px -2px rgba(15, 23, 42, 0.1);
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.sp-leaflet-custom-popup .leaflet-popup-content {
+  margin: 0;
+  width: 290px !important;
+  max-width: calc(100vw - 32px);
+  line-height: normal;
+  font-family: inherit;
+}
+
+.sp-leaflet-custom-popup .leaflet-popup-tip-container {
+  width: 26px;
+  height: 13px;
+}
+
+.sp-leaflet-custom-popup .leaflet-popup-tip {
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  border-left: 1px solid #e2e8f0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.sp-popup-card {
+  padding: 14px 16px 12px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-popup-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sp-popup-location {
+  font-size: 10.5px;
+  font-weight: 750;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-popup-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #ea580c;
+  flex-shrink: 0;
+}
+
+.sp-popup-star {
+  color: #ea580c;
+  font-size: 12px;
+}
+
+.sp-popup-rating-val {
+  font-weight: 800;
+  color: #ea580c;
+}
+
+.sp-popup-rating-count {
+  color: #ea580c;
+  font-weight: 700;
+}
+
+.sp-popup-title {
+  font-size: 15.5px;
+  font-weight: 850;
+  color: #0f172a;
+  line-height: 1.24;
+  margin: 6px 0 3px 0;
+  letter-spacing: -0.015em;
+}
+
+.sp-popup-pro-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #2563eb;
+  margin-bottom: 2px;
+}
+
+.sp-popup-pro-icon {
+  font-size: 14px;
+}
+
+.sp-popup-pro-label {
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.sp-popup-pro-name {
+  font-weight: 800;
+  color: #2563eb;
+}
+
+.sp-popup-specialty {
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.35;
+  margin-bottom: 10px;
+}
+
+.sp-popup-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.sp-popup-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 9999px;
+  padding: 3.5px 9px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #15803d;
+  letter-spacing: 0.02em;
+}
+
+.sp-popup-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+  display: inline-block;
+}
+
+.sp-popup-status-badge--offline {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.sp-popup-status-dot--offline {
+  background: #94a3b8;
+  box-shadow: none;
+}
+
+.sp-popup-distance {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.sp-popup-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 10px;
+}
+
+.sp-popup-price-label {
+  color: #64748b;
+}
+
+.sp-popup-price-value {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.sp-popup-action-btn {
+  width: 100%;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 7.5px 12px;
+  color: #2563eb;
+  font-size: 11.5px;
+  font-weight: 750;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.18s ease;
+  font-family: inherit;
+  outline: none;
+}
+
+.sp-popup-action-btn:hover {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.sp-popup-action-btn .sp-popup-hand {
+  font-size: 13px;
+}
+
