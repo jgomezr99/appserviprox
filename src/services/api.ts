@@ -38,9 +38,12 @@ const resolveApiBaseUrl = (): string => {
 
   // 3. Dispositivo nativo compilado con Capacitor (Emulador o App instalada)
   if (Capacitor.isNativePlatform()) {
-    return Capacitor.getPlatform() === "android"
-      ? "http://10.0.2.2:8000/api/v1"
-      : "http://192.168.0.6:8000/api/v1";
+    const saved = typeof window !== "undefined" ? localStorage.getItem("serviprox_api_host") : null;
+    if (saved) {
+      return `${saved.replace(/\/$/, "")}/api/v1`;
+    }
+    // Celular físico conectado por Wi-Fi usa la IP local del servidor (192.168.0.6)
+    return "http://192.168.0.6:8000/api/v1";
   }
 
   // 4. Navegador Web y Móvil (DevTunnels, Red Local, Localhost)
@@ -77,8 +80,9 @@ export const getCandidateBaseUrls = (): string[] => {
   }
 
   if (Capacitor.isNativePlatform()) {
-    candidates.push("http://10.0.2.2:8000/api/v1");
     candidates.push("http://192.168.0.6:8000/api/v1");
+    candidates.push("http://10.0.2.2:8000/api/v1");
+    candidates.push("http://localhost:8000/api/v1");
   }
 
   // Eliminar duplicados manteniendo orden de prioridad
@@ -89,6 +93,11 @@ export const setWorkingBaseUrl = (url: string) => {
   activeBaseUrl = url.replace(/\/$/, "");
   API_BASE_URL = activeBaseUrl;
   if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("serviprox_api_host", activeBaseUrl.replace(/\/api\/v1$/, ""));
+    } catch {
+      // Ignorar restricciones de almacenamiento
+    }
     window.dispatchEvent(
       new CustomEvent("serviprox:connection-status", {
         detail: { connected: true, url: activeBaseUrl },
@@ -186,7 +195,13 @@ async function fetchWithResilience(
     for (const base of candidates) {
       const url = buildUrlForBase(base, path, params);
       try {
-        const response = await fetch(url, init);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const response = await fetch(url, {
+          ...init,
+          signal: init.signal || controller.signal,
+        });
+        clearTimeout(timeoutId);
 
         // Si el estado no es error de puerta de enlace (502/503/504), el backend respondió correctamente
         if (!isGatewayOrNetworkError(response.status)) {
@@ -202,7 +217,7 @@ async function fetchWithResilience(
       }
 
       // Pequeña pausa antes de intentar el siguiente candidato
-      await sleep(250);
+      await sleep(150);
     }
 
     // Espera incremental entre rondas completas de reintentos
@@ -383,10 +398,14 @@ export const checkBackendHealth = async (): Promise<{
   for (const base of candidates) {
     try {
       const url = `${base.replace(/\/$/, "")}/health/`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       const res = await fetch(url, {
         method: "GET",
         headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         setWorkingBaseUrl(base);

@@ -45,7 +45,7 @@ interface AppPage {
 
 
 const clientPages: AppPage[] = [
-  { title: 'Inicio', url: '/cliente/servicios', iosIcon: homeOutline, mdIcon: homeSharp },
+  { title: 'Inicio', url: '/cliente/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
   { title: 'Mapa de contratistas', url: '/cliente/mapa', iosIcon: mapOutline, mdIcon: mapSharp },
   { title: 'Servicios', url: '/cliente/servicios', iosIcon: constructOutline, mdIcon: constructSharp },
   { title: 'Mis solicitudes', url: '/cliente/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
