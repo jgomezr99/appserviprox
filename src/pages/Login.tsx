@@ -146,7 +146,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
       setCheckingConnection(false);
     }
   };
-
+  /* conexion de login  direccion home*/
   useEffect(() => {
     if (!sessionLoading && isAuthenticated) {
       if (!administrative && (!user || user.role === "client")) {

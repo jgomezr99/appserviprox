@@ -9,6 +9,8 @@ import {
 	IonMenuButton,
 	IonModal,
 	IonPage,
+	IonSelect,
+	IonSelectOption,
 	IonTitle,
 	IonTextarea,
 	IonToast,
@@ -25,6 +27,14 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { authService } from "../services/auth";
 import "./RolePages.css";
+
+const DELETE_REASONS = [
+	"Ya no uso la aplicación",
+	"No encontré el servicio que buscaba",
+	"Tuve una mala experiencia",
+	"Preocupaciones de privacidad",
+	"Otro",
+];
 
 const ClientProfilePage: React.FC = () => {
 	const { user, updateMe, logout } = useAuth();
@@ -43,6 +53,7 @@ const ClientProfilePage: React.FC = () => {
 	const [toast, setToast] = useState("");
 	const [deleteOpen, setDeleteOpen] = useState(false);
 	const [deleteReason, setDeleteReason] = useState("");
+	const [deleteComment, setDeleteComment] = useState("");
 	const [deleting, setDeleting] = useState(false);
 
 	useEffect(() => {
@@ -92,7 +103,8 @@ const ClientProfilePage: React.FC = () => {
 		if (!deleteReason.trim() || deleting) return;
 		setDeleting(true);
 		try {
-			await authService.deleteCurrentUser(deleteReason.trim());
+			const comment = deleteComment.trim();
+			await authService.deleteCurrentUser(comment ? `${deleteReason}: ${comment}` : deleteReason);
 			logout();
 			window.location.assign("/login");
 		} catch {
@@ -183,14 +195,27 @@ const ClientProfilePage: React.FC = () => {
 					<h2>¿Por qué deseas eliminar tu cuenta?</h2>
 					<p>Tu respuesta nos ayuda a mejorar Serviprox.</p>
 					<form onSubmit={handleDeleteAccount}>
-						<IonTextarea
+						<IonSelect
 							label="Motivo"
 							labelPlacement="stacked"
 							value={deleteReason}
-							placeholder="Escribe el motivo"
+							placeholder="Selecciona un motivo"
+							interface="popover"
+							onIonChange={(event) => setDeleteReason(String(event.detail.value ?? ""))}
+						>
+							{DELETE_REASONS.map((reason) => (
+								<IonSelectOption key={reason} value={reason}>
+									{reason}
+								</IonSelectOption>
+							))}
+						</IonSelect>
+						<IonTextarea
+							label="Cuéntanos más (opcional)"
+							labelPlacement="stacked"
+							value={deleteComment}
+							placeholder="¿Qué podríamos mejorar?"
 							autoGrow
-							required
-							onIonInput={(event) => setDeleteReason(String(event.detail.value ?? ""))}
+							onIonInput={(event) => setDeleteComment(String(event.detail.value ?? ""))}
 						/>
 						<div className="client-profile-actions">
 							<IonButton type="submit" color="danger" disabled={!deleteReason.trim() || deleting}>
