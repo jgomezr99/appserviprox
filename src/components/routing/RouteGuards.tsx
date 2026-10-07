@@ -46,6 +46,9 @@ export const RequireAuth: React.FC<GuardProps> = ({
   }
 
   if (onboarding === "complete" && !user.onboarding_completed) {
+    if (user.role === "client") {
+      return <>{children}</>;
+    }
     return <Redirect to={getOnboardingRoute(user.role)} />;
   }
 

@@ -149,9 +149,13 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
 
   useEffect(() => {
     if (!sessionLoading && isAuthenticated) {
-      history.replace(getEntryRoute(user));
+      if (!administrative && (!user || user.role === "client")) {
+        history.replace("/cliente/inicio");
+      } else {
+        history.replace(getEntryRoute(user));
+      }
     }
-  }, [history, isAuthenticated, sessionLoading, user]);
+  }, [administrative, history, isAuthenticated, sessionLoading, user]);
 
   const canSubmit = emailOk(email) && password.length >= 6 && !isSubmitting;
 
@@ -167,7 +171,11 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
         setError("Esta cuenta no tiene permisos administrativos.");
         return;
       }
-      history.replace(getEntryRoute(currentUser));
+      if (!administrative && (!currentUser || currentUser.role === "client")) {
+        history.replace("/cliente/inicio");
+      } else {
+        history.replace(getEntryRoute(currentUser));
+      }
     } catch (err) {
       setError(getLoginErrorMessage(err));
     } finally {
