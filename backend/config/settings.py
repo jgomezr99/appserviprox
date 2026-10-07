@@ -29,7 +29,7 @@ def env_int(name: str, default: int = 0) -> int:
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-inseguro-cambiar-en-produccion")
 DEBUG = env_bool("DJANGO_DEBUG", True)
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "*" if DEBUG else "localhost,127.0.0.1,0.0.0.0,backend")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "*" if DEBUG else "localhost,127.0.0.1,0.0.0.0,backend,.onrender.com,.railway.app,.devtunnels.ms,.ngrok-free.app,.ngrok.io")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -223,20 +223,23 @@ DEFAULT_CLIENT_ORIGINS = (
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8100,http://127.0.0.1:8100,https://localhost,capacitor://localhost,http://10.0.2.2:8000,http://10.0.2.2:8100"
 )
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", DEFAULT_CLIENT_ORIGINS)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.devtunnels\.ms$",
+    r"^https://.*\.netlify\.app$",
+    r"^https://.*\.ngrok-free\.app$",
+    r"^https://.*\.ngrok\.io$",
+    r"^https?://localhost(:\d+)?$",
+    r"^https?://127\.0\.0\.1(:\d+)?$",
+    r"^https?://192\.168\.\d+\.\d+(:\d+)?$",
+    r"^https?://10\.\d+\.\d+\.\d+(:\d+)?$",
+]
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
-    CORS_ALLOWED_ORIGIN_REGEXES = [
-        r"^https://.*\.devtunnels\.ms$",
-        r"^https?://localhost(:\d+)?$",
-        r"^https?://127\.0\.0\.1(:\d+)?$",
-        r"^https?://192\.168\.\d+\.\d+(:\d+)?$",
-        r"^https?://10\.\d+\.\d+\.\d+(:\d+)?$",
-    ]
 
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
-    DEFAULT_CLIENT_ORIGINS + ",https://*.devtunnels.ms,http://192.168.*:8100,http://192.168.*:8000"
+    DEFAULT_CLIENT_ORIGINS + ",https://*.devtunnels.ms,https://*.netlify.app,https://*.ngrok-free.app,https://*.onrender.com,https://*.railway.app,http://192.168.*:8100,http://192.168.*:8000"
 )
 
 

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: serviprox-backend
+    runtime: python
+    buildCommand: "pip install -r backend/requirements.txt && python backend/manage.py migrate --no-input && python backend/seed_demo.py"
+    startCommand: "gunicorn --chdir backend config.wsgi:application --bind 0.0.0.0:$PORT --workers 2"
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DJANGO_DEBUG
+        value: "True"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "*"
+      - key: SERVIPROX_DATABASE
+        value: sqlite
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://serviproxweb.netlify.app,https://deploy-preview-2--serviproxweb.netlify.app"
+

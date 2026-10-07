@@ -18,7 +18,9 @@ import {
 } from "ionicons/icons";
 import { useHistory } from "react-router-dom";
 import { authService } from "../services/auth";
+import { checkBackendHealth, ApiError } from "../services/api";
 import { getEntryRoute } from "../utils/routes";
+import { ServerConnectionModal } from "../components/ServerConnectionModal";
 import logo from "../Assets/logo.png";
 import "./AdministrativeLoginPage.css";
 
@@ -42,6 +44,20 @@ const AdministrativeLoginPage: React.FC = () => {
 	const [showPassword, setShowPassword] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState("");
+	const [serverModalOpen, setServerModalOpen] = useState(false);
+	const [serverConnected, setServerConnected] = useState<boolean | null>(null);
+
+	useEffect(() => {
+		checkBackendHealth().then((res) => {
+			setServerConnected(res.ok);
+		});
+		const handleStatus = (e: Event) => {
+			const detail = (e as CustomEvent).detail;
+			setServerConnected(Boolean(detail?.connected));
+		};
+		window.addEventListener("serviprox:connection-status", handleStatus);
+		return () => window.removeEventListener("serviprox:connection-status", handleStatus);
+	}, []);
 
 	// Modales
 	const [supportOpen, setSupportOpen] = useState(false);
@@ -95,8 +111,16 @@ const AdministrativeLoginPage: React.FC = () => {
 				return;
 			}
 			history.replace(getEntryRoute(currentUser));
-		} catch {
-			setError("Correo o contraseña incorrectos.");
+		} catch (err: any) {
+			if (err?.status === 401) {
+				setError("Usuario o contraseña incorrectos.");
+			} else if (err?.status >= 500 || err?.status === 502 || err?.status === 503) {
+				setError("No pudimos conectar con el servidor backend ni la base de datos.");
+			} else if (err?.message && !err.message.startsWith("API request")) {
+				setError(err.message);
+			} else {
+				setError("No pudimos iniciar sesión. Verifica tu conexión con el backend.");
+			}
 		} finally {
 			setSubmitting(false);
 		}
@@ -378,9 +402,30 @@ const AdministrativeLoginPage: React.FC = () => {
 							</label>
 
 							{error && (
-								<p className="admin-login-error" role="alert">
-									{error}
-								</p>
+								<div style={{ marginBottom: "16px" }}>
+									<p className="admin-login-error" role="alert" style={{ marginBottom: (error.includes("servidor") || error.includes("backend") || error.includes("base de datos") || error.includes("conexión")) ? "8px" : "0" }}>
+										{error}
+									</p>
+									{(error.includes("servidor") || error.includes("backend") || error.includes("base de datos") || error.includes("conexión")) && (
+										<button
+											type="button"
+											onClick={() => setServerModalOpen(true)}
+											style={{
+												width: "100%",
+												background: "rgba(56, 189, 248, 0.15)",
+												border: "1px solid #38bdf8",
+												color: "#38bdf8",
+												padding: "8px 12px",
+												borderRadius: "10px",
+												fontSize: "0.82rem",
+												fontWeight: 700,
+												cursor: "pointer",
+											}}
+										>
+											⚙ Configurar Servidor / Enlace de Base de Datos
+										</button>
+									)}
+								</div>
 							)}
 
 							<IonButton
@@ -399,6 +444,42 @@ const AdministrativeLoginPage: React.FC = () => {
 							>
 								¿Olvidaste tu contraseña? Recuperar con soporte
 							</button>
+
+							<div style={{ display: "flex", justifyContent: "center", marginTop: "14px" }}>
+								<button
+									type="button"
+									onClick={() => setServerModalOpen(true)}
+									style={{
+										background: "rgba(255, 255, 255, 0.08)",
+										border: "1px solid rgba(255, 255, 255, 0.15)",
+										borderRadius: "20px",
+										padding: "6px 14px",
+										display: "flex",
+										alignItems: "center",
+										gap: "8px",
+										cursor: "pointer",
+										fontSize: "0.78rem",
+										fontWeight: 700,
+										color: "#e2e8f0",
+									}}
+								>
+									<span
+										style={{
+											width: "8px",
+											height: "8px",
+											borderRadius: "50%",
+											background: serverConnected ? "#10b981" : "#ef4444",
+											boxShadow: serverConnected
+												? "0 0 0 2px rgba(16, 185, 129, 0.25)"
+												: "0 0 0 2px rgba(239, 68, 68, 0.25)",
+										}}
+									/>
+									<span>
+										{serverConnected ? "Base de datos conectada" : "Servidor desconectado"}
+									</span>
+									<span style={{ color: "#38bdf8" }}>⚙ Ajustes</span>
+								</button>
+							</div>
 						</form>
 					</section>
 				</main>
@@ -710,6 +791,10 @@ const AdministrativeLoginPage: React.FC = () => {
 						document.body
 					)}
 			</IonContent>
+			<ServerConnectionModal
+				isOpen={serverModalOpen}
+				onClose={() => setServerModalOpen(false)}
+			/>
 		</IonPage>
 	);
 };

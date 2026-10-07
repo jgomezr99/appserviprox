@@ -26,6 +26,7 @@ import { ApiError, checkBackendHealth } from "../services/api";
 import { authService } from "../services/auth";
 import { useAuth } from "../context/AuthContext";
 import { getEntryRoute } from "../utils/routes";
+import { ServerConnectionModal } from "../components/ServerConnectionModal";
 import logo from "../Assets/logo.png";
 import imagemain from "../Assets/imag/Categorías de servicios para el hogar.png";
 import contractorImage from "../Assets/imag/contratista .png";
@@ -98,7 +99,15 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   const [isSplashVisible, setIsSplashVisible] = useState(!administrative);
   const [activeSlide, setActiveSlide] = useState(0);
   const [isAdminLogin, setIsAdminLogin] = useState(administrative);
-//s
+  const [serverModalOpen, setServerModalOpen] = useState(false);
+  const [serverConnected, setServerConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    checkBackendHealth().then((res) => {
+      setServerConnected(res.ok);
+    });
+  }, []);
+
   useEffect(() => {
     const splashTimer = window.setTimeout(() => setIsSplashVisible(false), 8000);
     return () => window.clearTimeout(splashTimer);
@@ -107,6 +116,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   useEffect(() => {
     const handleStatus = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      setServerConnected(Boolean(detail?.connected));
       if (detail?.connected) {
         if (error && (error.includes("backend") || error.includes("puerto 8000") || error.includes("conexión"))) {
           setError("");
@@ -124,12 +134,13 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
     setConnectionSuccess("");
     try {
       const health = await checkBackendHealth();
+      setServerConnected(health.ok);
       if (health.ok) {
         setError("");
         setConnectionSuccess("¡Conexión verificada exitosamente con la base de datos!");
         setTimeout(() => setConnectionSuccess(""), 4000);
       } else {
-        setError("El backend aún no responde en el puerto 8000. Verifica que iniciar_serviprox.bat esté activo.");
+        setError("El backend aún no responde en el servidor configurado. Verifica la URL o ábrela en Configurar servidor.");
       }
     } finally {
       setCheckingConnection(false);
@@ -396,29 +407,44 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
               {error && (
                 <div className={styles.error} role="alert">
                   <p style={{ margin: 0 }}>{error}</p>
-                  {(error.includes("backend") || error.includes("puerto 8000") || error.includes("conexión")) && (
-                    <IonButton
-                      fill="outline"
-                      size="small"
-                      style={{
-                        marginTop: "10px",
-                        width: "100%",
-                        "--border-radius": "12px",
-                        textTransform: "none",
-                        fontWeight: 800,
-                      }}
-                      disabled={checkingConnection}
-                      onClick={handleRetryConnection}
-                    >
-                      {checkingConnection ? (
-                        <>
-                          <IonSpinner name="crescent" style={{ width: "16px", height: "16px", marginRight: "6px" }} />
-                          Verificando backend...
-                        </>
-                      ) : (
-                        "🔄 Reintentar conexión con el servidor"
-                      )}
-                    </IonButton>
+                  {(error.includes("backend") || error.includes("servidor") || error.includes("puerto 8000") || error.includes("conexión")) && (
+                    <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                      <IonButton
+                        fill="outline"
+                        size="small"
+                        style={{
+                          flex: 1,
+                          "--border-radius": "12px",
+                          textTransform: "none",
+                          fontWeight: 800,
+                        }}
+                        disabled={checkingConnection}
+                        onClick={handleRetryConnection}
+                      >
+                        {checkingConnection ? (
+                          <>
+                            <IonSpinner name="crescent" style={{ width: "14px", height: "14px", marginRight: "6px" }} />
+                            Probando...
+                          </>
+                        ) : (
+                          "🔄 Reintentar"
+                        )}
+                      </IonButton>
+                      <IonButton
+                        fill="solid"
+                        color="primary"
+                        size="small"
+                        style={{
+                          flex: 1,
+                          "--border-radius": "12px",
+                          textTransform: "none",
+                          fontWeight: 800,
+                        }}
+                        onClick={() => setServerModalOpen(true)}
+                      >
+                        ⚙ Configurar BD
+                      </IonButton>
+                    </div>
                   )}
                 </div>
               )}
@@ -432,11 +458,44 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                 {isSubmitting ? <IonSpinner name="crescent" /> : "Iniciar sesión"}
               </IonButton>
 
-              
-                
+              <div style={{ display: "flex", justifyContent: "center", marginTop: "14px" }}>
+                <button
+                  type="button"
+                  onClick={() => setServerModalOpen(true)}
+                  style={{
+                    background: "#f1f5f9",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "20px",
+                    padding: "6px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: "#334155",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      background: serverConnected ? "#10b981" : "#ef4444",
+                      boxShadow: serverConnected
+                        ? "0 0 0 2px rgba(16, 185, 129, 0.25)"
+                        : "0 0 0 2px rgba(239, 68, 68, 0.25)",
+                    }}
+                  />
+                  <span>
+                    {serverConnected
+                      ? "Base de datos conectada"
+                      : "Base de datos desconectada"}
+                  </span>
+                  <span style={{ color: "#0284c7" }}>⚙ Ajustes</span>
+                </button>
+              </div>
             </form>
-
-            
 
             {!administrative && <div className={styles.footerPrompt}>
               <span>¿Aún no tienes cuenta?</span>
@@ -515,7 +574,15 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
           </div>
         </IonModal>
       </IonContent>
-      
+      <ServerConnectionModal
+        isOpen={serverModalOpen}
+        onClose={() => setServerModalOpen(false)}
+        onSelectDemoUser={(demoEmail, demoPass = "serviprox2026") => {
+          setEmail(demoEmail);
+          setPassword(demoPass);
+          setShowLoginForm(true);
+        }}
+      />
     </IonPage>
   );
 };

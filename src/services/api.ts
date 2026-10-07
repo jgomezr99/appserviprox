@@ -22,32 +22,42 @@ export class ApiError extends Error {
   }
 }
 
+export const normalizeApiUrl = (url: string): string => {
+  const clean = url.trim().replace(/\/$/, "");
+  return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
+};
+
+export const getSavedCustomHost = (): string => {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("serviprox_api_host") || "";
+  }
+  return "";
+};
+
 const resolveApiBaseUrl = (): string => {
   // 1. Configuración explícita en variable de entorno
   if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL.replace(/\/$/, "");
+    return normalizeApiUrl(import.meta.env.VITE_API_URL);
   }
 
   // 2. Anulación manual en localStorage si se requiere conectar a un servidor específico
-  if (typeof window !== "undefined") {
-    const customHost = localStorage.getItem("serviprox_api_host");
-    if (customHost) {
-      return `${customHost.replace(/\/$/, "")}/api/v1`;
-    }
+  const customHost = getSavedCustomHost();
+  if (customHost) {
+    return normalizeApiUrl(customHost);
   }
 
   // 3. Dispositivo nativo compilado con Capacitor (Emulador o App instalada)
   if (Capacitor.isNativePlatform()) {
-    const saved = typeof window !== "undefined" ? localStorage.getItem("serviprox_api_host") : null;
-    if (saved) {
-      return `${saved.replace(/\/$/, "")}/api/v1`;
-    }
     // Celular físico conectado por Wi-Fi usa la IP local del servidor (192.168.0.6)
     return "http://192.168.0.6:8000/api/v1";
   }
 
   // 4. Navegador Web y Móvil (DevTunnels, Red Local, Localhost)
   if (typeof window !== "undefined" && window.location?.origin) {
+    // En Netlify estático, window.location.origin no ejecuta Python
+    if (window.location.hostname.includes("netlify.app")) {
+      return "/api/v1";
+    }
     return `${window.location.origin.replace(/\/$/, "")}/api/v1`;
   }
 
@@ -61,20 +71,35 @@ export let API_BASE_URL = activeBaseUrl;
 export const getApiBaseUrl = (): string => activeBaseUrl;
 
 export const getCandidateBaseUrls = (): string[] => {
-  const candidates: string[] = [activeBaseUrl];
+  const candidates: string[] = [];
+
+  const saved = getSavedCustomHost();
+  if (saved) {
+    candidates.push(normalizeApiUrl(saved));
+  }
+
+  if (import.meta.env.VITE_API_URL) {
+    candidates.push(normalizeApiUrl(import.meta.env.VITE_API_URL));
+  }
+
+  if (activeBaseUrl && activeBaseUrl !== "/api/v1") {
+    candidates.push(activeBaseUrl);
+  }
 
   if (typeof window !== "undefined" && window.location) {
     const hostname = window.location.hostname;
+    const isNetlify = hostname.includes("netlify.app");
+
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       // Fallbacks directos a Django para saltarse posibles fallos de proxy de Vite
       candidates.push("http://127.0.0.1:8000/api/v1");
       candidates.push("http://localhost:8000/api/v1");
-    } else if (hostname && !hostname.includes("devtunnels.ms")) {
+    } else if (hostname && !hostname.includes("devtunnels.ms") && !isNetlify) {
       candidates.push(`http://${hostname}:8000/api/v1`);
     }
 
-    // Proxy relativo por si se sirve en port 8100
-    if (window.location.origin) {
+    // Proxy relativo solo si no estamos en Netlify estático sin backend
+    if (window.location.origin && !isNetlify) {
       candidates.push(`${window.location.origin.replace(/\/$/, "")}/api/v1`);
     }
   }
@@ -90,7 +115,7 @@ export const getCandidateBaseUrls = (): string[] => {
 };
 
 export const setWorkingBaseUrl = (url: string) => {
-  activeBaseUrl = url.replace(/\/$/, "");
+  activeBaseUrl = normalizeApiUrl(url);
   API_BASE_URL = activeBaseUrl;
   if (typeof window !== "undefined") {
     try {
@@ -156,7 +181,16 @@ const parseResponse = async (response: Response) => {
     return response.json();
   }
 
-  return response.text();
+  const text = await response.text();
+  if (contentType.includes("text/html")) {
+    throw new ApiError(
+      503,
+      "El host devolvió una página web (HTML) en lugar de datos JSON de Django. Verifica la URL del backend.",
+      text
+    );
+  }
+
+  return text;
 };
 
 const getErrorMessage = (status: number, payload: unknown) => {
@@ -203,8 +237,20 @@ async function fetchWithResilience(
         });
         clearTimeout(timeoutId);
 
-        // Si el estado no es error de puerta de enlace (502/503/504), el backend respondió correctamente
+        // Si el estado no es error de puerta de enlace (502/503/504)
         if (!isGatewayOrNetworkError(response.status)) {
+          const contentType = response.headers.get("content-type") || "";
+          // Si el servidor respondió con HTML (ej. index.html de Netlify por rewrite de SPA),
+          // NO es una respuesta válida de la API de Django!
+          if (contentType.includes("text/html")) {
+            lastError = new ApiError(
+              503,
+              `El host (${base}) respondió con HTML en lugar de datos JSON de Django.`,
+              null
+            );
+            continue;
+          }
+
           if (base !== activeBaseUrl) {
             setWorkingBaseUrl(base);
           }
@@ -388,30 +434,47 @@ async function blobRequest(
 /**
  * Comprueba el estado de la base de datos y la API de Serviprox.
  */
-export const checkBackendHealth = async (): Promise<{
+export const checkBackendHealth = async (
+  customCandidate?: string
+): Promise<{
   ok: boolean;
   database: string;
   url?: string;
+  engine?: string;
   error?: string;
 }> => {
-  const candidates = getCandidateBaseUrls();
+  const candidates = customCandidate
+    ? [normalizeApiUrl(customCandidate)]
+    : getCandidateBaseUrls();
+
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      database: "disconnected",
+      error: "No hay servidores backend configurados. En Netlify debes configurar VITE_API_URL o la URL del backend.",
+    };
+  }
+
   for (const base of candidates) {
     try {
       const url = `${base.replace(/\/$/, "")}/health/`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const res = await fetch(url, {
         method: "GET",
         headers: { Accept: "application/json" },
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      if (res.ok) {
+
+      const contentType = res.headers.get("content-type") || "";
+      if (res.ok && contentType.includes("application/json")) {
         const data = await res.json();
         setWorkingBaseUrl(base);
         return {
           ok: true,
           database: data.database || "connected",
+          engine: data.engine || "sqlite",
           url: base,
         };
       }
@@ -423,8 +486,67 @@ export const checkBackendHealth = async (): Promise<{
   return {
     ok: false,
     database: "disconnected",
-    error: "Backend no responde en el puerto 8000",
+    error: "No pudimos conectar con el backend o la base de datos.",
   };
+};
+
+/**
+ * Guarda y prueba una URL personalizada para el backend (ej: Render, DevTunnel, o IP local).
+ */
+export const saveCustomApiHost = async (
+  host: string
+): Promise<{ ok: boolean; message: string; database?: string; engine?: string; url?: string }> => {
+  if (!host.trim()) {
+    clearCustomApiHost();
+    return { ok: true, message: "Se restauró la configuración por defecto." };
+  }
+
+  const normalized = normalizeApiUrl(host);
+  const health = await checkBackendHealth(normalized);
+  if (health.ok) {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("serviprox_api_host", host.trim());
+      } catch {
+        // ignore
+      }
+    }
+    setWorkingBaseUrl(normalized);
+    return {
+      ok: true,
+      message: `¡Conexión exitosa! Base de datos: ${health.database} (${health.engine || "sqlite"}).`,
+      database: health.database,
+      engine: health.engine,
+      url: normalized,
+    };
+  }
+
+  return {
+    ok: false,
+    message: health.error || "No se pudo verificar la conexión con este servidor.",
+  };
+};
+
+/**
+ * Limpia la URL personalizada de localStorage y restaura el valor por defecto.
+ */
+export const clearCustomApiHost = () => {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("serviprox_api_host");
+    } catch {
+      // ignore
+    }
+  }
+  activeBaseUrl = resolveApiBaseUrl();
+  API_BASE_URL = activeBaseUrl;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("serviprox:connection-status", {
+        detail: { connected: false, url: activeBaseUrl },
+      })
+    );
+  }
 };
 
 export const api = {
@@ -438,4 +560,6 @@ export const api = {
     request<T>("DELETE", path, body, options),
   blob: (path: string, options?: RequestOptions) => blobRequest(path, options),
   checkHealth: checkBackendHealth,
+  saveCustomHost: saveCustomApiHost,
+  clearCustomHost: clearCustomApiHost,
 };
