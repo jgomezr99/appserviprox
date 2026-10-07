@@ -20,6 +20,125 @@
   padding: 28px 18px calc(34px + env(safe-area-inset-bottom));
 }
 
+.loginShell {
+  display: block;
+  width: min(100%, 520px);
+  min-height: 100dvh;
+  padding: 0 0 24px;
+}
+
+.loginShell .brandPanel {
+  min-height: 390px;
+  box-sizing: border-box;
+  padding: 34px 22px 92px;
+  align-content: start;
+  background: linear-gradient(180deg, #d90d20 0%, #dc5264 35%, #f2dfe3 82%, #f6f8fc 100%);
+}
+
+.loginShell .brandMark {
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .18);
+}
+
+.loginShell .brandMark ion-img {
+  width: 58px;
+  height: 58px;
+}
+
+.loginShell .brandPanel h1 {
+  max-width: 390px;
+  color: var(--sp-primary-dark);
+  font-size: clamp(2rem, 8vw, 3.1rem);
+  line-height: 1.02;
+}
+
+.loginShell .brandCopy {
+  max-width: 380px;
+  color: #000000;
+  font-size: .98rem;
+  line-height: 1.6;
+}
+
+.loginShell .kicker { color: #070505; }
+
+.loginShell .authCard {
+  position: relative;
+  z-index: 1;
+  margin: -48px 18px 0;
+  width: auto;
+  max-width: none;
+  padding: 24px 20px;
+  border-radius: 28px;
+  background: rgba(221, 15, 15, 0.92);
+  box-shadow: 0 18px 42px rgba(16, 24, 40, .12);
+}
+
+.loginShell .primaryButton {
+  --background: #050a47;
+  --background-hover: #050a47;
+  --background-activated: #050a47;
+  --box-shadow: none;
+}
+
+.administrativeLogin .loginShell,
+.administrativeLogin.loginShell {
+  --admin-accent: #0b2f6b;
+}
+
+.administrativeLogin .brandPanel {
+  background: linear-gradient(180deg, #d90d20 0%, #dc5264 35%, #f2dfe3 82%, #f6f8fc 100%);
+}
+
+.administrativeLogin .brandPanel h1,
+.administrativeLogin .brandPanel .brandCopy {
+  color: #ffffff;
+}
+
+.administrativeLogin .brandPanel .kicker {
+  color: #dbeafe;
+}
+
+body .administrativeLogin .authCard {
+  border: 0;
+  background: linear-gradient(145deg, #bd1026, #f04b5b);
+  box-shadow: 0 24px 55px rgba(143, 18, 35, .28);
+}
+
+.administrativeLogin .formHeader h2 {
+  color: #ffffff;
+}
+
+.administrativeLogin .formHeader p,
+.administrativeLogin .cardEyebrow,
+.administrativeLogin .field,
+.administrativeLogin .recoverButton,
+.administrativeLogin .backButton {
+  color: rgba(255, 255, 255, .82);
+  --color: rgba(255, 255, 255, .82);
+}
+
+.administrativeLogin .inputShell {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .35);
+  box-shadow: none;
+}
+
+.administrativeLogin .inputShell ion-icon,
+.administrativeLogin .inputShell ion-input {
+  color: #ffffff;
+  --color: #ffffff;
+  --placeholder-color: rgba(255, 255, 255, .7);
+}
+
+body .administrativeLogin .primaryButton {
+  --background: #0d18b3;
+  --background-hover: ;
+  --background-activated: #d90f20;
+  --box-shadow: none;
+}
+
 .brandPanel {
   display: grid;
   gap: 18px;
@@ -27,25 +146,294 @@
   padding: 10px 4px;
 }
 
+.splashScreen {
+  position: fixed;
+  inset: 24px;
+  width: min(520px, calc(100% - 48px));
+  height: calc(100dvh - 48px);
+  min-height: 0;
+  z-index: 10;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  margin: auto;
+  padding: env(safe-area-inset-top) 18px env(safe-area-inset-bottom);
+  box-sizing: border-box;
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgba(92, 15, 26, .14);
+  animation: splashReveal 700ms ease both;
+}
+
+.splashScreen ion-img { width: min(290px, 78vw); height: 100px; object-fit: contain; }
+.splashScreen p { margin: -4px 0 22px; color: var(--sp-text-muted); font-size: .95rem; }
+.splashProgress { width: 110px; height: 4px; overflow: hidden; border-radius: 4px; background: #e8eef7; }
+.splashProgress::after { content: ""; display: block; width: 45%; height: 100%; border-radius: inherit; background: var(--sp-accent); animation: splashLoading 8s linear forwards; }
+
+@keyframes splashReveal { from { opacity: 0; } to { opacity: 1; } }
+@keyframes splashLoading { from { transform: translateX(-100%); } to { transform: translateX(230%); } }
+
+.welcomePanel {
+  grid-column: 1 / -1;
+  width: min(720px, 100%);
+  justify-self: center;
+  display: grid;
+  gap: 22px;
+  padding: clamp(24px, 5vw, 58px) clamp(18px, 6vw, 72px);
+  border-radius: 34px;
+  background: linear-gradient(145deg, #ffffff 0%, #f2f6fd 100%);
+  box-shadow: 0 24px 70px rgba(7, 30, 69, 0.14);
+  border: 1px solid rgba(11, 47, 107, 0.1);
+}
+
+.welcomePanelTrust {
+  grid-template-columns: minmax(0, 1fr) minmax(120px, .56fr);
+  column-gap: 24px;
+}
+
+.welcomePanelTrust .welcomeBrand,
+.welcomePanelTrust .adminLoginButton,
+.welcomePanelTrust .startButton,
+.welcomePanelTrust .welcomeDots {
+  grid-column: 1 / -1;
+}
+
+.welcomePanelTrust .welcomeCopy,
+.welcomePanelTrust .welcomeLine,
+.welcomePanelTrust .trustList {
+  grid-column: 1;
+}
+
+.welcomePanelTrust .welcomeCopy,
+.welcomePanelTrust .welcomeLine {
+  display: none;
+}
+
+.contractorImage {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: center;
+  justify-self: center;
+  width: min(190px, 100%);
+  max-height: 290px;
+  padding-left: 18px;
+  border-left: 1px solid rgba(11, 47, 107, .18);
+  object-fit: contain;
+}
+
+.welcomePanelTrust .trustList {
+  align-self: center;
+  gap: 12px;
+}
+
+.welcomePanelTrust .trustList span {
+  min-height: 34px;
+}
+
+.welcomeBrand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.welcomeBrand ion-img {
+  width: 220px;
+  height: 70px;
+  object-fit: contain;
+}
+
+.welcomeBrand p {
+  margin: 32px 0 0;
+  color: var(--sp-text-muted);
+  font-size: .9rem;
+}
+
+.welcomeCopy {
+  max-width: 560px;
+}
+
+.welcomeCopy h1 {
+  margin: 8px 0 0;
+  color: var(--sp-primary-dark);
+  font-size: clamp(2.4rem, 7vw, 4.6rem);
+  line-height: .98;
+  font-weight: 850;
+}
+
+.welcomeCopy h1 span {
+  color: var(--sp-accent);
+}
+
+.welcomeCopy > p:last-child {
+  max-width: 430px;
+  margin: 20px 0 0;
+  color: var(--sp-text-muted);
+  font-size: 1.08rem;
+  line-height: 1.5;
+}
+
+.welcomeLine {
+  width: 48px;
+  height: 5px;
+  border-radius: 4px;
+  background: var(--sp-accent);
+}
+
+.welcomeBenefits {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 8px 0 2px;
+}
+
+.welcomeBenefits > div {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  color: var(--sp-primary-dark);
+  text-align: center;
+}
+
+.welcomeBenefits > div + div { border-left: 1px solid rgba(11, 47, 107, .12); }
+.welcomeBenefits ion-icon { color: var(--sp-primary); font-size: 27px; }
+.welcomeBenefits strong { font-size: .84rem; line-height: 1.15; }
+.welcomeBenefits small { color: var(--sp-text-muted); font-size: .72rem; line-height: 1.25; }
+
+.startButton {
+  min-height: 56px;
+  margin-top: 8px;
+  --background: #f7192b;
+  --background-hover: #d90f20;
+  --background-activated: #d90f20;
+  --border-radius: 30px;
+  --box-shadow: 0 14px 28px rgba(217, 54, 74, .24);
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.startButton ion-icon { font-size: 26px; }
+
+.adminLoginButton {
+  justify-self: center;
+  height: 34px;
+  margin: -16px 0 0;
+  --color: var(--sp-primary-dark);
+  text-transform: none;
+  font-size: .82rem;
+  font-weight: 800;
+}
+
+.welcomeDots {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.welcomeDots span {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #b8c9df;
+}
+
+.welcomeDots button { width: 11px; height: 11px; padding: 0; border: 0; border-radius: 50%; background: #b8c9df; cursor: pointer; }
+.welcomeDots button.activeDot { background: var(--sp-primary); }
+
+.serviceGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.serviceGrid span { display: grid; gap: 5px; justify-items: center; padding: 13px 6px; border-radius: 14px; background: #eef4ff; color: var(--sp-primary); font-size: 1.35rem; }
+.serviceGrid strong { font-size: .72rem; }
+.trustList { display: grid; gap: 10px; }
+.trustList span { display: flex; align-items: center; gap: 10px; color: var(--sp-primary-dark); font-size: .9rem; }
+.trustList ion-icon { padding: 8px; border-radius: 50%; background: var(--sp-primary-soft); color: var(--sp-primary); font-size: 18px; }
+
+.welcomeOptions {
+  display: grid;
+  gap: 10px;
+}
+
+.welcomeOption {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 12px 16px;
+  border: 1px solid rgba(11, 47, 107, .12);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--sp-primary-dark);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.welcomeOption:hover,
+.welcomeOption:focus-visible {
+  border-color: rgba(11, 47, 107, .35);
+  box-shadow: 0 10px 24px rgba(11, 47, 107, .1);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.welcomeOption > ion-icon:first-child {
+  padding: 11px;
+  border-radius: 50%;
+  background: var(--sp-primary-soft);
+  color: var(--sp-primary);
+  font-size: 22px;
+}
+
+.welcomeOption span {
+  display: grid;
+  gap: 3px;
+}
+
+.welcomeOption strong { font-size: .98rem; }
+.welcomeOption small { color: var(--sp-text-muted); font-size: .82rem; }
+.optionArrow { color: var(--sp-accent); font-size: 22px; }
+
+.welcomeOptionPrimary {
+  background: var(--sp-primary);
+  color: #fff;
+  border-color: var(--sp-primary);
+}
+
+.welcomeOptionPrimary > ion-icon:first-child { background: rgba(255,255,255,.14); color: #fff; }
+.welcomeOptionPrimary small { color: rgba(255,255,255,.76); }
+.welcomeOptionPrimary .optionArrow { color: #fff; }
+
+.welcomeFootnote {
+  margin: 0;
+  color: var(--sp-text-muted);
+  font-size: .8rem;
+  text-align: center;
+}
+
+.backButton {
+  height: 32px;
+  margin: -8px 0 8px -10px;
+  --color: var(--sp-text-muted);
+  text-transform: none;
+}
+
 .brandMark {
-  width: 370px;
-  height: 150px;
+  width: min(370px, 100%);
+  height: 104px;
   display: grid;
   place-items: center;
   overflow: hidden;
-  border-radius: 28px;
- 
-  border: 1px solid var(--sp-border);
-  box-shadow: var(--sp-shadow);
-  backdrop-filter: blur(var(--sp-blur));
-  -webkit-backdrop-filter: blur(var(--sp-blur));
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .72);
 }
 
-/*.brandMark ion-img {
-  width: 78px;
-  height: 78px;
+.brandMark ion-img {
+  width: min(280px, 92%);
+  height: 84px;
   object-fit: contain;
-}*/
+}
 
 .kicker,
 .cardEyebrow {
@@ -235,7 +623,7 @@
   border-radius: 16px;
   background: var(--sp-accent-soft);
   border: 1px solid rgba(217, 54, 74, 0.18);
-  color: #9f2232;
+  color: #ff0a2a;
   font-size: 0.9rem;
   line-height: 1.45;
 }
@@ -399,6 +787,37 @@
     padding: 30px;
   }
 
+  .loginShell {
+    width: min(100%, 1120px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(420px, 520px);
+    gap: 24px;
+    padding: 46px 28px;
+    align-items: center;
+  }
+
+  .loginShell .brandPanel {
+    min-height: auto;
+    padding: 10px 4px;
+    background: transparent;
+  }
+
+  .loginShell .brandMark {
+    width: min(370px, 100%);
+    height: 104px;
+  }
+
+  .loginShell .brandMark ion-img {
+    width: min(280px, 92%);
+    height: 84px;
+  }
+
+  .loginShell .authCard {
+    margin: 0;
+    background: #fffdf2;
+    border-color: rgba(255, 255, 255, .85);
+  }
+
   .twoColumn {
     grid-template-columns: 1fr 1fr;
   }
@@ -415,13 +834,13 @@
   }
 
   .brandMark {
-    width: 72px;
+    width: 220px;
     height: 72px;
-    border-radius: 24px;
+    border-radius: 16px;
   }
 
   .brandMark ion-img {
-    width: 60px;
+    width: 198px;
     height: 60px;
   }
 
@@ -436,6 +855,48 @@
   .authCard {
     padding: 20px;
     border-radius: 28px;
+  }
+
+  .welcomePanel {
+    gap: 18px;
+    border-radius: 26px;
+  }
+
+  .welcomePanelTrust {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(112px, .72fr);
+    column-gap: 10px;
+  }
+  .welcomePanelTrust .welcomeBrand,
+  .welcomePanelTrust .startButton,
+  .welcomePanelTrust .welcomeDots { grid-column: 1 / -1; }
+  .welcomePanelTrust .welcomeCopy,
+  .welcomePanelTrust .welcomeLine { display: none; }
+  .welcomePanelTrust .trustList { grid-column: 1; grid-row: 2; }
+  .contractorImage {
+    grid-column: 2;
+    grid-row: 2;
+    width: min(150px, 100%);
+    max-height: 220px;
+    justify-self: center;
+    padding-left: 10px;
+    border-left: 1px solid rgba(11, 47, 107, .18);
+  }
+
+  .welcomeBrand { display: block; }
+  .welcomeBrand ion-img { width: 190px; height: 58px; }
+  .welcomeBrand p { margin: -2px 0 0 4px; }
+  .welcomeCopy h1 { font-size: 2.6rem; }
+  .welcomeOption { min-height: 68px; padding: 10px 12px; }
+  .welcomeBenefits { gap: 4px; }
+  .welcomeBenefits > div { padding: 0 2px; }
+  .welcomeBenefits strong { font-size: .68rem; }
+  .welcomeBenefits small { font-size: .62rem; }
+  .splashScreen {
+    inset: 12px;
+    width: calc(100% - 24px);
+    height: calc(100dvh - 24px);
+    min-height: 0;
   }
 }
 

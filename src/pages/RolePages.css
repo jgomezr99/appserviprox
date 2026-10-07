@@ -83,6 +83,100 @@
   margin-bottom: 14px;
 }
 
+.sp-profile-preferences {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--sp-border, rgba(11, 47, 107, .12));
+  color: var(--sp-text);
+  font-weight: 700;
+}
+
+.sp-profile-preferences span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-profile-preferences ion-icon {
+  color: var(--sp-primary);
+  font-size: 20px;
+}
+
+.client-profile-page { max-width: 900px; }
+.client-profile-card .sp-card-header { align-items: center; }
+.client-profile-actions { display: flex; gap: 10px; align-items: center; margin-top: 18px; }
+.client-profile-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-top: 18px; }
+.client-profile-summary p { display: grid; gap: 4px; margin: 0; padding: 12px 0; border-bottom: 1px solid var(--sp-border); }
+.client-profile-summary span { color: var(--sp-text-muted); }
+.client-profile-preferences-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.client-profile-preference-label { display: flex; align-items: center; gap: 12px; }
+.client-profile-preference-label > ion-icon { color: var(--sp-primary); font-size: 24px; }
+.client-profile-preference-label span { display: grid; gap: 4px; }
+.client-profile-preference-label small { color: var(--sp-text-muted); }
+.client-profile-danger-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-color: rgba(220, 38, 38, .22); }
+.client-profile-danger-card h2, .client-profile-danger-card p { margin: 0; }
+.client-profile-danger-card p { margin-top: 4px; color: var(--sp-text-muted); }
+.client-profile-delete-modal { padding: 28px 22px; }
+.client-profile-delete-modal h2, .client-profile-delete-modal p { margin-top: 0; }
+.client-profile-delete-modal p { color: var(--sp-text-muted); }
+
+body.dark {
+  --sp-bg: #111827;
+  --sp-background: #111827;
+  --sp-surface: #1f2937;
+  --sp-surface-glass: rgba(31, 41, 55, .92);
+  --sp-text: #f3f4f6;
+  --sp-text-muted: #b6c0d0;
+  --sp-primary: #dbeafe;
+  --sp-primary-dark: #ffffff;
+  --sp-border: rgba(148, 163, 184, .24);
+  --ion-background-color: #111827;
+  --ion-text-color: #f3f4f6;
+}
+
+body.dark .sp-role-content,
+body.dark .sp-card,
+body.dark ion-toolbar,
+body.dark ion-item {
+  --background: #1f2937;
+  background: #1f2937;
+  color: #f3f4f6;
+}
+
+body.dark .sp-role-header h1,
+body.dark .sp-card h2,
+body.dark .sp-card-title h2,
+body.dark .sp-card-title p,
+body.dark .sp-field,
+body.dark .sp-profile-preferences,
+body.dark .client-profile-preference-label strong {
+  color: #ffffff;
+}
+
+body.dark .sp-icon-tile,
+body.dark .sp-icon-tile ion-icon,
+body.dark .client-profile-preference-label > ion-icon {
+  color: #ffffff;
+}
+
+body.dark .sp-field ion-input,
+body.dark .sp-field ion-textarea,
+body.dark .sp-field ion-select {
+  --color: #ffffff;
+  --placeholder-color: #cbd5e1;
+}
+
+@media (max-width: 600px) {
+  .client-profile-summary { grid-template-columns: 1fr; }
+  .client-profile-card .sp-card-header { align-items: flex-start; flex-wrap: wrap; }
+  .client-profile-actions { flex-wrap: wrap; }
+  .client-profile-danger-card { align-items: flex-start; flex-direction: column; }
+}
+
 .sp-card-title {
   display: grid;
   gap: 5px;

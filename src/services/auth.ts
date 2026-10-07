@@ -17,6 +17,14 @@ export const authService = {
     return tokens;
   },
 
+  loginWithUsername: async (username: string, password: string) => {
+    const tokens = await api.post<AuthTokenResponse>("auth/token/", { username, password }, {
+      auth: false,
+    });
+    tokenStorage.setTokens(tokens.access, tokens.refresh);
+    return api.get<User>("auth/me/");
+  },
+
   register: (payload: RegisterPayload) =>
     api.post<User>("auth/register/", payload, { auth: false }),
 
@@ -33,6 +41,9 @@ export const authService = {
 
   updateCurrentUser: (payload: UpdateMePayload) =>
     api.patch<User>("auth/me/", payload),
+
+  deleteCurrentUser: (reason: string) =>
+    api.delete<void>("auth/me/delete/", { reason }),
 
   becomeProfessional: () => api.post<User>("auth/become-professional/"),
 
@@ -52,4 +63,11 @@ export const authService = {
     tokenStorage.setTokens(tokens.access, tokens.refresh);
     return tokens.access;
   },
+
+  getSecurityQuestion: (username: string) =>
+    api.post<{ security_question: string }>(
+      "auth/security-question/",
+      { username },
+      { auth: false }
+    ),
 };

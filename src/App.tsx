@@ -5,11 +5,13 @@ import { AuthProvider } from './context/AuthContext';
 import Menu from './components/Menu';
 import Page from './pages/Page';
 import ClientHome from './pages/ClientHome';
+import ClientProfilePage from './pages/ClientProfilePage';
 import ClientOnboarding from './pages/ClientOnboarding';
 import ClientProfessionalDetail from './pages/ClientProfessionalDetail';
 import ContractorMapPage from './pages/ContractorMapPage';
 
 import Login from './pages/Login';
+import AdministrativeLoginPage from './pages/AdministrativeLoginPage';
 import Register from './pages/Register';
 
 import HistorialPago from './components/historiadepago/historiapago';
@@ -99,6 +101,9 @@ const App: React.FC = () => {
               <Route path="/login" exact={true}>
                 <Login />
               </Route>
+              <Route path="/login/administrativo" exact={true}>
+                <AdministrativeLoginPage />
+              </Route>
               {/* alternate entry path used by the Menu */}
               <Route path="/ingresar" exact={true}>
                 <Redirect to="/login" />
@@ -121,6 +126,11 @@ const App: React.FC = () => {
               <Route path="/cliente/inicio" exact={true}>
                 <RequireAuth role="client">
                   <ClientHome />
+                </RequireAuth>
+              </Route>
+              <Route path="/cliente/perfil" exact={true}>
+                <RequireAuth role="client">
+                  <ClientProfilePage />
                 </RequireAuth>
               </Route>
               <Route path="/cliente/viviendas" exact={true}>

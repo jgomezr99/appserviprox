@@ -1,5 +1,6 @@
 import secrets
 import re
+import logging
 from datetime import timedelta
 
 from django.contrib.auth.hashers import check_password, make_password
@@ -12,6 +13,8 @@ from rest_framework.views import APIView
 
 from .models import PasswordResetCode, User, UserRole
 from .serializers import RegisterSerializer, UserSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class RegisterView(generics.CreateAPIView):
@@ -90,6 +93,20 @@ class MeView(APIView):
 
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+
+class DeleteAccountView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        reason = str(request.data.get("reason", "")).strip()
+        if not reason:
+            raise ValidationError({"reason": "Indica el motivo para eliminar la cuenta."})
+
+        user = request.user
+        logger.info("Solicitud de eliminación de cuenta para user_id=%s, motivo=%s", user.pk, reason)
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def patch(self, request):
         serializer = UserSerializer(request.user, data=request.data, partial=True)

@@ -38,8 +38,10 @@ export const GlobalChatButton: React.FC = () => {
     };
   }, []);
 
+  const isAdministrativeLogin = location.pathname === '/login/administrativo';
   const isHidden =
     HIDDEN_PATHS.some((p) => location.pathname.startsWith(p)) ||
+    isAdministrativeLogin ||
     location.pathname.startsWith('/onboarding') ||
     (user && user.role !== 'client');
 

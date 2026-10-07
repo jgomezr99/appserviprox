@@ -52,7 +52,7 @@ const clientPages: AppPage[] = [
   { title: 'Favoritos', url: '/cliente/favoritos', iosIcon: heartOutline, mdIcon: heartSharp },
   { title: 'Mis viviendas', url: '/cliente/viviendas', iosIcon: businessOutline, mdIcon: businessSharp },
   { title: 'PQRS & Quejas', url: '/cliente/pqrs', iosIcon: shieldCheckmarkOutline, mdIcon: shieldCheckmarkSharp },
-  { title: 'Mi perfil de cliente', url: '/cliente/inicio', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
+  { title: 'Mi perfil de cliente', url: '/cliente/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
 ];
 
 

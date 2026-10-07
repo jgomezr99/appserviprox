@@ -12,8 +12,11 @@ import {
 } from "@ionic/react";
 import {
   arrowBackOutline,
+  arrowForwardOutline,
+  briefcaseOutline,
   eyeOffOutline,
   eyeOutline,
+  homeOutline,
   lockClosedOutline,
   mailOutline,
   shieldCheckmarkOutline,
@@ -24,6 +27,8 @@ import { authService } from "../services/auth";
 import { useAuth } from "../context/AuthContext";
 import { getEntryRoute } from "../utils/routes";
 import logo from "../Assets/logo.png";
+import imagemain from "../Assets/imag/Categorías de servicios para el hogar.png";
+import contractorImage from "../Assets/imag/contratista .png";
 import styles from "./Login.module.css";
 
 const emailOk = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
@@ -67,7 +72,12 @@ const getLoginErrorMessage = (error: unknown) => {
   return "No pudimos iniciar sesión. Inténtalo nuevamente.";
 };
 
-const Login: React.FC = () => {
+interface LoginProps {
+  administrative?: boolean;
+  pageClassName?: string;
+}
+
+const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "" }) => {
   const history = useHistory();
   const { isAuthenticated, isLoading: sessionLoading, login, user } = useAuth();
   const [email, setEmail] = useState("");
@@ -84,6 +94,15 @@ const Login: React.FC = () => {
   const [recoveryMessage, setRecoveryMessage] = useState("");
   const [recoveryError, setRecoveryError] = useState("");
   const [recoverySubmitting, setRecoverySubmitting] = useState(false);
+  const [showLoginForm, setShowLoginForm] = useState(administrative);
+  const [isSplashVisible, setIsSplashVisible] = useState(!administrative);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [isAdminLogin, setIsAdminLogin] = useState(administrative);
+//s
+  useEffect(() => {
+    const splashTimer = window.setTimeout(() => setIsSplashVisible(false), 8000);
+    return () => window.clearTimeout(splashTimer);
+  }, []);
 
   useEffect(() => {
     const handleStatus = (e: Event) => {
@@ -133,6 +152,10 @@ const Login: React.FC = () => {
     setIsSubmitting(true);
     try {
       const currentUser = await login({ email: email.trim().toLowerCase(), password });
+      if (administrative && currentUser.role !== "staff") {
+        setError("Esta cuenta no tiene permisos administrativos.");
+        return;
+      }
       history.replace(getEntryRoute(currentUser));
     } catch (err) {
       setError(getLoginErrorMessage(err));
@@ -207,27 +230,89 @@ const Login: React.FC = () => {
   };
 
   return (
-    <IonPage className={styles.authPage}>
+    <IonPage className={`${styles.authPage} ${pageClassName}`}>
       <IonContent fullscreen className={styles.authContent}>
-        <main className={styles.authShell}>
-          <section className={styles.brandPanel} aria-label="Serviprox">
+        <main className={`${styles.authShell} ${showLoginForm ? styles.loginShell : ""} ${administrative ? `${styles.administrativeLogin} admin-login-shell` : ""}`}>
+          {isSplashVisible ? (
+            <section className={styles.splashScreen} aria-label="Cargando Serviprox">
+              <IonImg src={logo} alt="Serviprox" />
+              <p>Servicios cerca de ti</p>
+              <div className={styles.splashProgress} aria-hidden="true" />
+            </section>
+          ) : !showLoginForm ? (
+            <section className={`${styles.welcomePanel} ${activeSlide === 2 ? styles.welcomePanelTrust : ""}`} aria-labelledby="welcome-title">
+              <div className={styles.welcomeBrand}>
+                <IonImg src={logo} alt="Serviprox" />
+                <p>Servicios cerca de ti</p>
+              </div>
+              <div className={styles.welcomeCopy}>
+                {activeSlide === 0 && <><h1 id="welcome-title">Tu hogar en <span>buenas manos</span></h1><p>Contrata profesionales confiables para tus servicios del hogar, de forma rápida, segura y en tu zona.</p></>}
+                {activeSlide === 1 && <><h1 id="welcome-title">Todo lo que tu hogar <span>necesita</span></h1><p>Plomeros, electricistas, personal de limpieza y más, todo en un solo lugar.</p></>}
+                {activeSlide === 2 && <><h1 id="welcome-title">Profesionales de confianza <span>en tu zona</span></h1><p>Personas verificadas, con experiencia y bien valoradas, listas para ayudarte.</p></>}
+              </div>
+              <div className={styles.welcomeLine} aria-hidden="true" />
+              {activeSlide === 0 && <div className={styles.welcomeBenefits}>
+                <div><IonIcon icon={shieldCheckmarkOutline} /><strong>Profesionales<br />verificados</strong><small>Tu seguridad es primero</small></div>
+                <div><IonIcon icon={arrowForwardOutline} /><strong>Atención<br />rápida</strong><small>Cuando lo necesites</small></div>
+                <div><IonIcon icon={homeOutline} /><strong>Cerca<br />de ti</strong><small>Encuentra servicios en tu zona</small></div>
+                <div><IonIcon icon={briefcaseOutline} /><strong>Valoraciones<br />reales</strong><small>Confía en la comunidad</small></div>
+              </div>}
+              {activeSlide === 1 && <>
+                <IonImg className={styles.welcomeImage} src={imagemain} alt="Categorías de servicios para el hogar" />
+                <div className={styles.serviceGrid} />
+              </>}
+              {activeSlide === 2 && <div className={styles.trustList}>
+                <span><IonIcon icon={shieldCheckmarkOutline} /><strong>Perfiles verificados</strong></span><span><IonIcon icon={arrowForwardOutline} /><strong>Servicio rápido</strong></span><span><IonIcon icon={briefcaseOutline} /><strong>Valoraciones reales</strong></span>
+              </div>}
+              {activeSlide === 2 && <IonImg className={styles.contractorImage} src={contractorImage} alt="Perfil de profesional ubicado cerca de ti" />}
+              <IonButton className={styles.startButton} expand="block" onClick={() => {
+                if (activeSlide < 2) {
+                  setActiveSlide(activeSlide + 1);
+                } else {
+                  setIsAdminLogin(false);
+                  setShowLoginForm(true);
+                }
+              }}>
+                {activeSlide < 2 ? "Continuar" : "Continuar al login"} <IonIcon slot="end" icon={arrowForwardOutline} />
+              </IonButton>
+              {!administrative && !showLoginForm && activeSlide === 2 && (
+                <IonButton routerLink="/login/administrativo" fill="clear" className={styles.adminLoginButton}>
+                  Acceso administrador
+                </IonButton>
+              )}
+              <div className={styles.welcomeDots} aria-label="Navegación del onboarding">{[0, 1, 2].map((slide) => <button key={slide} type="button" className={slide === activeSlide ? styles.activeDot : ""} aria-label={`Pantalla ${slide + 1}`} onClick={() => setActiveSlide(slide)} />)}</div>
+            </section>
+          ) : (
+            <section className={`${styles.brandPanel} ${administrative ? "admin-login-brand" : ""}`} aria-label="Serviprox">
             <div className={styles.brandMark}>
               <IonImg src={logo} alt="Serviprox" />
             </div>
-            <IonText>
+            {!administrative && <IonText>
               <p className={styles.kicker}>Servicios confiables para el hogar</p>
               <h1>Encuentra ayuda para tu casa con más claridad.</h1>
               <p className={styles.brandCopy}>
                 Ingresa para continuar con tus servicios, solicitudes y profesionales
                 disponibles en Serviprox.
               </p>
-            </IonText>
-          </section>
+            </IonText>}
+            </section>
+          )}
 
-          <section className={styles.authCard} aria-labelledby="login-title">
+          {showLoginForm && <section className={`${styles.authCard} ${administrative ? "admin-login-card" : ""}`} aria-labelledby="login-title">
+            <IonButton fill="clear" className={styles.backButton} onClick={() => {
+              if (administrative) {
+                history.replace("/login");
+              } else {
+                setIsAdminLogin(false);
+                setShowLoginForm(false);
+              }
+            }}>
+              <IonIcon slot="start" icon={arrowBackOutline} />
+              Volver
+            </IonButton>
             <div className={styles.formHeader}>
               <span className={styles.cardEyebrow}>SERVIPROX</span>
-              <h2 id="login-title">Bienvenido de nuevo</h2>
+              <h2 id="login-title">{isAdminLogin ? "Login administrativo" : "Bienvenido de nuevo"}</h2>
               <p>Ingresa tus credenciales para acceder</p>
             </div>
 
@@ -353,15 +438,15 @@ const Login: React.FC = () => {
 
             
 
-            <div className={styles.footerPrompt}>
+            {!administrative && <div className={styles.footerPrompt}>
               <span>¿Aún no tienes cuenta?</span>
               <IonButton routerLink="/register" fill="clear" className={styles.linkButton}>
                 Crear cuenta
               </IonButton>
-            </div>
+            </div>}
 
             
-          </section>
+          </section>}
         </main>
         <IonModal
           isOpen={recoveryOpen}
@@ -430,6 +515,7 @@ const Login: React.FC = () => {
           </div>
         </IonModal>
       </IonContent>
+      
     </IonPage>
   );
 };

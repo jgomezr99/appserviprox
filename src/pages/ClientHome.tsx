@@ -14,6 +14,7 @@ import {
   IonSpinner,
   IonTitle,
   IonToast,
+  IonToggle,
   IonToolbar,
 } from "@ionic/react";
 import {
@@ -27,6 +28,7 @@ import {
   locationOutline,
   mailOutline,
   mapOutline,
+  moonOutline,
   personCircleOutline,
   saveOutline,
 } from "ionicons/icons";
@@ -51,8 +53,15 @@ const ClientHome: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [darkMode, setDarkMode] = useState(() => document.body.classList.contains("dark"));
 
   const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ");
+
+  const toggleDarkMode = () => {
+    const nextValue = !darkMode;
+    setDarkMode(nextValue);
+    document.body.classList.toggle("dark", nextValue);
+  };
 
   useEffect(() => {
     if (user) {
@@ -144,6 +153,8 @@ const ClientHome: React.FC = () => {
               </div>
              
             </div>
+
+            
 
             {saveSuccess && (
               <div className="sp-alert-success" style={{ margin: "1rem 0", display: "flex", alignItems: "center", gap: "8px", color: "var(--ion-color-success)" }}>

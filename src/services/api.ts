@@ -434,8 +434,8 @@ export const api = {
     request<T>("POST", path, body, options),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>("PATCH", path, body, options),
-  delete: <T>(path: string, options?: RequestOptions) =>
-    request<T>("DELETE", path, undefined, options),
+  delete: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>("DELETE", path, body, options),
   blob: (path: string, options?: RequestOptions) => blobRequest(path, options),
   checkHealth: checkBackendHealth,
 };

@@ -1,0 +1,722 @@
+/* ── Reset y Variables ── */
+.admin-login-page {
+  --admin-red: #d7192f;
+  --admin-red-dark: #b91024;
+  --admin-cream: #fffdf2;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.admin-login-page .admin-login-content {
+  --background: linear-gradient(180deg, #d7192f 0%, #e76672 46%, #fffdf2 100%);
+}
+
+.admin-login-page .admin-login-layout {
+  min-height: 100%;
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 46px 28px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 520px);
+  gap: 32px;
+  align-items: center;
+}
+
+.admin-login-page .admin-login-brand {
+  display: grid;
+  place-items: center;
+}
+
+.admin-login-page .admin-login-logo {
+  width: min(370px, 100%);
+  height: 104px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+
+}
+
+.admin-login-page .admin-login-logo ion-img {
+  width: min(280px, 92%);
+  height: 84px;
+  object-fit: contain;
+}
+
+.admin-login-page .admin-login-card {
+  padding: 32px 28px;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #bd1026, #f04b5b);
+  box-shadow: 0 24px 55px rgba(143, 18, 35, 0.28);
+  color: #ffffff;
+}
+
+.admin-login-page .admin-login-back {
+  margin: -8px 0 14px -10px;
+  --color: #ffffff;
+  text-transform: none;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.admin-login-page .admin-login-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 850;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.admin-login-page .admin-login-card h1 {
+  margin: 6px 0 6px;
+  color: #ffffff;
+  font-size: 2.1rem;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.admin-login-page .admin-login-subtitle {
+  margin: 0 0 24px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.95rem;
+}
+
+.admin-login-page .admin-login-form {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-login-page .admin-login-form label {
+  display: grid;
+  gap: 8px;
+  color: #ffffff;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.admin-login-page .admin-login-input {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.admin-login-page .admin-login-input:focus-within {
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.admin-login-page .admin-login-input > ion-icon {
+  flex: 0 0 auto;
+  font-size: 20px;
+  color: #ffffff;
+}
+
+.admin-login-page .admin-login-input ion-input {
+  --color: #ffffff;
+  --placeholder-color: rgba(255, 255, 255, 0.72);
+  --padding-start: 0;
+  --padding-end: 0;
+  font-size: 0.95rem;
+}
+
+.admin-login-page .admin-login-input ion-button {
+  margin: 0;
+  --color: #ffffff;
+}
+
+.admin-login-page .admin-login-submit {
+  min-height: 52px;
+  margin-top: 6px;
+  --background: #f01313;
+  --background-hover: #e2190b;
+  --background-activated: #bd1026;
+  --border-radius: 16px;
+  text-transform: none;
+  font-weight: 800;
+  font-size: 1rem;
+  --box-shadow: 0 8px 20px rgba(189, 16, 38, 0.4);
+}
+
+.admin-login-page .admin-login-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #ffe4e6;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.admin-login-page .admin-login-support {
+  border: 0;
+  padding: 6px;
+  background: transparent;
+  color: #ffffff;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: center;
+  transition: opacity 0.15s;
+}
+
+.admin-login-page .admin-login-support:hover {
+  opacity: 0.85;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL DE CHAT EN VIVO (DISEÑO EXACTO SERVIPROX / QUEJAS & SOPORTE BOGOTÁ)
+   ══════════════════════════════════════════════════════════════════════════════ */
+.admin-chat-portal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, 0.72) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  z-index: 9999999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  box-sizing: border-box !important;
+}
+
+.admin-chat-portal-dialog {
+  background: #fffdf8 !important;
+  border-radius: 28px !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  height: 90vh !important;
+  max-height: 720px !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  animation: adminChatModalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  color: #1e293b !important;
+}
+
+@keyframes adminChatModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ── Encabezado Oscuro Vino ── */
+.admin-chat-dialog-header {
+  background: linear-gradient(135deg, #18050e 0%, #2a0715 100%) !important;
+  padding: 16px 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.admin-chat-header-identity {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.admin-chat-bot-avatar {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 16px !important;
+  background: rgba(225, 29, 72, 0.18) !important;
+  border: 1.5px solid rgba(244, 63, 94, 0.35) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+}
+
+.admin-chat-bot-avatar svg {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+.admin-chat-bot-status-dot {
+  position: absolute !important;
+  bottom: -2px !important;
+  right: -2px !important;
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  background: #10b981 !important;
+  border: 2px solid #18050e !important;
+  box-shadow: 0 0 6px #10b981 !important;
+}
+
+.admin-chat-header-text {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.admin-chat-header-title-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.admin-chat-header-title-row h3 {
+  margin: 0 !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  letter-spacing: -0.2px !important;
+}
+
+.admin-chat-online-badge {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  padding: 2px 8px !important;
+  border-radius: 9999px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.admin-chat-header-subtitle {
+  margin: 2px 0 0 !important;
+  font-size: 11.5px !important;
+  color: #fca5a5 !important;
+  font-weight: 500 !important;
+}
+
+.admin-chat-close-btn {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: none !important;
+  color: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease !important;
+  flex-shrink: 0 !important;
+}
+
+.admin-chat-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* ── Barra de Diagnóstico / SSL ── */
+.admin-chat-diagnostic-bar {
+  background: #fbf8f1 !important;
+  border-bottom: 1px solid #ebd9c8 !important;
+  padding: 8px 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 11px !important;
+  color: #64748b !important;
+}
+
+.admin-chat-diagnostic-bar strong {
+  color: #1e293b !important;
+}
+
+.admin-chat-ssl-tag {
+  font-size: 10px !important;
+  font-family: monospace !important;
+  color: #78716c !important;
+  font-weight: 600 !important;
+}
+
+/* ── Área de Mensajes ── */
+.admin-chat-stream {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  padding: 18px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  background: #fffdf9 !important;
+}
+
+.admin-chat-msg-row {
+  display: flex !important;
+  gap: 10px !important;
+  max-width: 92% !important;
+}
+
+.admin-chat-msg-row.from-support {
+  align-self: flex-start !important;
+}
+
+.admin-chat-msg-row.from-user {
+  align-self: flex-end !important;
+  flex-direction: row-reverse !important;
+}
+
+.admin-chat-avatar-img {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  border: 1.5px solid #ebd9c8 !important;
+  flex-shrink: 0 !important;
+  margin-top: 2px !important;
+}
+
+.admin-chat-bubble-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  max-width: 100% !important;
+}
+
+.admin-chat-bubble {
+  padding: 14px 18px !important;
+  font-size: 13.5px !important;
+  line-height: 1.55 !important;
+  word-break: break-word !important;
+}
+
+.admin-chat-bubble.support-bubble {
+  background: #ffffff !important;
+  border: 1px solid #eadfca !important;
+  border-radius: 18px !important;
+  border-top-left-radius: 4px !important;
+  color: #1f2937 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02) !important;
+}
+
+.admin-chat-bubble.user-bubble {
+  background: #d7192f !important;
+  color: #ffffff !important;
+  border-radius: 18px !important;
+  border-top-right-radius: 4px !important;
+  box-shadow: 0 4px 14px rgba(215, 25, 47, 0.22) !important;
+}
+
+.admin-chat-agent-label {
+  color: #e11d48 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  margin-bottom: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.admin-chat-chips-group {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-top: 12px !important;
+}
+
+.admin-chat-chip-btn {
+  background: #ffffff !important;
+  border: 1px solid #ebd9c8 !important;
+  border-radius: 9999px !important;
+  padding: 6px 14px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.15s ease !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+
+.admin-chat-chip-btn:hover {
+  background: #fdf6ee !important;
+  border-color: #d7192f !important;
+  color: #d7192f !important;
+  transform: translateY(-1px) !important;
+}
+
+.admin-chat-time-stamp {
+  font-size: 10px !important;
+  color: #9ca3af !important;
+  margin-top: 2px !important;
+}
+
+.admin-chat-msg-row.from-user .admin-chat-time-stamp {
+  text-align: right !important;
+}
+
+.admin-chat-typing-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 12px !important;
+  color: #64748b !important;
+  font-style: italic !important;
+  background: #ffffff !important;
+  border: 1px solid #ebd9c8 !important;
+  padding: 8px 14px !important;
+  border-radius: 16px !important;
+  width: fit-content !important;
+}
+
+/* ── Barra de Entrada (Composer) ── */
+.admin-chat-composer-box {
+  background: #fffdf9 !important;
+  border-top: 1px solid #ebd9c8 !important;
+  padding: 14px 20px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.admin-chat-composer-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.admin-chat-clip-btn {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 14px !important;
+  background: #f3ede2 !important;
+  border: 1px solid #ebd9c8 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #64748b !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease !important;
+  flex-shrink: 0 !important;
+}
+
+.admin-chat-clip-btn:hover {
+  background: #ebd9c8 !important;
+  color: #1e293b !important;
+}
+
+.admin-chat-input-pill {
+  flex: 1 !important;
+  height: 46px !important;
+  background: #ffffff !important;
+  border: 1.5px solid #ebd9c8 !important;
+  border-radius: 9999px !important;
+  padding: 0 18px !important;
+  font-size: 13.5px !important;
+  color: #1e293b !important;
+  outline: none !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02) !important;
+  transition: border-color 0.15s ease !important;
+}
+
+.admin-chat-input-pill:focus {
+  border-color: #d7192f !important;
+}
+
+.admin-chat-send-btn {
+  height: 46px !important;
+  padding: 0 20px !important;
+  background: #fca5a5 !important;
+  border-radius: 9999px !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+}
+
+.admin-chat-send-btn:hover:not(:disabled) {
+  background: #f87171 !important;
+  transform: translateY(-1px) !important;
+}
+
+.admin-chat-send-btn:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+}
+
+.admin-chat-attachment-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #047857 !important;
+  background: #ecfdf5 !important;
+  border: 1px solid #a7f3d0 !important;
+  border-radius: 8px !important;
+  padding: 4px 10px !important;
+  width: fit-content !important;
+}
+
+.admin-chat-attachment-pill button {
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  color: #64748b !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL DE RECUPERACIÓN PREGUNTA DE SEGURIDAD (ELEGANTE Y COHERENTE)
+   ══════════════════════════════════════════════════════════════════════════════ */
+.admin-support-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, 0.72) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  z-index: 9999998 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.admin-support-modal-dialog {
+  background: #ffffff !important;
+  border-radius: 28px !important;
+  width: 100% !important;
+  max-width: 480px !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.4) !important;
+  overflow: hidden !important;
+  animation: adminChatModalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.admin-support-modal-header {
+  background: linear-gradient(135deg, #18050e 0%, #2a0715 100%) !important;
+  padding: 20px 24px !important;
+  color: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.admin-support-modal-header h2 {
+  margin: 0 !important;
+  font-size: 1.15rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+}
+
+.admin-support-modal-body {
+  padding: 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  color: #1e293b !important;
+}
+
+.admin-support-modal-body p {
+  margin: 0 !important;
+  color: #64748b !important;
+  font-size: 0.9rem !important;
+}
+
+.admin-support-modal-body label {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  font-size: 0.86rem !important;
+  font-weight: 700 !important;
+  color: #334155 !important;
+}
+
+.admin-support-modal-body input {
+  height: 48px !important;
+  border: 1.5px solid #d9deea !important;
+  border-radius: 14px !important;
+  padding: 0 14px !important;
+  font-size: 0.92rem !important;
+  outline: none !important;
+  transition: border-color 0.15s ease !important;
+}
+
+.admin-support-modal-body input:focus {
+  border-color: #d7192f !important;
+}
+
+.admin-support-modal-actions {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  margin-top: 6px !important;
+}
+
+.admin-support-modal-submit {
+  height: 48px !important;
+  background: #d7192f !important;
+  color: #ffffff !important;
+  border-radius: 14px !important;
+  border: none !important;
+  font-size: 0.95rem !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.admin-support-modal-submit:hover:not(:disabled) {
+  background: #052cdb !important;
+}
+
+.admin-support-modal-submit:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+}
+
+.admin-support-modal-cancel {
+  height: 40px !important;
+  background: transparent !important;
+  color: #64748b !important;
+  border: none !important;
+  font-size: 0.9rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+}
+
+.admin-support-modal-cancel:hover {
+  color: #1e293b !important;
+}
+
+/* ── Responsive ── */
+@media (max-width: 759px) {
+  .admin-login-page .admin-login-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 24px 16px;
+  }
+  .admin-login-page .admin-login-logo {
+    width: 260px;
+    height: 82px;
+  }
+  .admin-login-page .admin-login-logo ion-img {
+    width: 220px;
+    height: 68px;
+  }
+  .admin-login-page .admin-login-card {
+    padding: 24px 18px;
+    border-radius: 24px;
+  }
+  .admin-chat-portal-dialog {
+    max-height: 94vh !important;
+    border-radius: 24px !important;
+  }
+}
