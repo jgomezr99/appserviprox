@@ -10,6 +10,8 @@ import {
   IonText,
 } from "@ionic/react";
 import {
+  arrowBackOutline,
+  arrowForwardOutline,
   briefcaseOutline,
   checkmarkCircleOutline,
   eyeOffOutline,
@@ -28,6 +30,18 @@ import logo from "../Assets/logo.png";
 import styles from "./Login.module.css";
 
 const emailOk = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
+
+const slugPart = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+const buildUsername = (firstName: string, lastName: string) => {
+  const base = [slugPart(firstName), slugPart(lastName)].filter(Boolean).join(".");
+  return base.length >= 3 ? base : `${base}user`;
+};
 
 const getApiFieldMessage = (payload: unknown) => {
   if (!payload || typeof payload !== "object") return "";
@@ -82,7 +96,6 @@ const Register: React.FC = () => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("Bogotá");
   const [documentId, setDocumentId] = useState("");
@@ -93,6 +106,7 @@ const Register: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [step, setStep] = useState<1 | 2>(1);
 
   useEffect(() => {
     if (!sessionLoading && isAuthenticated) {
@@ -101,23 +115,31 @@ const Register: React.FC = () => {
   }, [history, isAuthenticated, sessionLoading, user]);
 
   const passwordsMatch = password === confirmPassword;
-  const canSubmit =
+  const canContinue =
+    firstName.trim().length > 0 &&
+    lastName.trim().length > 0 &&
     emailOk(email) &&
-    username.trim().length >= 3 &&
     password.length >= 8 &&
-    passwordsMatch &&
-    !isSubmitting;
+    passwordsMatch;
+  const canSubmit = canContinue && !isSubmitting;
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (step === 1) {
+      if (canContinue) {
+        setError("");
+        setStep(2);
+      }
+      return;
+    }
     if (!canSubmit) return;
 
     setError("");
     setIsSubmitting(true);
     try {
-      const currentUser = await register({
+      const baseUsername = buildUsername(firstName, lastName);
+      const payload = {
         email: email.trim().toLowerCase(),
-        username: username.trim(),
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         phone: phone.trim(),
@@ -126,7 +148,20 @@ const Register: React.FC = () => {
         address: address.trim(),
         role,
         password,
-      });
+      };
+      let currentUser;
+      try {
+        currentUser = await register({ ...payload, username: baseUsername });
+      } catch (err) {
+        const usernameTaken =
+          err instanceof ApiError &&
+          typeof err.payload === "object" &&
+          err.payload !== null &&
+          "username" in err.payload;
+        if (!usernameTaken) throw err;
+        const suffix = Math.floor(100 + Math.random() * 900);
+        currentUser = await register({ ...payload, username: `${baseUsername}${suffix}` });
+      }
       history.replace(getEntryRoute(currentUser));
     } catch (err) {
       setError(getRegisterErrorMessage(err));
@@ -157,10 +192,18 @@ const Register: React.FC = () => {
             <div className={styles.formHeader}>
               <span className={styles.cardEyebrow}>CREAR CUENTA</span>
               <h2 id="register-title">Empieza en Serviprox</h2>
-              <p>Selecciona tu tipo de cuenta y completa tus datos</p>
+              <p>
+                {step === 1
+                  ? "Selecciona tu tipo de cuenta y crea tu acceso"
+                  : "Completa tus datos personales"}
+              </p>
+              <p aria-label={`Paso ${step} de 2`} style={{ fontWeight: 700, marginTop: 8 }}>
+                Paso {step} de 2
+              </p>
             </div>
 
             <form className={styles.form} onSubmit={handleRegister} noValidate>
+              {step === 1 && (<>
               <fieldset className={styles.roleGroup}>
                 <legend>¿Qué quieres hacer en Serviprox?</legend>
                 {roleOptions.map((option) => {
@@ -194,6 +237,7 @@ const Register: React.FC = () => {
                       autocomplete="given-name"
                       placeholder="Tu nombre"
                       onIonInput={(event) => setFirstName(String(event.detail.value ?? ""))}
+                      required
                     />
                   </div>
                 </label>
@@ -207,6 +251,7 @@ const Register: React.FC = () => {
                       autocomplete="family-name"
                       placeholder="Tu apellido"
                       onIonInput={(event) => setLastName(String(event.detail.value ?? ""))}
+                      required
                     />
                   </div>
                 </label>
@@ -227,71 +272,6 @@ const Register: React.FC = () => {
                   />
                 </div>
               </label>
-
-              <label className={styles.field}>
-                <span>Nombre de usuario</span>
-                <div className={styles.inputShell}>
-                  <IonIcon icon={personOutline} aria-hidden="true" />
-                  <IonInput
-                    value={username}
-                    autocomplete="username"
-                    placeholder="ej: camila.serviprox"
-                    onIonInput={(event) => setUsername(String(event.detail.value ?? ""))}
-                    required
-                  />
-                </div>
-              </label>
-
-              <div className={styles.twoColumn}>
-                <label className={styles.field}>
-                  <span>Teléfono</span>
-                  <div className={styles.inputShell}>
-                    <IonInput
-                      type="tel"
-                      value={phone}
-                      autocomplete="tel"
-                      placeholder="+57 300 000 0000"
-                      onIonInput={(event) => setPhone(String(event.detail.value ?? ""))}
-                    />
-                  </div>
-                </label>
-
-                <label className={styles.field}>
-                  <span>Ciudad</span>
-                  <div className={styles.inputShell}>
-                    <IonInput
-                      value={city}
-                      autocomplete="address-level2"
-                      placeholder="Bogotá"
-                      onIonInput={(event) => setCity(String(event.detail.value ?? ""))}
-                    />
-                  </div>
-                </label>
-              </div>
-
-              <div className={styles.twoColumn}>
-                <label className={styles.field}>
-                  <span>Cédula / Documento de Identidad</span>
-                  <div className={styles.inputShell}>
-                    <IonInput
-                      value={documentId}
-                      placeholder="Ej: CC 1.020.345.678"
-                      onIonInput={(event) => setDocumentId(String(event.detail.value ?? ""))}
-                    />
-                  </div>
-                </label>
-
-                <label className={styles.field}>
-                  <span>Dirección del Inmueble (Bogotá)</span>
-                  <div className={styles.inputShell}>
-                    <IonInput
-                      value={address}
-                      placeholder="Ej: Calle 72 # 11-45, Chapinero"
-                      onIonInput={(event) => setAddress(String(event.detail.value ?? ""))}
-                    />
-                  </div>
-                </label>
-              </div>
 
               <label className={styles.field}>
                 <span>Contraseña</span>
@@ -348,6 +328,60 @@ const Register: React.FC = () => {
                   Las contraseñas no coinciden.
                 </p>
               )}
+              </>)}
+
+              {step === 2 && (<>
+              <div className={styles.twoColumn}>
+                <label className={styles.field}>
+                  <span>Teléfono</span>
+                  <div className={styles.inputShell}>
+                    <IonInput
+                      type="tel"
+                      value={phone}
+                      autocomplete="tel"
+                      placeholder="+57 300 000 0000"
+                      onIonInput={(event) => setPhone(String(event.detail.value ?? ""))}
+                    />
+                  </div>
+                </label>
+
+                <label className={styles.field}>
+                  <span>Ciudad</span>
+                  <div className={styles.inputShell}>
+                    <IonInput
+                      value={city}
+                      autocomplete="address-level2"
+                      placeholder="Bogotá"
+                      onIonInput={(event) => setCity(String(event.detail.value ?? ""))}
+                    />
+                  </div>
+                </label>
+              </div>
+
+              <div className={styles.twoColumn}>
+                <label className={styles.field}>
+                  <span>Cédula / pasaporte</span>
+                  <div className={styles.inputShell}>
+                    <IonInput
+                      value={documentId}
+                      placeholder="Ej: CC 1.020.345.678"
+                      onIonInput={(event) => setDocumentId(String(event.detail.value ?? ""))}
+                    />
+                  </div>
+                </label>
+
+                <label className={styles.field}>
+                  <span>Dirección del Inmueble (Bogotá)</span>
+                  <div className={styles.inputShell}>
+                    <IonInput
+                      value={address}
+                      placeholder="Ej: Calle 72 # 11-45, Chapinero"
+                      onIonInput={(event) => setAddress(String(event.detail.value ?? ""))}
+                    />
+                  </div>
+                </label>
+              </div>
+              </>)}
 
               {error && (
                 <p className={styles.error} role="alert">
@@ -355,18 +389,41 @@ const Register: React.FC = () => {
                 </p>
               )}
 
-              <IonButton
-                expand="block"
-                type="submit"
-                className={styles.primaryButton}
-                disabled={!canSubmit}
-              >
-                {isSubmitting ? <IonSpinner name="crescent" /> : "Crear cuenta"}
-              </IonButton>
+              {step === 1 ? (
+                <IonButton
+                  expand="block"
+                  type="submit"
+                  className={styles.primaryButton}
+                  disabled={!canContinue}
+                >
+                  Continuar <IonIcon slot="end" icon={arrowForwardOutline} />
+                </IonButton>
+              ) : (
+                <>
+                  <IonButton
+                    expand="block"
+                    type="submit"
+                    className={styles.primaryButton}
+                    disabled={!canSubmit}
+                  >
+                    {isSubmitting ? <IonSpinner name="crescent" /> : "Crear cuenta"}
+                  </IonButton>
+                  <IonButton
+                    expand="block"
+                    type="button"
+                    fill="clear"
+                    disabled={isSubmitting}
+                    onClick={() => setStep(1)}
+                  >
+                    <IonIcon slot="start" icon={arrowBackOutline} />
+                    Volver al paso 1
+                  </IonButton>
+                </>
+              )}
             </form>
 
             <div className={styles.footerPrompt}>
-              <span>¿Ya tienes cuenta?</span>
+              <span>Ya tienes cuenta</span>
               <IonButton routerLink="/login" fill="clear" className={styles.linkButton}>
                 Iniciar sesión
               </IonButton>

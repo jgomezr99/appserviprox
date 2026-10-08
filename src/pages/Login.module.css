@@ -74,11 +74,11 @@
   background: rgba(221, 15, 15, 0.92);
   box-shadow: 0 18px 42px rgba(16, 24, 40, .12);
 }
-
+/* color customization for primary button */
 .loginShell .primaryButton {
-  --background: #050a47;
-  --background-hover: #050a47;
-  --background-activated: #050a47;
+  --background: #d90d20;
+  --background-hover: #c20019;
+  --background-activated: #c20019;
   --box-shadow: none;
 }
 
@@ -359,7 +359,7 @@
 .backButton {
   height: 32px;
   margin: -8px 0 8px -10px;
-  --color: var(--sp-text-muted);
+  --color: var(--sp-primary);
   text-transform: none;
 }
 
@@ -501,7 +501,7 @@
 }
 
 .recoverButton {
-  justify-self: end;
+  justify-self: auto;
   height: 34px;
   margin: -4px 0 0;
   --color: #082768;
@@ -546,9 +546,9 @@
 .primaryButton {
   min-height: 52px;
   margin-top: 2px;
-  --background: var(--sp-primary);
-  --background-hover: var(--sp-primary-dark);
-  --background-activated: var(--sp-primary-dark);
+  --background: #d90d20;
+  --background-hover: #c20019;
+  --background-activated: #c20019;
   --border-radius: 18px;
   --box-shadow: 0 16px 34px rgba(11, 47, 107, 0.24);
   text-transform: none;
@@ -609,32 +609,24 @@
   gap: 10px;
 }
 
-.demoButton {
-  min-height: 42px;
-  margin: 0;
-  --border-radius: 14px;
-  --border-color: rgba(11, 47, 107, 0.24);
-  --color: var(--sp-primary);
-  text-transform: none;
-  font-size: 0.83rem;
-  font-weight: 800;
-}
 
+/*boton ya tienes cuenta */
 .footerPrompt {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   justify-content: center;
-  color: var(--sp-text-muted);
+  color: #d90d20;
   font-size: 0.95rem;
+   font-weight: bold;
 }
 
 .linkButton {
   height: 38px;
   margin: 0;
   --border-radius: 14px;
-  --color: var(--sp-primary);
+  --color: #0d43d9;
   text-transform: none;
   font-weight: 800;
 }

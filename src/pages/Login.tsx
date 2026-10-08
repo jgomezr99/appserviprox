@@ -389,7 +389,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                   setRecoveryMessage("");
                 }}
               >
-                ¿Olvidaste la contraseña?
+                Olvidaste la contraseña
               </IonButton>
 
               {connectionSuccess && (
@@ -488,7 +488,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                     />
                   </div>
                 </label>
-                <IonButton expand="block" type="submit" disabled={!emailOk(email) || recoverySubmitting}>
+                <IonButton expand="block" type="submit" className={styles.primaryButton} disabled={!emailOk(email) || recoverySubmitting}>
                   {recoverySubmitting ? <IonSpinner name="crescent" /> : "Enviar código"}
                 </IonButton>
               </form>
@@ -514,7 +514,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                   />
                 </label>
                 {recoveryMessage && <p className={styles.recoveryMessage}>{recoveryMessage}</p>}
-                <IonButton expand="block" type="submit" disabled={recoveryCode.length !== 6 || newPassword.length < 6 || recoverySubmitting}>
+                <IonButton expand="block" type="submit" className={styles.primaryButton} disabled={recoveryCode.length !== 6 || newPassword.length < 6 || recoverySubmitting}>
                   {recoverySubmitting ? <IonSpinner name="crescent" /> : "Cambiar contraseña"}
                 </IonButton>
                 <IonButton
