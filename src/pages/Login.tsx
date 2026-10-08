@@ -389,7 +389,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                   setRecoveryMessage("");
                 }}
               >
-                ¿Olvidaste tu contraseña?
+                ¿Olvidaste la contraseña?
               </IonButton>
 
               {connectionSuccess && (
@@ -438,20 +438,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                           "🔄 Reintentar"
                         )}
                       </IonButton>
-                      <IonButton
-                        fill="solid"
-                        color="primary"
-                        size="small"
-                        style={{
-                          flex: 1,
-                          "--border-radius": "12px",
-                          textTransform: "none",
-                          fontWeight: 800,
-                        }}
-                        onClick={() => setServerModalOpen(true)}
-                      >
-                        ⚙ Configurar BD
-                      </IonButton>
+                     
                     </div>
                   )}
                 </div>
@@ -466,43 +453,6 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                 {isSubmitting ? <IonSpinner name="crescent" /> : "Iniciar sesión"}
               </IonButton>
 
-              <div style={{ display: "flex", justifyContent: "center", marginTop: "14px" }}>
-                <button
-                  type="button"
-                  onClick={() => setServerModalOpen(true)}
-                  style={{
-                    background: "#f1f5f9",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: "20px",
-                    padding: "6px 14px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    cursor: "pointer",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    color: "#334155",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      background: serverConnected ? "#10b981" : "#ef4444",
-                      boxShadow: serverConnected
-                        ? "0 0 0 2px rgba(16, 185, 129, 0.25)"
-                        : "0 0 0 2px rgba(239, 68, 68, 0.25)",
-                    }}
-                  />
-                  <span>
-                    {serverConnected
-                      ? "Base de datos conectada"
-                      : "Base de datos desconectada"}
-                  </span>
-                  <span style={{ color: "#0284c7" }}>⚙ Ajustes</span>
-                </button>
-              </div>
             </form>
 
             {!administrative && <div className={styles.footerPrompt}>

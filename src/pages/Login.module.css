@@ -36,10 +36,10 @@
 }
 
 .loginShell .brandMark {
-  width: 68px;
-  height: 68px;
+  width: 70px;
+  height: 70px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, .18);
+  
 }
 
 .loginShell .brandMark ion-img {
@@ -82,62 +82,6 @@
   --box-shadow: none;
 }
 
-.administrativeLogin .loginShell,
-.administrativeLogin.loginShell {
-  --admin-accent: #0b2f6b;
-}
-
-.administrativeLogin .brandPanel {
-  background: linear-gradient(180deg, #d90d20 0%, #dc5264 35%, #f2dfe3 82%, #f6f8fc 100%);
-}
-
-.administrativeLogin .brandPanel h1,
-.administrativeLogin .brandPanel .brandCopy {
-  color: #ffffff;
-}
-
-.administrativeLogin .brandPanel .kicker {
-  color: #dbeafe;
-}
-
-body .administrativeLogin .authCard {
-  border: 0;
-  background: linear-gradient(145deg, #bd1026, #f04b5b);
-  box-shadow: 0 24px 55px rgba(143, 18, 35, .28);
-}
-
-.administrativeLogin .formHeader h2 {
-  color: #ffffff;
-}
-
-.administrativeLogin .formHeader p,
-.administrativeLogin .cardEyebrow,
-.administrativeLogin .field,
-.administrativeLogin .recoverButton,
-.administrativeLogin .backButton {
-  color: rgba(255, 255, 255, .82);
-  --color: rgba(255, 255, 255, .82);
-}
-
-.administrativeLogin .inputShell {
-  background: rgba(255, 255, 255, .12);
-  border-color: rgba(255, 255, 255, .35);
-  box-shadow: none;
-}
-
-.administrativeLogin .inputShell ion-icon,
-.administrativeLogin .inputShell ion-input {
-  color: #ffffff;
-  --color: #ffffff;
-  --placeholder-color: rgba(255, 255, 255, .7);
-}
-
-body .administrativeLogin .primaryButton {
-  --background: #0d18b3;
-  --background-hover: ;
-  --background-activated: #d90f20;
-  --box-shadow: none;
-}
 
 .brandPanel {
   display: grid;
@@ -426,7 +370,7 @@ body .administrativeLogin .primaryButton {
   place-items: center;
   overflow: hidden;
   border-radius: 18px;
-  background: rgba(255, 255, 255, .72);
+ 
 }
 
 .brandMark ion-img {
@@ -464,7 +408,7 @@ body .administrativeLogin .primaryButton {
 .authCard {
   width: 100%;
   max-width: 520px;
-  justify-self: center;
+  
   padding: 24px;
   border-radius: var(--sp-radius-xl);
   background: var(--sp-surface-glass);
