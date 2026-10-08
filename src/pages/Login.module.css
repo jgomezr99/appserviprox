@@ -479,7 +479,7 @@
 .inputShell ion-input {
   --padding-start: 0;
   --padding-end: 0;
-  --placeholder-color: #8d98ab;
+  --placeholder-color: #1055cc;
   --color: var(--sp-text);
   min-height: 54px;
   font-size: 1rem;
@@ -504,10 +504,10 @@
   justify-self: end;
   height: 34px;
   margin: -4px 0 0;
-  --color: var(--sp-text-muted);
-  --border-radius: 14px;
+  --color: #082768;
+  --border-radius: 20px;
   text-transform: none;
-  font-weight: 700;
+  font-weight: 900;
 }
 
 .recoveryModal {

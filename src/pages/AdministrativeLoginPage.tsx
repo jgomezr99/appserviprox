@@ -181,7 +181,7 @@ const AdministrativeLoginPage: React.FC = () => {
 				`Entendido. Para restablecer tu acceso como Staff, por favor escribe aquí tu nombre de usuario o correo corporativo. Consultaremos tu estado en la base de datos de Bogotá inmediatamente.`,
 				[
 					{ label: "🛡️ Tengo mi pregunta de seguridad", action: "pregunta_seguridad" },
-					{ label: "💬 Hablar con un supervisor humano", action: "supervisor" },
+					{ label: "💬 Hablar con un asesor  humano", action: "supervisor" },
 				]
 			);
 		} else if (action === "pregunta_seguridad") {
