@@ -828,40 +828,11 @@ export const AdminDashboard: React.FC = () => {
               <h1>Bienvenido, Administrador</h1>
               <p>Aquí puedes supervisar y gestionar toda la información de Serviprox en tiempo real.</p>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-              {/* Indicador de conexión a Base de Datos en vivo */}
-              <div
-                className={`ad-db-status-pill ${dbInfo.connected ? "connected" : "offline"}`}
-                title={
-                  dbInfo.connected
-                    ? `Base de datos SQLite activa (${dbInfo.database_name || "db.sqlite3"})`
-                    : "Servidor local desconectado o en modo demo"
-                }
-              >
-                <span className="ad-status-dot" />
-                <span>
-                  {dbInfo.connected
-                    ? `Base de Datos: Conectada (${dbInfo.engine.toUpperCase()})`
-                    : "Base de Datos: Modo Demostración"}
-                </span>
-                <button
-                  type="button"
-                  onClick={fetchLiveOverview}
-                  disabled={dbInfo.loading}
-                  className="ad-refresh-db-btn"
-                  title="Recargar consultas en vivo desde la base de datos"
-                >
-                  {dbInfo.loading ? "⏳" : "🔄"}
-                </button>
-              </div>
-
-              {/* Fecha actual */}
-              <div className="ad-date-card">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
-                </svg>
-                <span>Miércoles, 8 de octubre de 2026</span>
-              </div>
+            <div className="ad-date-card">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
+              </svg>
+              <span>Miércoles, 8 de octubre de 2026</span>
             </div>
           </div>
 
