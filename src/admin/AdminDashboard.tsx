@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { adminService } from "../services/adminService";
 import "./AdminDashboard.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ type AdminMenuId =
 
 interface RequestItem {
   id: string;
+  raw_id?: number;
   type: "Servicio" | "Producto" | "PQR" | "Falla";
   typeIcon: string;
   typeColor: string;
@@ -36,6 +38,7 @@ interface RequestItem {
 
 interface TopProfessional {
   id: string;
+  raw_id?: number;
   name: string;
   specialty: string;
   rating: number;
@@ -217,6 +220,93 @@ export const AdminDashboard: React.FC = () => {
     },
   ]);
 
+  // Estado de conexión a la Base de Datos
+  const [dbInfo, setDbInfo] = useState<{
+    connected: boolean;
+    engine: string;
+    database_name?: string;
+    loading: boolean;
+  }>({
+    connected: false,
+    engine: "sqlite",
+    database_name: "",
+    loading: true,
+  });
+
+  // Métricas de Indicadores Clave (KPIs)
+  const [kpis, setKpis] = useState({
+    clients: 1248,
+    professionals: 356,
+    hired_services: 1890,
+    pending_publications: 42,
+    open_pqrs: 27,
+    technical_issues: 5,
+    raw_clients: 4,
+    raw_pros: 15,
+    raw_services: 5,
+    raw_publications: 21,
+    raw_pqrs: 4,
+    raw_issues: 3,
+  });
+
+  // Distribución de usuarios para gráfica
+  const [userDistribution, setUserDistribution] = useState({
+    clients: 1248,
+    professionals: 356,
+    administrators: 18,
+  });
+
+  // Distribución de PQR para gráfico de barras
+  const [pqrDistribution, setPqrDistribution] = useState({
+    radicado: 6,
+    en_revision: 9,
+    conciliacion: 4,
+    resuelto: 8,
+  });
+
+  // Función para consultar en vivo la base de datos
+  const fetchLiveOverview = async () => {
+    setDbInfo((prev) => ({ ...prev, loading: true }));
+    try {
+      const data = await adminService.getOverview();
+      if (data.database && data.database.connected) {
+        setDbInfo({
+          connected: true,
+          engine: data.database.engine || "sqlite",
+          database_name: String(data.database.database_name || "db.sqlite3"),
+          loading: false,
+        });
+        if (data.kpis) {
+          setKpis((prev) => ({ ...prev, ...data.kpis }));
+        }
+        if (data.requests_list && data.requests_list.length > 0) {
+          setRequestsList(data.requests_list);
+        }
+        if (data.top_professionals && data.top_professionals.length > 0) {
+          setProsList(data.top_professionals);
+        }
+        if (data.audit_logs && data.audit_logs.length > 0) {
+          setAuditLogs(data.audit_logs);
+        }
+        if (data.charts?.user_distribution) {
+          setUserDistribution(data.charts.user_distribution);
+        }
+        if (data.charts?.pqr_chart) {
+          setPqrDistribution(data.charts.pqr_chart);
+        }
+      } else {
+        setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
+      }
+    } catch (err) {
+      console.warn("Fallo al consultar base de datos en overview:", err);
+      setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveOverview();
+  }, []);
+
   // Estado de modales
   const [modalBloqueoOpen, setModalBloqueoOpen] = useState(false);
   const [targetUserToBlock, setTargetUserToBlock] = useState<string>("");
@@ -233,8 +323,10 @@ export const AdminDashboard: React.FC = () => {
   const [modalDetailOpen, setModalDetailOpen] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
 
+  const adminDisplayName = (user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username) || "Superadministrador";
+
   // Acciones en la tabla de solicitudes
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
     setRequestsList((prev) =>
       prev.map((r) =>
         r.id === id ? { ...r, status: "Aprobado", statusClass: "ad-status-aprobado" } : r
@@ -245,18 +337,24 @@ export const AdminDashboard: React.FC = () => {
       setAuditLogs((prev) => [
         {
           id: `aud-${Date.now()}`,
-          adminName: "Superadministrador",
+          adminName: adminDisplayName,
           action: `Aprobación de ${item.type.toLowerCase()}`,
           target: `${item.title} (${item.userName})`,
           date: new Date().toLocaleString(),
-          reason: "Aprobado desde el panel administrativo",
+          reason: "Aprobado desde el panel administrativo (BD)",
         },
         ...prev,
       ]);
     }
+    await adminService.executeAction({
+      action: "approve_request",
+      target_id: id,
+      admin_name: adminDisplayName,
+      reason: "Aprobado desde el panel administrativo",
+    });
   };
 
-  const handleReject = (id: string) => {
+  const handleReject = async (id: string) => {
     setRequestsList((prev) =>
       prev.map((r) =>
         r.id === id ? { ...r, status: "Rechazado", statusClass: "ad-status-abierto" } : r
@@ -267,7 +365,7 @@ export const AdminDashboard: React.FC = () => {
       setAuditLogs((prev) => [
         {
           id: `aud-${Date.now()}`,
-          adminName: "Superadministrador",
+          adminName: adminDisplayName,
           action: `Rechazo de ${item.type.toLowerCase()}`,
           target: `${item.title} (${item.userName})`,
           date: new Date().toLocaleString(),
@@ -276,6 +374,12 @@ export const AdminDashboard: React.FC = () => {
         ...prev,
       ]);
     }
+    await adminService.executeAction({
+      action: "reject_request",
+      target_id: id,
+      admin_name: adminDisplayName,
+      reason: "No cumple con las normas de publicación de Serviprox",
+    });
   };
 
   const handleViewDetail = (item: any) => {
@@ -283,29 +387,42 @@ export const AdminDashboard: React.FC = () => {
     setModalDetailOpen(true);
   };
 
-  const confirmBlockUser = () => {
+  const confirmBlockUser = async () => {
     if (!blockReason.trim()) return;
+    const reasonText = blockReason;
+    const target = targetUserToBlock || "Usuario seleccionado";
     setAuditLogs((prev) => [
       {
         id: `aud-${Date.now()}`,
-        adminName: "Superadministrador",
+        adminName: adminDisplayName,
         action: blockType === "temporal" ? `Bloqueo temporal (${blockDuration} días)` : "Bloqueo permanente",
-        target: targetUserToBlock || "Usuario seleccionado",
+        target: target,
         date: new Date().toLocaleString(),
-        reason: blockReason,
+        reason: reasonText,
       },
       ...prev,
     ]);
     setModalBloqueoOpen(false);
     setBlockReason("");
-    alert(`Cuenta de ${targetUserToBlock} bloqueada con éxito. Motivo documentado en auditoría.`);
+
+    await adminService.executeAction({
+      action: "block_user",
+      target_id: target,
+      admin_name: adminDisplayName,
+      reason: reasonText,
+    });
+    alert(`Cuenta de ${target} bloqueada con éxito en la base de datos.`);
+    fetchLiveOverview();
   };
 
-  const confirmAssignBenefits = () => {
+  const confirmAssignBenefits = async () => {
     if (!targetProBeneficio) return;
+    const proId = targetProBeneficio.id;
+    const proName = targetProBeneficio.name;
+    const targetPro = targetProBeneficio;
     setProsList((prev) =>
       prev.map((p) =>
-        p.id === targetProBeneficio.id
+        p.id === proId
           ? { ...p, points: p.points + puntosToAdd }
           : p
       )
@@ -313,16 +430,26 @@ export const AdminDashboard: React.FC = () => {
     setAuditLogs((prev) => [
       {
         id: `aud-${Date.now()}`,
-        adminName: "Superadministrador",
+        adminName: adminDisplayName,
         action: `Asignación de +${puntosToAdd} pts y $${recargaToAdd.toLocaleString("es-CO")}`,
-        target: targetProBeneficio.name,
+        target: proName,
         date: new Date().toLocaleString(),
         reason: motivoBeneficio,
       },
       ...prev,
     ]);
     setModalBeneficiosOpen(false);
-    alert(`Beneficios asignados a ${targetProBeneficio.name}. Total actualizado: ${targetProBeneficio.points + puntosToAdd} pts.`);
+
+    await adminService.executeAction({
+      action: "assign_benefits",
+      target_id: targetPro.raw_id || proId,
+      admin_name: adminDisplayName,
+      points: puntosToAdd,
+      recharge: recargaToAdd,
+      reason: motivoBeneficio,
+    });
+    alert(`Beneficios asignados a ${proName}. Total actualizado guardado en la base de datos.`);
+    fetchLiveOverview();
   };
 
   const handleLogout = () => {
@@ -511,7 +638,7 @@ export const AdminDashboard: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76l1-1.36 1 1.36 2.38 3.24L17 10.83 14.92 8H20v6z" />
               </svg>
-              <span>Beneficios y Puntos</span>
+              <span>Beneficios</span>
             </button>
 
             {/* Fallas Técnicas */}
@@ -695,17 +822,46 @@ export const AdminDashboard: React.FC = () => {
 
         {/* Cuerpo del Panel */}
         <div className="ad-dashboard-body">
-          {/* Fila de Bienvenida & Fecha */}
+          {/* Fila de Bienvenida, Fecha y Estado de BD */}
           <div className="ad-welcome-row">
             <div className="ad-welcome-text">
               <h1>Bienvenido, Administrador</h1>
-              <p>Aquí puedes gestionar toda la información de Serviprox.</p>
+              <p>Aquí puedes supervisar y gestionar toda la información de Serviprox en tiempo real.</p>
             </div>
-            <div className="ad-date-card">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
-              </svg>
-              <span>Miércoles, 8 de octubre de 2026</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              {/* Indicador de conexión a Base de Datos en vivo */}
+              <div
+                className={`ad-db-status-pill ${dbInfo.connected ? "connected" : "offline"}`}
+                title={
+                  dbInfo.connected
+                    ? `Base de datos SQLite activa (${dbInfo.database_name || "db.sqlite3"})`
+                    : "Servidor local desconectado o en modo demo"
+                }
+              >
+                <span className="ad-status-dot" />
+                <span>
+                  {dbInfo.connected
+                    ? `Base de Datos: Conectada (${dbInfo.engine.toUpperCase()})`
+                    : "Base de Datos: Modo Demostración"}
+                </span>
+                <button
+                  type="button"
+                  onClick={fetchLiveOverview}
+                  disabled={dbInfo.loading}
+                  className="ad-refresh-db-btn"
+                  title="Recargar consultas en vivo desde la base de datos"
+                >
+                  {dbInfo.loading ? "⏳" : "🔄"}
+                </button>
+              </div>
+
+              {/* Fecha actual */}
+              <div className="ad-date-card">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
+                </svg>
+                <span>Miércoles, 8 de octubre de 2026</span>
+              </div>
             </div>
           </div>
 
@@ -718,7 +874,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">1,248</div>
+              <div className="ad-kpi-value">{kpis.clients.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Clientes registrados</p>
               <div className="ad-kpi-trend positive">
                 <span>↗</span> +12%
@@ -732,7 +888,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M12 2c-4.42 0-8 3.58-8 8v3h16v-3c0-4.42-3.58-8-8-8zm-1 16H3v2c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h-8v-2h-2v2z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">356</div>
+              <div className="ad-kpi-value">{kpis.professionals.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Profesionales activos</p>
               <div className="ad-kpi-trend positive">
                 <span>↗</span> +8%
@@ -746,7 +902,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">428</div>
+              <div className="ad-kpi-value">{kpis.pending_publications.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Publicaciones en revisión</p>
               <div className="ad-kpi-trend warning">
                 <span>↗</span> +24%
@@ -760,7 +916,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">189</div>
+              <div className="ad-kpi-value">{kpis.hired_services.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Servicios contratados</p>
               <div className="ad-kpi-trend" style={{ color: "#9333ea" }}>
                 <span>↗</span> +15%
@@ -774,7 +930,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">27</div>
+              <div className="ad-kpi-value">{kpis.open_pqrs.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">PQR pendientes</p>
               <div className="ad-kpi-trend danger">
                 <span>↘</span> +8%
@@ -788,7 +944,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">12</div>
+              <div className="ad-kpi-value">{kpis.technical_issues.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Fallas técnicas</p>
               <div className="ad-kpi-trend teal">
                 <span>↘</span> -20%
@@ -1097,55 +1253,73 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="ad-donut-wrapper">
                   <div className="ad-donut-chart">
-                    <svg viewBox="0 0 36 36" style={{ width: "100%", height: "100%" }}>
-                      {/* Fondo */}
-                      <path
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        stroke="#e2e8f0"
-                        strokeWidth="4"
-                      />
-                      {/* Porción Clientes 78% (Azul) */}
-                      <path
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        stroke="#2563eb"
-                        strokeWidth="4.5"
-                        strokeDasharray="78, 100"
-                        strokeLinecap="round"
-                      />
-                      {/* Porción Profesionales 22% (Verde) */}
-                      <path
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        stroke="#22c55e"
-                        strokeWidth="4.5"
-                        strokeDasharray="22, 100"
-                        strokeDashoffset="-78"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="ad-donut-center">
-                      <strong>1,604</strong>
-                      <span>Usuarios</span>
-                    </div>
+                    {(() => {
+                      const totalUsers = (userDistribution.clients || 0) + (userDistribution.professionals || 0);
+                      const clientPct = totalUsers > 0 ? Math.round((userDistribution.clients / totalUsers) * 100) : 78;
+                      const proPct = 100 - clientPct;
+                      return (
+                        <>
+                          <svg viewBox="0 0 36 36" style={{ width: "100%", height: "100%" }}>
+                            {/* Fondo */}
+                            <path
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              fill="none"
+                              stroke="#e2e8f0"
+                              strokeWidth="4"
+                            />
+                            {/* Porción Clientes (Azul) */}
+                            <path
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              fill="none"
+                              stroke="#2563eb"
+                              strokeWidth="4.5"
+                              strokeDasharray={`${clientPct}, 100`}
+                              strokeLinecap="round"
+                            />
+                            {/* Porción Profesionales (Verde) */}
+                            <path
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              fill="none"
+                              stroke="#22c55e"
+                              strokeWidth="4.5"
+                              strokeDasharray={`${proPct}, 100`}
+                              strokeDashoffset={`-${clientPct}`}
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <div className="ad-donut-center">
+                            <strong>{totalUsers.toLocaleString("es-CO")}</strong>
+                            <span>Usuarios</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
 
                   <div className="ad-donut-legend">
-                    <div className="ad-legend-item">
-                      <span className="ad-legend-dot" style={{ background: "#2563eb" }} />
-                      <div className="ad-legend-text">
-                        <strong>Clientes</strong>
-                        <span>1,248 (78%)</span>
-                      </div>
-                    </div>
-                    <div className="ad-legend-item">
-                      <span className="ad-legend-dot" style={{ background: "#22c55e" }} />
-                      <div className="ad-legend-text">
-                        <strong>Profesionales</strong>
-                        <span>356 (22%)</span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const totalUsers = (userDistribution.clients || 0) + (userDistribution.professionals || 0);
+                      const clientPct = totalUsers > 0 ? Math.round((userDistribution.clients / totalUsers) * 100) : 78;
+                      const proPct = 100 - clientPct;
+                      return (
+                        <>
+                          <div className="ad-legend-item">
+                            <span className="ad-legend-dot" style={{ background: "#2563eb" }} />
+                            <div className="ad-legend-text">
+                              <strong>Clientes</strong>
+                              <span>{userDistribution.clients.toLocaleString("es-CO")} ({clientPct}%)</span>
+                            </div>
+                          </div>
+                          <div className="ad-legend-item">
+                            <span className="ad-legend-dot" style={{ background: "#22c55e" }} />
+                            <div className="ad-legend-text">
+                              <strong>Profesionales</strong>
+                              <span>{userDistribution.professionals.toLocaleString("es-CO")} ({proPct}%)</span>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1173,25 +1347,25 @@ export const AdminDashboard: React.FC = () => {
                     <line x1="30" y1="150" x2="310" y2="150" stroke="#cbd5e1" strokeWidth="1" />
                     <text x="15" y="153" fontSize="10" fill="#94a3b8" textAnchor="end">0</text>
 
-                    {/* Barra 1: Abiertos (27) - Rojo */}
-                    <rect x="55" y="55" width="36" height="95" rx="4" fill="#ef4444" />
-                    <text x="73" y="47" fontSize="11" fontWeight="700" fill="#ef4444" textAnchor="middle">27</text>
+                    {/* Barra 1: Radicados / Abiertos - Rojo */}
+                    <rect x="55" y={Math.max(30, 150 - Math.min(120, pqrDistribution.radicado * 4))} width="36" height={Math.min(120, pqrDistribution.radicado * 4)} rx="4" fill="#ef4444" />
+                    <text x="73" y={Math.max(22, 142 - Math.min(120, pqrDistribution.radicado * 4))} fontSize="11" fontWeight="700" fill="#ef4444" textAnchor="middle">{pqrDistribution.radicado}</text>
                     <text x="73" y="165" fontSize="10" fill="#64748b" textAnchor="middle">Abiertos</text>
 
-                    {/* Barra 2: En proceso (18) - Amarillo */}
-                    <rect x="125" y="87" width="36" height="63" rx="4" fill="#f59e0b" />
-                    <text x="143" y="79" fontSize="11" fontWeight="700" fill="#f59e0b" textAnchor="middle">18</text>
-                    <text x="143" y="165" fontSize="10" fill="#64748b" textAnchor="middle">En proceso</text>
+                    {/* Barra 2: En revisión - Amarillo */}
+                    <rect x="125" y={Math.max(30, 150 - Math.min(120, pqrDistribution.en_revision * 4))} width="36" height={Math.min(120, pqrDistribution.en_revision * 4)} rx="4" fill="#f59e0b" />
+                    <text x="143" y={Math.max(22, 142 - Math.min(120, pqrDistribution.en_revision * 4))} fontSize="11" fontWeight="700" fill="#f59e0b" textAnchor="middle">{pqrDistribution.en_revision}</text>
+                    <text x="143" y="165" fontSize="10" fill="#64748b" textAnchor="middle">Revisión</text>
 
-                    {/* Barra 3: Resueltos (12) - Azul */}
-                    <rect x="195" y="108" width="36" height="42" rx="4" fill="#3b82f6" />
-                    <text x="213" y="100" fontSize="11" fontWeight="700" fill="#3b82f6" textAnchor="middle">12</text>
-                    <text x="213" y="165" fontSize="10" fill="#64748b" textAnchor="middle">Resueltos</text>
+                    {/* Barra 3: Conciliación - Azul */}
+                    <rect x="195" y={Math.max(30, 150 - Math.min(120, pqrDistribution.conciliacion * 4))} width="36" height={Math.min(120, pqrDistribution.conciliacion * 4)} rx="4" fill="#3b82f6" />
+                    <text x="213" y={Math.max(22, 142 - Math.min(120, pqrDistribution.conciliacion * 4))} fontSize="11" fontWeight="700" fill="#3b82f6" textAnchor="middle">{pqrDistribution.conciliacion}</text>
+                    <text x="213" y="165" fontSize="10" fill="#64748b" textAnchor="middle">Concilia</text>
 
-                    {/* Barra 4: Cerrados (5) - Verde */}
-                    <rect x="265" y="132" width="36" height="18" rx="4" fill="#10b981" />
-                    <text x="283" y="124" fontSize="11" fontWeight="700" fill="#10b981" textAnchor="middle">5</text>
-                    <text x="283" y="165" fontSize="10" fill="#64748b" textAnchor="middle">Cerrados</text>
+                    {/* Barra 4: Resueltos - Verde */}
+                    <rect x="265" y={Math.max(30, 150 - Math.min(120, pqrDistribution.resuelto * 4))} width="36" height={Math.min(120, pqrDistribution.resuelto * 4)} rx="4" fill="#10b981" />
+                    <text x="283" y={Math.max(22, 142 - Math.min(120, pqrDistribution.resuelto * 4))} fontSize="11" fontWeight="700" fill="#10b981" textAnchor="middle">{pqrDistribution.resuelto}</text>
+                    <text x="283" y="165" fontSize="10" fill="#64748b" textAnchor="middle">Resueltos</text>
                   </svg>
                 </div>
               </div>

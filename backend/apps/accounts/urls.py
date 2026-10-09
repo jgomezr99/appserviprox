@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .admin_views import AdminActionView, AdminOverviewView, AdminUsersListView
 from .views import (
     BecomeClientView,
     BecomeProfessionalView,
@@ -32,4 +33,7 @@ urlpatterns = [
         CompleteOnboardingView.as_view(),
         name="auth-onboarding-complete",
     ),
+    path("admin/overview/", AdminOverviewView.as_view(), name="admin-overview"),
+    path("admin/action/", AdminActionView.as_view(), name="admin-action"),
+    path("admin/users/", AdminUsersListView.as_view(), name="admin-users"),
 ]

@@ -39,6 +39,10 @@ class ProfessionalProfile(models.Model):
     is_verified = models.BooleanField(_("verificado por Serviprox"), default=False)
     is_active = models.BooleanField(_("activo"), default=True)
     accepts_urgent = models.BooleanField(_("atiende urgencias"), default=False)
+    points = models.PositiveIntegerField(_("puntos de incentivos"), default=1000)
+    wallet_balance = models.DecimalField(
+        _("saldo recarga"), max_digits=12, decimal_places=2, default=Decimal("0.00")
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -286,7 +286,7 @@ const AdministrativeLoginPage: React.FC = () => {
 				{
 					id: `user-${Date.now()}`,
 					sender: "user",
-					text: "💬 Deseo hablar con un supervisor.",
+					text: "💬 Deseo hablar con un asesor.",
 					timestamp: time,
 				},
 			]);
@@ -424,7 +424,7 @@ const AdministrativeLoginPage: React.FC = () => {
 								className="admin-login-support"
 								onClick={() => setAdminChatOpen(true)}
 							>
-								Olvidaste tu contraseña? Recuperar con soporte
+								Olvidaste tu contraseña Recuperar con soporte
 							</button>
 						</form>
 					</section>

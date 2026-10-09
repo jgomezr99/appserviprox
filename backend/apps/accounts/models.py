@@ -120,3 +120,28 @@ class ProfessionalUser(User):
         verbose_name = _("profesional (cuenta)")
         verbose_name_plural = _("profesionales (cuentas)")
 
+
+class AdminAuditLog(models.Model):
+    """Registro de auditoría para trazabilidad de acciones administrativas."""
+
+    admin_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_logs_authored",
+    )
+    admin_name = models.CharField(_("nombre del administrador"), max_length=150, default="Superadministrador")
+    action = models.CharField(_("acción realizada"), max_length=150)
+    target = models.CharField(_("elemento o usuario afectado"), max_length=255)
+    reason = models.TextField(_("motivo o justificación"), blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = _("registro de auditoría")
+        verbose_name_plural = _("registros de auditoría")
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"[{self.created_at.strftime('%Y-%m-%d %H:%M')}] {self.admin_name}: {self.action} -> {self.target}"
+

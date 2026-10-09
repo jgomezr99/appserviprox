@@ -21,11 +21,12 @@ django.setup()
 
 from django.db import transaction  # noqa: E402
 
-from apps.accounts.models import User, UserRole  # noqa: E402
+from apps.accounts.models import AdminAuditLog, User, UserRole  # noqa: E402
 from apps.catalog.models import Service, ServiceCategory  # noqa: E402
 from apps.diagnosis.models import DiagnosticOption, DiagnosticQuestion  # noqa: E402
 from apps.households.models import Household  # noqa: E402
 from apps.orders.models import Order  # noqa: E402
+from apps.pqrs.models import AppProblemReport, PQRMessage, PQRReport  # noqa: E402
 from apps.professionals.models import (  # noqa: E402
     AvailabilitySlot,
     PortfolioItem,
@@ -36,7 +37,7 @@ from apps.service_requests.models import ServiceRequest  # noqa: E402
 
 DEMO_PASSWORD = "serviprox2026"
 
-# Centro del mapa del prototipo: Kennedy, Bogotá.
+# Centro del mapa del prototipo: , Bogotá.
 HOME_LAT, HOME_LNG = 4.6280, -74.1500
 
 CATEGORIES = [
@@ -406,6 +407,182 @@ def seed_admin() -> User:
     return admin_user
 
 
+def seed_pqrs() -> None:
+    client = User.objects.filter(role=UserRole.CLIENT).first()
+    pro = ProfessionalProfile.objects.first()
+
+    pqrs_data = [
+        {
+            "radicado": "PQR-2026-0042",
+            "contractor_name": pro.display_name if pro else "Ing. Carlos Mendoza",
+            "contractor_company": pro.headline if pro else "Mendoza Instalaciones RETIE",
+            "contractor_specialty": pro.specialty_label if pro else "Electricidad RETIE",
+            "pqr_type": "queja",
+            "reason": "cobro_indebido",
+            "status": "en_revision",
+            "amount_disputed": 120000.00,
+            "description": "Cobro adicional no acordado inicialmente durante la revisión de breakers en Chapinero.",
+            "client_name": "Laura G.",
+            "client_email": "laura.gomez@example.com",
+            "client_phone": "+57 311 234 5678",
+        },
+        {
+            "radicado": "PQR-2026-0038",
+            "contractor_name": "Diego Salcedo",
+            "contractor_company": "Electricidad y mantenimiento",
+            "contractor_specialty": "Técnico RETIE",
+            "pqr_type": "reclamo",
+            "reason": "incumplimiento_horario",
+            "status": "radicado",
+            "amount_disputed": 80000.00,
+            "description": "El técnico se retrasó más de 3 horas sin previo aviso para una revisión urgente de tablero.",
+            "client_name": "Carlos M.",
+            "client_email": "carlos.m@example.com",
+            "client_phone": "+57 320 456 7890",
+        },
+        {
+            "radicado": "PQR-2026-0021",
+            "contractor_name": "Marcela Gómez",
+            "contractor_company": "Plomería residencial",
+            "contractor_specialty": "Redes hidráulicas",
+            "pqr_type": "recurso_garantia",
+            "reason": "garantia_filtracion",
+            "status": "conciliacion",
+            "amount_disputed": 250000.00,
+            "description": "Se presentó filtración nuevamente al cabo de 2 semanas en la tubería reparada en Castilla.",
+            "client_name": "Miguel R.",
+            "client_email": "miguel.r@example.com",
+            "client_phone": "+57 315 890 1234",
+        },
+        {
+            "radicado": "PQR-2026-0015",
+            "contractor_name": "Andrés Ruiz",
+            "contractor_company": "Soluciones Técnicas Ruiz",
+            "contractor_specialty": "Electricista residencial",
+            "pqr_type": "peticion",
+            "reason": "solicitud_soporte",
+            "status": "resuelto",
+            "amount_disputed": 0.00,
+            "description": "Solicitud de acta de recibo a satisfacción y factura electrónica firmada.",
+            "client_name": "Ana P.",
+            "client_email": "ana.p@example.com",
+            "client_phone": "+57 301 987 6543",
+        },
+    ]
+
+    for item in pqrs_data:
+        pqr, created = PQRReport.objects.update_or_create(
+            radicado_number=item["radicado"],
+            defaults={
+                "client": client,
+                "contractor": pro,
+                "contractor_id_ref": str(pro.id) if pro else "1",
+                "contractor_name": item["contractor_name"],
+                "contractor_company": item["contractor_company"],
+                "contractor_specialty": item["contractor_specialty"],
+                "pqr_type": item["pqr_type"],
+                "reason": item["reason"],
+                "status": item["status"],
+                "amount_disputed": item["amount_disputed"],
+                "description": item["description"],
+                "client_name": item["client_name"],
+                "client_email": item["client_email"],
+                "client_phone": item["client_phone"],
+            },
+        )
+        if created:
+            PQRMessage.objects.create(
+                pqr=pqr,
+                sender="system",
+                sender_name="Serviprox Notificaciones",
+                sender_role="Sistema Oficial",
+                text=f"Caso radicado exitosamente con código {pqr.radicado_number}. En trámite administrativo.",
+            )
+
+
+def seed_app_problems() -> None:
+    client = User.objects.filter(role=UserRole.CLIENT).first()
+    problems_data = [
+        {
+            "ticket": "TIK-8841",
+            "category": "error_imagenes",
+            "category_label": "Falla al subir imágenes en chat",
+            "description": "Al intentar adjuntar foto de la fuga en formato HEIC/JPG desde iPhone, el chat muestra error de carga.",
+            "reported_by": "Juan S.",
+            "user_email": "juan.s@example.com",
+            "device_info": "iOS 17.4 / Web",
+            "status": "en_proceso",
+        },
+        {
+            "ticket": "TIK-8835",
+            "category": "error_mapa",
+            "category_label": "Demora al actualizar GPS Bogotá",
+            "description": "El radio de cobertura en Kennedy tarda más de 15 segundos en recalcular los profesionales cercanos.",
+            "reported_by": "Camila R.",
+            "user_email": "camila.r@example.com",
+            "device_info": "Android 14 (Capacitor)",
+            "status": "recibido",
+        },
+        {
+            "ticket": "TIK-8812",
+            "category": "error_login",
+            "category_label": "Cierre inesperado en cotizaciones",
+            "description": "Se cerraba la sesión al aceptar cotización con tarjeta de crédito débito.",
+            "reported_by": "Diego S.",
+            "user_email": "diego.s@example.com",
+            "device_info": "Chrome Desktop Windows",
+            "status": "resuelto",
+            "response_notes": "Corregido en versión 1.2.0 del módulo de órdenes.",
+        },
+    ]
+
+    for item in problems_data:
+        AppProblemReport.objects.update_or_create(
+            ticket_number=item["ticket"],
+            defaults={
+                "user": client,
+                "user_email": item["user_email"],
+                "category": item["category"],
+                "category_label": item["category_label"],
+                "description": item["description"],
+                "reported_by": item["reported_by"],
+                "device_info": item["device_info"],
+                "status": item["status"],
+                "response_notes": item.get("response_notes", ""),
+            },
+        )
+
+
+def seed_audit_logs(admin_user: User) -> None:
+    audit_data = [
+        {
+            "action": "Aprobación de producto",
+            "target": "Taladro eléctrico (Ana P.)",
+            "reason": "Verificación de especificaciones y precio reglamentario",
+        },
+        {
+            "action": "Asignación de puntos",
+            "target": "Andrés López (+200 pts)",
+            "reason": "Cumplimiento récord de 10 servicios 5 estrellas en Kennedy",
+        },
+        {
+            "action": "Bloqueo temporal",
+            "target": "Usuario contratista #402",
+            "reason": "Queja reiterada de incumplimiento de citas",
+        },
+    ]
+    for item in audit_data:
+        AdminAuditLog.objects.get_or_create(
+            action=item["action"],
+            target=item["target"],
+            defaults={
+                "admin_user": admin_user,
+                "admin_name": admin_user.get_full_name() or "Superadministrador",
+                "reason": item["reason"],
+            },
+        )
+
+
 @transaction.atomic
 def run(reset: bool = False) -> None:
     if reset:
@@ -414,7 +591,10 @@ def run(reset: bool = False) -> None:
     seed_questions()
     seed_client()
     seed_professionals(categories)
-    seed_admin()
+    admin_user = seed_admin()
+    seed_pqrs()
+    seed_app_problems()
+    seed_audit_logs(admin_user)
 
 
 if __name__ == "__main__":
