@@ -97,6 +97,32 @@ interface AuditLogEntry {
   reason: string;
 }
 
+export interface BenefitRedeemedItem {
+  id: string;
+  title: string;
+  date: string;
+  status: string;
+  icon: string;
+  iconBg: string;
+}
+
+export interface BenefitProItem {
+  id: number;
+  name: string;
+  document_id: string;
+  category: string;
+  city: string;
+  points: number;
+  level: "Oro" | "Plata" | "Bronce" | "Destacados";
+  redeemed_count: number;
+  status: "Activo" | "En revisión" | "Suspendido";
+  rating: number;
+  reviews_count: number;
+  avatar: string;
+  next_level_points: number;
+  redeemed_history: BenefitRedeemedItem[];
+}
+
 // Datos iniciales de la base de datos para respaldo y render inmediato
 const INITIAL_DB_CLIENTS: ClientItem[] = [
   {
@@ -251,6 +277,163 @@ const INITIAL_DB_PROS: ProfessionalItem[] = [
     categories: ["Plomería"],
     neighborhood: "Engativá",
     city: "Bogotá",
+  },
+];
+
+// Datos del panel de Beneficios y Puntos sincronizados con la captura oficial
+const INITIAL_BENEFIT_PROS: BenefitProItem[] = [
+  {
+    id: 1,
+    name: "Andrés López",
+    document_id: "CC 1023456789",
+    category: "Electricidad",
+    city: "Bogotá",
+    points: 2450,
+    level: "Oro",
+    redeemed_count: 8,
+    status: "Activo",
+    rating: 4.9,
+    reviews_count: 120,
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+    next_level_points: 3000,
+    redeemed_history: [
+      { id: "b1", title: "Bono de descuento 20% en herramientas", date: "15 May 2024", status: "Entregado", icon: "🛠️", iconBg: "#fef3c7" },
+      { id: "b2", title: "Recarga de datos móviles 10GB", date: "02 May 2024", status: "Entregado", icon: "📱", iconBg: "#e0f2fe" },
+      { id: "b3", title: "Seguro contra accidentes 1 mes", date: "18 Abr 2024", status: "Entregado", icon: "🛡️", iconBg: "#dcfce7" },
+    ],
+  },
+  {
+    id: 2,
+    name: "María Torres",
+    document_id: "CC 1039876543",
+    category: "Limpieza",
+    city: "Medellín",
+    points: 1820,
+    level: "Plata",
+    redeemed_count: 5,
+    status: "Activo",
+    rating: 4.8,
+    reviews_count: 85,
+    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
+    next_level_points: 2000,
+    redeemed_history: [
+      { id: "b4", title: "Recarga de datos móviles 10GB", date: "28 Abr 2024", status: "Entregado", icon: "📱", iconBg: "#e0f2fe" },
+      { id: "b5", title: "Bono de supermercado $50.000", date: "10 Mar 2024", status: "Entregado", icon: "🛒", iconBg: "#fef3c7" },
+      { id: "b5b", title: "Seguro contra accidentes 1 mes", date: "15 Feb 2024", status: "Entregado", icon: "🛡️", iconBg: "#dcfce7" },
+    ],
+  },
+  {
+    id: 3,
+    name: "José Ramírez",
+    document_id: "CC 1045678901",
+    category: "Plomería",
+    city: "Cali",
+    points: 980,
+    level: "Bronce",
+    redeemed_count: 2,
+    status: "Activo",
+    rating: 4.7,
+    reviews_count: 42,
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
+    next_level_points: 1000,
+    redeemed_history: [
+      { id: "b6", title: "Recarga de minutos $15.000", date: "12 Feb 2024", status: "Entregado", icon: "📞", iconBg: "#e0f2fe" },
+      { id: "b6b", title: "Bono de descuento ferretería", date: "10 Ene 2024", status: "Entregado", icon: "🛠️", iconBg: "#fef3c7" },
+    ],
+  },
+  {
+    id: 4,
+    name: "Carolina Pérez",
+    document_id: "CC 1012345678",
+    category: "Entrenamiento",
+    city: "Bogotá",
+    points: 3120,
+    level: "Oro",
+    redeemed_count: 10,
+    status: "Activo",
+    rating: 5.0,
+    reviews_count: 150,
+    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80",
+    next_level_points: 3500,
+    redeemed_history: [
+      { id: "b7", title: "Membresía médica premium", date: "20 Abr 2024", status: "Entregado", icon: "🩺", iconBg: "#fee2e2" },
+      { id: "b8", title: "Bono indumentaria deportiva", date: "05 Mar 2024", status: "Entregado", icon: "👟", iconBg: "#fef3c7" },
+      { id: "b8b", title: "Recarga de datos móviles 10GB", date: "18 Feb 2024", status: "Entregado", icon: "📱", iconBg: "#e0f2fe" },
+    ],
+  },
+  {
+    id: 5,
+    name: "Diego Martínez",
+    document_id: "CC 1034567890",
+    category: "Mantenimiento",
+    city: "Barranquilla",
+    points: 560,
+    level: "Bronce",
+    redeemed_count: 1,
+    status: "En revisión",
+    rating: 4.5,
+    reviews_count: 19,
+    avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80",
+    next_level_points: 1000,
+    redeemed_history: [
+      { id: "b9", title: "Kit básico de seguridad", date: "15 Ene 2024", status: "Entregado", icon: "🦺", iconBg: "#ffedd5" },
+    ],
+  },
+  {
+    id: 6,
+    name: "Laura Gómez",
+    document_id: "CC 1056789012",
+    category: "Niñera",
+    city: "Bogotá",
+    points: 1340,
+    level: "Plata",
+    redeemed_count: 4,
+    status: "Activo",
+    rating: 4.9,
+    reviews_count: 64,
+    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
+    next_level_points: 2000,
+    redeemed_history: [
+      { id: "b10", title: "Curso de primeros auxilios pediátricos", date: "01 Abr 2024", status: "Entregado", icon: "🎓", iconBg: "#f3e8ff" },
+      { id: "b10b", title: "Bono de supermercado $50.000", date: "12 Mar 2024", status: "Entregado", icon: "🛒", iconBg: "#fef3c7" },
+    ],
+  },
+  {
+    id: 7,
+    name: "Ricardo Sánchez",
+    document_id: "CC 1023987654",
+    category: "Jardinería",
+    city: "Medellín",
+    points: 420,
+    level: "Bronce",
+    redeemed_count: 1,
+    status: "Suspendido",
+    rating: 4.2,
+    reviews_count: 31,
+    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80",
+    next_level_points: 1000,
+    redeemed_history: [
+      { id: "b11", title: "Recarga de minutos $10.000", date: "10 Ene 2024", status: "Entregado", icon: "📞", iconBg: "#e0f2fe" },
+    ],
+  },
+  {
+    id: 8,
+    name: "Valentina Ruiz",
+    document_id: "CC 1067890123",
+    category: "Clases de inglés",
+    city: "Bogotá",
+    points: 2030,
+    level: "Plata",
+    redeemed_count: 6,
+    status: "Activo",
+    rating: 4.9,
+    reviews_count: 98,
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+    next_level_points: 2500,
+    redeemed_history: [
+      { id: "b12", title: "Licencia de plataforma educativa 3 meses", date: "22 Abr 2024", status: "Entregado", icon: "💻", iconBg: "#e0f2fe" },
+      { id: "b12b", title: "Bono para libros y material didáctico", date: "10 Mar 2024", status: "Entregado", icon: "📚", iconBg: "#fef3c7" },
+    ],
   },
 ];
 
@@ -568,6 +751,19 @@ export const AdminDashboard: React.FC = () => {
   const [modalDetailOpen, setModalDetailOpen] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
 
+  // Estados específicos para la vista de Beneficios y Puntos
+  const [benefitProsList, setBenefitProsList] = useState<BenefitProItem[]>(INITIAL_BENEFIT_PROS);
+  const [selectedBenefitProId, setSelectedBenefitProId] = useState<number>(1);
+  const [benefitsTab, setBenefitsTab] = useState<"Todos" | "Bronce" | "Plata" | "Oro" | "Destacados">("Todos");
+  const [benefitSearch, setBenefitSearch] = useState("");
+  const [benefitCategoryFilter, setBenefitCategoryFilter] = useState("Todas");
+  const [benefitCityFilter, setBenefitCityFilter] = useState("Todas");
+  const [benefitLevelFilter, setBenefitLevelFilter] = useState("Todos");
+  const [benefitStatusFilter, setBenefitStatusFilter] = useState("Todos");
+  const [benefitRightSubTab, setBenefitRightSubTab] = useState<"informacion" | "puntos" | "historial">("puntos");
+  const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(true);
+  const [selectedBenefitCheckboxIds, setSelectedBenefitCheckboxIds] = useState<number[]>([]);
+
   const adminDisplayName = (user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username) || "Superadministrador";
 
   // Acciones en la tabla de solicitudes
@@ -782,6 +978,13 @@ export const AdminDashboard: React.FC = () => {
           : p
       )
     );
+    setBenefitProsList((prev) =>
+      prev.map((bp) =>
+        bp.name.toLowerCase() === String(target).toLowerCase() || bp.id === targetId
+          ? { ...bp, status: "Suspendido" }
+          : bp
+      )
+    );
     alert(`Cuenta de ${target} bloqueada con éxito en la base de datos.`);
     fetchLiveOverview();
     fetchClients();
@@ -810,6 +1013,17 @@ export const AdminDashboard: React.FC = () => {
               wallet_balance: (Number(p.wallet_balance || 0) + recargaToAdd).toFixed(2),
             }
           : p
+      )
+    );
+    setBenefitProsList((prev) =>
+      prev.map((bp) =>
+        bp.name.toLowerCase() === proName.toLowerCase() || bp.id === Number(proId)
+          ? {
+              ...bp,
+              points: bp.points + puntosToAdd,
+              redeemed_count: bp.redeemed_count + (recargaToAdd > 0 ? 1 : 0),
+            }
+          : bp
       )
     );
     setAuditLogs((prev) => [
@@ -919,6 +1133,45 @@ export const AdminDashboard: React.FC = () => {
 
     return true;
   });
+
+  // Filtrado de profesionales para la vista de Beneficios y Puntos
+  const filteredBenefitPros = benefitProsList.filter((pro) => {
+    // Pestaña de nivel
+    if (benefitsTab === "Bronce" && pro.level !== "Bronce") return false;
+    if (benefitsTab === "Plata" && pro.level !== "Plata") return false;
+    if (benefitsTab === "Oro" && pro.level !== "Oro") return false;
+    if (benefitsTab === "Destacados" && pro.points < 2000 && pro.level !== "Oro") return false;
+
+    // Búsqueda por texto (nombre, documento, categoría, ciudad)
+    if (benefitSearch.trim()) {
+      const q = benefitSearch.toLowerCase();
+      const matches =
+        pro.name.toLowerCase().includes(q) ||
+        pro.document_id.toLowerCase().includes(q) ||
+        pro.category.toLowerCase().includes(q) ||
+        pro.city.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+
+    // Filtros por selección
+    if (benefitCategoryFilter !== "Todas" && pro.category !== benefitCategoryFilter) {
+      return false;
+    }
+    if (benefitCityFilter !== "Todas" && pro.city !== benefitCityFilter) {
+      return false;
+    }
+    if (benefitLevelFilter !== "Todos" && pro.level !== benefitLevelFilter) {
+      return false;
+    }
+    if (benefitStatusFilter !== "Todos" && pro.status !== benefitStatusFilter) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const currentBenefitPro =
+    benefitProsList.find((p) => p.id === selectedBenefitProId) || benefitProsList[0];
 
   return (
     <div className="ad-wrapper">
@@ -1085,7 +1338,7 @@ export const AdminDashboard: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76l1-1.36 1 1.36 2.38 3.24L17 10.83 14.92 8H20v6z" />
               </svg>
-              <span>Beneficios</span>
+              <span>Beneficios y puntos</span>
             </button>
 
             {/* Fallas Técnicas */}
@@ -2530,57 +2783,916 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* ═════════════════════════════════════════════════════════════════
-              VISTA: BENEFICIOS E INCENTIVOS
+              VISTA: BENEFICIOS E INCENTIVOS (DISEÑO EXACTO OFICIAL)
              ═════════════════════════════════════════════════════════════════ */}
           {activeMenu === "beneficios" && (
             <section className="ad-benefits-view" aria-label="Beneficios e Incentivos">
+              {/* Encabezado Principal */}
               <div className="ad-view-header">
                 <div>
-                  <h2 className="ad-view-header-title">🎁 Beneficios y Puntos para Profesionales</h2>
+                  <h2 className="ad-view-header-title">Beneficios y Puntos</h2>
                   <p className="ad-view-header-subtitle">
-                    Asigna puntos por servicios completados, niveles de reconocimiento y recargas en dinero real.
+                    Administra los puntos, beneficios e incentivos de los profesionales de Serviprox.
                   </p>
                 </div>
+                <button
+                  type="button"
+                  className="ad-btn ad-btn-primary"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 18px", fontWeight: 700 }}
+                  onClick={() => {
+                    const pro = currentBenefitPro;
+                    handleOpenAssignBenefitsForPro({
+                      id: pro.id,
+                      display_name: pro.name,
+                      headline: pro.category,
+                      specialty_label: pro.category,
+                      is_verified: true,
+                      points: pro.points,
+                      wallet_balance: "50000",
+                      jobs_completed: pro.reviews_count,
+                      avatar_url: pro.avatar,
+                    } as any);
+                  }}
+                >
+                  <span style={{ fontSize: "1.1rem" }}>+</span> Asignar puntos / beneficio
+                </button>
               </div>
-              <div className="ad-card" style={{ padding: "0", overflow: "hidden" }}>
-                <div className="ad-table-responsive">
-                  <table className="ad-table">
-                    <thead>
-                      <tr>
-                        <th>Profesional</th>
-                        <th>Especialidad</th>
-                        <th>Puntos Acumulados</th>
-                        <th>Saldo Billetera</th>
-                        <th style={{ textAlign: "right" }}>Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allProsList.map((pro) => (
-                        <tr key={pro.id}>
-                          <td>
-                            <div className="ad-user-cell">
-                              <img src={pro.avatar_url} alt="" className="ad-table-avatar" />
-                              <strong>{pro.display_name}</strong>
+
+              {/* 4 Tarjetas KPI */}
+              <div className="ad-benefits-kpi-grid">
+                {/* KPI 1: Puntos acumulados */}
+                <div className="ad-ben-kpi-card purple">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div className="ad-ben-kpi-icon" style={{ background: "#ede9fe", color: "#7e22ce" }}>
+                      ★
+                    </div>
+                  </div>
+                  <div className="ad-ben-kpi-value">12,840</div>
+                  <p className="ad-ben-kpi-label">Puntos acumulados</p>
+                  <div className="ad-ben-kpi-footer">
+                    <span className="ad-ben-trend">↗ +18%</span>
+                    <div className="ad-mini-bars">
+                      <span className="ad-mini-bar" style={{ height: "6px", background: "#c084fc" }} />
+                      <span className="ad-mini-bar" style={{ height: "10px", background: "#c084fc" }} />
+                      <span className="ad-mini-bar" style={{ height: "8px", background: "#c084fc" }} />
+                      <span className="ad-mini-bar" style={{ height: "13px", background: "#c084fc" }} />
+                      <span className="ad-mini-bar" style={{ height: "16px", background: "#7e22ce" }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* KPI 2: Beneficios entregados */}
+                <div className="ad-ben-kpi-card green">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div className="ad-ben-kpi-icon" style={{ background: "#dcfce7", color: "#16a34a" }}>
+                      🎁
+                    </div>
+                  </div>
+                  <div className="ad-ben-kpi-value">356</div>
+                  <p className="ad-ben-kpi-label">Beneficios entregados</p>
+                  <div className="ad-ben-kpi-footer">
+                    <span className="ad-ben-trend">↗ +12%</span>
+                    <div className="ad-mini-bars">
+                      <span className="ad-mini-bar" style={{ height: "5px", background: "#86efac" }} />
+                      <span className="ad-mini-bar" style={{ height: "8px", background: "#86efac" }} />
+                      <span className="ad-mini-bar" style={{ height: "12px", background: "#86efac" }} />
+                      <span className="ad-mini-bar" style={{ height: "10px", background: "#86efac" }} />
+                      <span className="ad-mini-bar" style={{ height: "16px", background: "#16a34a" }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* KPI 3: Profesionales activos */}
+                <div className="ad-ben-kpi-card orange">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div className="ad-ben-kpi-icon" style={{ background: "#ffedd5", color: "#ea580c" }}>
+                      👥
+                    </div>
+                  </div>
+                  <div className="ad-ben-kpi-value">634</div>
+                  <p className="ad-ben-kpi-label">Profesionales activos</p>
+                  <div className="ad-ben-kpi-footer">
+                    <span className="ad-ben-trend">↗ +8%</span>
+                    <div className="ad-mini-bars">
+                      <span className="ad-mini-bar" style={{ height: "7px", background: "#fdba74" }} />
+                      <span className="ad-mini-bar" style={{ height: "10px", background: "#fdba74" }} />
+                      <span className="ad-mini-bar" style={{ height: "12px", background: "#fdba74" }} />
+                      <span className="ad-mini-bar" style={{ height: "11px", background: "#fdba74" }} />
+                      <span className="ad-mini-bar" style={{ height: "16px", background: "#ea580c" }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* KPI 4: Profesionales nivel Oro */}
+                <div className="ad-ben-kpi-card blue">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div className="ad-ben-kpi-icon" style={{ background: "#dbeafe", color: "#2563eb" }}>
+                      👑
+                    </div>
+                  </div>
+                  <div className="ad-ben-kpi-value">48</div>
+                  <p className="ad-ben-kpi-label">Profesionales nivel Oro</p>
+                  <div className="ad-ben-kpi-footer">
+                    <span className="ad-ben-trend">↗ +20%</span>
+                    <div className="ad-mini-bars">
+                      <span className="ad-mini-bar" style={{ height: "5px", background: "#93c5fd" }} />
+                      <span className="ad-mini-bar" style={{ height: "8px", background: "#93c5fd" }} />
+                      <span className="ad-mini-bar" style={{ height: "11px", background: "#93c5fd" }} />
+                      <span className="ad-mini-bar" style={{ height: "13px", background: "#93c5fd" }} />
+                      <span className="ad-mini-bar" style={{ height: "16px", background: "#2563eb" }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Layout Dividido: Tabla de Profesionales (Izquierda) + Detalle (Derecha) */}
+              <div
+                className="ad-benefits-layout"
+                style={{
+                  gridTemplateColumns: isDetailPanelOpen ? "1fr 380px" : "1fr",
+                }}
+              >
+                {/* COLUMNA IZQUIERDA: Pestañas, Filtros, Tabla y Paginación */}
+                <div className="ad-card" style={{ padding: "0", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                  {/* Pestañas de niveles superiores */}
+                  <div className="ad-level-tabs">
+                    <button
+                      type="button"
+                      className={`ad-level-tab-btn ${benefitsTab === "Todos" ? "active" : ""}`}
+                      onClick={() => setBenefitsTab("Todos")}
+                    >
+                      Todos (634)
+                    </button>
+                    <button
+                      type="button"
+                      className={`ad-level-tab-btn ${benefitsTab === "Bronce" ? "active" : ""}`}
+                      onClick={() => setBenefitsTab("Bronce")}
+                    >
+                      Bronce (220)
+                    </button>
+                    <button
+                      type="button"
+                      className={`ad-level-tab-btn ${benefitsTab === "Plata" ? "active" : ""}`}
+                      onClick={() => setBenefitsTab("Plata")}
+                    >
+                      Plata (180)
+                    </button>
+                    <button
+                      type="button"
+                      className={`ad-level-tab-btn ${benefitsTab === "Oro" ? "active" : ""}`}
+                      onClick={() => setBenefitsTab("Oro")}
+                    >
+                      Oro (130)
+                    </button>
+                    <button
+                      type="button"
+                      className={`ad-level-tab-btn ${benefitsTab === "Destacados" ? "active" : ""}`}
+                      onClick={() => setBenefitsTab("Destacados")}
+                    >
+                      Destacados (48)
+                    </button>
+                  </div>
+
+                  {/* Barra de Búsqueda y Filtros */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "10px",
+                      padding: "14px 16px",
+                      background: "#f8fafc",
+                      borderBottom: "1px solid var(--ad-border)",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div style={{ position: "relative", flex: "1 1 200px" }}>
+                      <input
+                        type="text"
+                        className="ad-search-input"
+                        placeholder="Buscar profesional por nombre o documento..."
+                        value={benefitSearch}
+                        onChange={(e) => setBenefitSearch(e.target.value)}
+                        style={{ width: "100%", paddingLeft: "34px", height: "36px", fontSize: "0.82rem" }}
+                      />
+                      <span
+                        style={{
+                          position: "absolute",
+                          left: "10px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          color: "#94a3b8",
+                          fontSize: "14px",
+                        }}
+                      >
+                        🔍
+                      </span>
+                    </div>
+
+                    <select
+                      className="ad-search-input"
+                      style={{ height: "36px", fontSize: "0.82rem", padding: "0 10px", minWidth: "120px" }}
+                      value={benefitCategoryFilter}
+                      onChange={(e) => setBenefitCategoryFilter(e.target.value)}
+                    >
+                      <option value="Todas">Categoría ⌵</option>
+                      <option value="Electricidad">Electricidad</option>
+                      <option value="Limpieza">Limpieza</option>
+                      <option value="Plomería">Plomería</option>
+                      <option value="Entrenamiento">Entrenamiento</option>
+                      <option value="Mantenimiento">Mantenimiento</option>
+                      <option value="Niñera">Niñera</option>
+                      <option value="Jardinería">Jardinería</option>
+                      <option value="Clases de inglés">Clases de inglés</option>
+                    </select>
+
+                    <select
+                      className="ad-search-input"
+                      style={{ height: "36px", fontSize: "0.82rem", padding: "0 10px", minWidth: "100px" }}
+                      value={benefitCityFilter}
+                      onChange={(e) => setBenefitCityFilter(e.target.value)}
+                    >
+                      <option value="Todas">Ciudad ⌵</option>
+                      <option value="Bogotá">Bogotá</option>
+                      <option value="Medellín">Medellín</option>
+                      <option value="Cali">Cali</option>
+                      <option value="Barranquilla">Barranquilla</option>
+                    </select>
+
+                    <select
+                      className="ad-search-input"
+                      style={{ height: "36px", fontSize: "0.82rem", padding: "0 10px", minWidth: "90px" }}
+                      value={benefitLevelFilter}
+                      onChange={(e) => setBenefitLevelFilter(e.target.value)}
+                    >
+                      <option value="Todos">Nivel ⌵</option>
+                      <option value="Bronce">Bronce</option>
+                      <option value="Plata">Plata</option>
+                      <option value="Oro">Oro</option>
+                      <option value="Destacados">Destacados</option>
+                    </select>
+
+                    <select
+                      className="ad-search-input"
+                      style={{ height: "36px", fontSize: "0.82rem", padding: "0 10px", minWidth: "95px" }}
+                      value={benefitStatusFilter}
+                      onChange={(e) => setBenefitStatusFilter(e.target.value)}
+                    >
+                      <option value="Todos">Estado ⌵</option>
+                      <option value="Activo">Activo</option>
+                      <option value="En revisión">En revisión</option>
+                      <option value="Suspendido">Suspendido</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      className="ad-btn ad-btn-secondary"
+                      style={{ height: "36px", fontSize: "0.82rem", padding: "0 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      onClick={() => {
+                        setBenefitSearch("");
+                        setBenefitCategoryFilter("Todas");
+                        setBenefitCityFilter("Todas");
+                        setBenefitLevelFilter("Todos");
+                        setBenefitStatusFilter("Todos");
+                        setBenefitsTab("Todos");
+                      }}
+                    >
+                      <span>⚙️</span> Más filtros
+                    </button>
+
+                    {!isDetailPanelOpen && (
+                      <button
+                        type="button"
+                        className="ad-btn ad-btn-primary"
+                        style={{ height: "36px", fontSize: "0.8rem", padding: "0 12px" }}
+                        onClick={() => setIsDetailPanelOpen(true)}
+                      >
+                        📊 Ver Detalle
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tabla de Profesionales */}
+                  <div className="ad-table-responsive">
+                    <table className="ad-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: "36px", textAlign: "center" }}>
+                            <input
+                              type="checkbox"
+                              checked={
+                                selectedBenefitCheckboxIds.length === filteredBenefitPros.length &&
+                                filteredBenefitPros.length > 0
+                              }
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedBenefitCheckboxIds(filteredBenefitPros.map((p) => p.id));
+                                } else {
+                                  setSelectedBenefitCheckboxIds([]);
+                                }
+                              }}
+                            />
+                          </th>
+                          <th>Profesional</th>
+                          <th>Categoría</th>
+                          <th>Ciudad</th>
+                          <th>Puntos</th>
+                          <th>Nivel</th>
+                          <th style={{ textAlign: "center" }}>Beneficios canjeados</th>
+                          <th>Estado</th>
+                          <th style={{ textAlign: "right" }}>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredBenefitPros.map((pro) => {
+                          const isSelected = currentBenefitPro.id === pro.id;
+                          return (
+                            <tr
+                              key={pro.id}
+                              style={{
+                                cursor: "pointer",
+                                backgroundColor: isSelected ? "#f0f7ff" : undefined,
+                              }}
+                              onClick={() => {
+                                setSelectedBenefitProId(pro.id);
+                                setIsDetailPanelOpen(true);
+                              }}
+                            >
+                              <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedBenefitCheckboxIds.includes(pro.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedBenefitCheckboxIds([...selectedBenefitCheckboxIds, pro.id]);
+                                    } else {
+                                      setSelectedBenefitCheckboxIds(
+                                        selectedBenefitCheckboxIds.filter((id) => id !== pro.id)
+                                      );
+                                    }
+                                  }}
+                                />
+                              </td>
+                              <td>
+                                <div className="ad-user-cell">
+                                  <img src={pro.avatar} alt={pro.name} className="ad-table-avatar" />
+                                  <div>
+                                    <strong style={{ display: "block", color: "#0f172a" }}>{pro.name}</strong>
+                                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>{pro.document_id}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ color: "#334155" }}>{pro.category}</td>
+                              <td style={{ color: "#334155" }}>{pro.city}</td>
+                              <td>
+                                <strong style={{ color: "#0f172a" }}>{pro.points.toLocaleString("es-CO")}</strong>
+                              </td>
+                              <td>
+                                <span className={`ad-level-pill ${pro.level.toLowerCase()}`}>
+                                  {pro.level === "Oro" ? "👑 " : pro.level === "Plata" ? "🥈 " : "🥉 "}
+                                  {pro.level}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: "center", color: "#334155", fontWeight: 700 }}>
+                                {pro.redeemed_count}
+                              </td>
+                              <td>
+                                <span
+                                  className={`ad-badge-${
+                                    pro.status === "Activo"
+                                      ? "success"
+                                      : pro.status === "En revisión"
+                                      ? "warning"
+                                      : "danger"
+                                  }`}
+                                >
+                                  ● {pro.status}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                  <button
+                                    type="button"
+                                    className="ad-action-pill gift"
+                                    title="Asignar Beneficio o Puntos"
+                                    onClick={() =>
+                                      handleOpenAssignBenefitsForPro({
+                                        id: pro.id,
+                                        display_name: pro.name,
+                                        headline: pro.category,
+                                        specialty_label: pro.category,
+                                        is_verified: true,
+                                        points: pro.points,
+                                        wallet_balance: "50000",
+                                        jobs_completed: pro.reviews_count,
+                                        avatar_url: pro.avatar,
+                                      } as any)
+                                    }
+                                  >
+                                    🎁
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="ad-action-pill view"
+                                    title="Ver detalle del profesional"
+                                    onClick={() => {
+                                      setSelectedBenefitProId(pro.id);
+                                      setIsDetailPanelOpen(true);
+                                    }}
+                                  >
+                                    📊
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="ad-action-pill neutral"
+                                    title="Ver perfil completo"
+                                    onClick={() =>
+                                      handleViewProDetail({
+                                        id: pro.id,
+                                        display_name: pro.name,
+                                        headline: pro.category,
+                                        specialty_label: pro.category,
+                                        city: pro.city,
+                                        is_verified: true,
+                                        is_active: pro.status === "Activo",
+                                        document_id: pro.document_id,
+                                        points: pro.points,
+                                        wallet_balance: "50000",
+                                        rating: pro.rating,
+                                        jobs_completed: pro.reviews_count,
+                                        avatar_url: pro.avatar,
+                                      } as any)
+                                    }
+                                  >
+                                    •••
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Paginación */}
+                  <div className="ad-ben-pagination">
+                    <div>Mostrando 1-8 de 634 profesionales</div>
+                    <div className="ad-ben-page-nums">
+                      <button type="button" className="ad-ben-page-btn" aria-label="Página anterior">‹</button>
+                      <button type="button" className="ad-ben-page-btn active">1</button>
+                      <button type="button" className="ad-ben-page-btn">2</button>
+                      <button type="button" className="ad-ben-page-btn">3</button>
+                      <button type="button" className="ad-ben-page-btn">4</button>
+                      <button type="button" className="ad-ben-page-btn">5</button>
+                      <span style={{ padding: "0 4px", color: "#94a3b8" }}>...</span>
+                      <button type="button" className="ad-ben-page-btn" aria-label="Página siguiente">›</button>
+                    </div>
+                    <div>
+                      <select className="ad-search-input" style={{ height: "30px", fontSize: "0.78rem", padding: "0 8px" }}>
+                        <option>Mostrar 8 por página</option>
+                        <option>Mostrar 15 por página</option>
+                        <option>Mostrar 25 por página</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* COLUMNA DERECHA: Detalle del Profesional */}
+                {isDetailPanelOpen && currentBenefitPro && (
+                  <div className="ad-pro-detail-panel">
+                    {/* Encabezado del Panel Lateral */}
+                    <div className="ad-detail-header">
+                      <h3>Detalle del profesional</h3>
+                      <button
+                        type="button"
+                        className="ad-modal-close"
+                        aria-label="Cerrar detalle"
+                        onClick={() => setIsDetailPanelOpen(false)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Identidad del Profesional */}
+                    <div className="ad-detail-identity">
+                      <img src={currentBenefitPro.avatar} alt={currentBenefitPro.name} className="ad-detail-avatar" />
+                      <div className="ad-detail-identity-meta">
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <h4>{currentBenefitPro.name}</h4>
+                          <span
+                            className={`ad-badge-${
+                              currentBenefitPro.status === "Activo"
+                                ? "success"
+                                : currentBenefitPro.status === "En revisión"
+                                ? "warning"
+                                : "danger"
+                            }`}
+                            style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                          >
+                            ● {currentBenefitPro.status}
+                          </span>
+                        </div>
+                        <p>{currentBenefitPro.document_id}</p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px", fontSize: "0.82rem", color: "#64748b" }}>
+                          <span style={{ color: "#f59e0b" }}>★</span>
+                          <strong style={{ color: "#0f172a" }}>{currentBenefitPro.rating}</strong>
+                          <span>({currentBenefitPro.reviews_count} reseñas)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sub-pestañas */}
+                    <div className="ad-detail-subtabs">
+                      <button
+                        type="button"
+                        className={`ad-detail-subtab-btn ${benefitRightSubTab === "informacion" ? "active" : ""}`}
+                        onClick={() => setBenefitRightSubTab("informacion")}
+                      >
+                        Información
+                      </button>
+                      <button
+                        type="button"
+                        className={`ad-detail-subtab-btn ${benefitRightSubTab === "puntos" ? "active" : ""}`}
+                        onClick={() => setBenefitRightSubTab("puntos")}
+                      >
+                        Puntos y beneficios
+                      </button>
+                      <button
+                        type="button"
+                        className={`ad-detail-subtab-btn ${benefitRightSubTab === "historial" ? "active" : ""}`}
+                        onClick={() => setBenefitRightSubTab("historial")}
+                      >
+                        Historial
+                      </button>
+                    </div>
+
+                    {benefitRightSubTab === "puntos" && (
+                      <>
+                        {/* Caja: Puntos acumulados */}
+                        <div className="ad-ben-points-card">
+                          <div className="ad-ben-points-left">
+                            <div className="ad-ben-star-icon">★</div>
+                            <div>
+                              <div style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600 }}>Puntos acumulados</div>
+                              <div className="ad-ben-points-num">{currentBenefitPro.points.toLocaleString("es-CO")}</div>
                             </div>
-                          </td>
-                          <td>{pro.headline || pro.specialty_label}</td>
-                          <td><strong style={{ color: "#7e22ce" }}>💎 {pro.points || 0} pts</strong></td>
-                          <td><strong style={{ color: "#16a34a" }}>💳 ${Number(pro.wallet_balance || 0).toLocaleString("es-CO")}</strong></td>
-                          <td style={{ textAlign: "right" }}>
+                          </div>
+                          <button
+                            type="button"
+                            className="ad-btn ad-btn-primary"
+                            style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                            onClick={() =>
+                              handleOpenAssignBenefitsForPro({
+                                id: currentBenefitPro.id,
+                                display_name: currentBenefitPro.name,
+                                headline: currentBenefitPro.category,
+                                specialty_label: currentBenefitPro.category,
+                                is_verified: true,
+                                points: currentBenefitPro.points,
+                                wallet_balance: "50000",
+                                jobs_completed: currentBenefitPro.reviews_count,
+                                avatar_url: currentBenefitPro.avatar,
+                              } as any)
+                            }
+                          >
+                            Asignar puntos
+                          </button>
+                        </div>
+
+                        {/* Caja: Nivel actual y progreso */}
+                        <div className="ad-ben-level-box">
+                          <div className="ad-ben-level-header">
+                            <div>
+                              <span style={{ fontSize: "0.75rem", color: "#64748b" }}>Nivel actual</span>
+                              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                                {currentBenefitPro.level}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <strong style={{ color: "#0f172a" }}>{currentBenefitPro.points.toLocaleString("es-CO")}</strong>
+                              <span style={{ color: "#94a3b8" }}> / {currentBenefitPro.next_level_points.toLocaleString("es-CO")} puntos</span>
+                            </div>
+                          </div>
+                          <div className="ad-ben-progress-bar">
+                            <div
+                              className="ad-ben-progress-fill"
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  Math.round((currentBenefitPro.points / currentBenefitPro.next_level_points) * 100)
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                            {currentBenefitPro.next_level_points > currentBenefitPro.points
+                              ? `Faltan ${(currentBenefitPro.next_level_points - currentBenefitPro.points).toLocaleString("es-CO")} puntos para ${
+                                  currentBenefitPro.level === "Oro"
+                                    ? "Nivel Platino"
+                                    : currentBenefitPro.level === "Plata"
+                                    ? "Nivel Oro"
+                                    : "Nivel Plata"
+                                }`
+                              : "Nivel máximo alcanzado"}
+                          </div>
+                        </div>
+
+                        {/* Lista: Beneficios canjeados */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h4 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#0f172a" }}>
+                              Beneficios canjeados ({currentBenefitPro.redeemed_count})
+                            </h4>
+                          </div>
+                          <div className="ad-ben-redeemed-list">
+                            {currentBenefitPro.redeemed_history.map((item) => (
+                              <div key={item.id} className="ad-ben-redeemed-item">
+                                <div className="ad-ben-redeemed-item-left">
+                                  <div className="ad-ben-redeemed-icon" style={{ background: item.iconBg }}>
+                                    {item.icon}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#1e293b", lineHeight: 1.2 }}>
+                                      {item.title}
+                                    </div>
+                                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "2px" }}>
+                                      {item.date}
+                                    </div>
+                                  </div>
+                                </div>
+                                <span className="ad-badge-success" style={{ fontSize: "0.7rem", padding: "2px 8px" }}>
+                                  {item.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#2563eb",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              textAlign: "left",
+                              cursor: "pointer",
+                              padding: "4px 0",
+                            }}
+                            onClick={() =>
+                              alert(
+                                `Historial de los ${currentBenefitPro.redeemed_count} beneficios de ${currentBenefitPro.name}`
+                              )
+                            }
+                          >
+                            Ver todos los {currentBenefitPro.redeemed_count} beneficios ➔
+                          </button>
+                        </div>
+
+                        {/* Catálogo de Beneficios (Grid 4) */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <h4 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#0f172a" }}>
+                            Catálogo de beneficios
+                          </h4>
+                          <div className="ad-ben-catalog-grid">
                             <button
                               type="button"
-                              className="ad-btn ad-btn-primary"
-                              style={{ fontSize: "0.8rem", padding: "6px 14px" }}
-                              onClick={() => handleOpenAssignBenefitsForPro(pro)}
+                              className="ad-ben-catalog-btn"
+                              onClick={() => {
+                                setPuntosToAdd(500);
+                                setRecargaToAdd(20000);
+                                setMotivoBeneficio("Recarga móvil 10GB");
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any);
+                              }}
                             >
-                              🎁 Asignar Puntos / Recarga
+                              <div className="ad-ben-catalog-icon" style={{ background: "#e0f2fe", color: "#0284c7" }}>
+                                📱
+                              </div>
+                              <span>Recarga móvil</span>
+                              <span style={{ fontSize: "0.68rem", color: "#64748b" }}>500 pts</span>
                             </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+
+                            <button
+                              type="button"
+                              className="ad-ben-catalog-btn"
+                              onClick={() => {
+                                setPuntosToAdd(1200);
+                                setRecargaToAdd(50000);
+                                setMotivoBeneficio("Seguro médico asistencial");
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any);
+                              }}
+                            >
+                              <div className="ad-ben-catalog-icon" style={{ background: "#fee2e2", color: "#dc2626" }}>
+                                🩺
+                              </div>
+                              <span>Seguro médico</span>
+                              <span style={{ fontSize: "0.68rem", color: "#64748b" }}>1,200 pts</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="ad-ben-catalog-btn"
+                              onClick={() => {
+                                setPuntosToAdd(800);
+                                setRecargaToAdd(30000);
+                                setMotivoBeneficio("Bono combustible");
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any);
+                              }}
+                            >
+                              <div className="ad-ben-catalog-icon" style={{ background: "#fef3c7", color: "#d97706" }}>
+                                ⛽
+                              </div>
+                              <span>Bono combustible</span>
+                              <span style={{ fontSize: "0.68rem", color: "#64748b" }}>800 pts</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="ad-ben-catalog-btn"
+                              onClick={() => {
+                                setPuntosToAdd(2000);
+                                setRecargaToAdd(100000);
+                                setMotivoBeneficio("Kit de herramientas profesionales");
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any);
+                              }}
+                            >
+                              <div className="ad-ben-catalog-icon" style={{ background: "#f3e8ff", color: "#9333ea" }}>
+                                🛠️
+                              </div>
+                              <span>Herramientas</span>
+                              <span style={{ fontSize: "0.68rem", color: "#64748b" }}>2,000 pts</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Acciones para este profesional (Grid 2x2) */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <h4 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#0f172a" }}>
+                            Acciones para este profesional
+                          </h4>
+                          <div className="ad-ben-actions-grid">
+                            <button
+                              type="button"
+                              className="ad-ben-act-btn green"
+                              onClick={() =>
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any)
+                              }
+                            >
+                              <span>🎁</span> Asignar beneficio
+                            </button>
+
+                            <button
+                              type="button"
+                              className="ad-ben-act-btn amber"
+                              onClick={() => {
+                                setPuntosToAdd(200);
+                                setRecargaToAdd(0);
+                                setMotivoBeneficio("Ajuste manual de puntos");
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any);
+                              }}
+                            >
+                              <span>💰</span> Ajustar puntos
+                            </button>
+
+                            <button
+                              type="button"
+                              className="ad-ben-act-btn neutral"
+                              onClick={() =>
+                                handleViewProDetail({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  city: currentBenefitPro.city,
+                                  is_verified: true,
+                                  is_active: currentBenefitPro.status === "Activo",
+                                  document_id: currentBenefitPro.document_id,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  rating: currentBenefitPro.rating,
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any)
+                              }
+                            >
+                              <span>👤</span> Ver perfil completo
+                            </button>
+
+                            <button
+                              type="button"
+                              className="ad-ben-act-btn danger"
+                              onClick={() => {
+                                setTargetUserToBlock(currentBenefitPro.name);
+                                setTargetIdToBlock(currentBenefitPro.id);
+                                setBlockReason("Incumplimiento de términos en módulo de beneficios");
+                                setBlockType("temporal");
+                                setBlockDuration("7");
+                                setModalBloqueoOpen(true);
+                              }}
+                            >
+                              <span>🚫</span> Suspender cuenta
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {benefitRightSubTab === "informacion" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "0.85rem" }}>
+                        <div className="ad-card" style={{ padding: "14px", background: "#f8fafc" }}>
+                          <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "4px" }}>Especialidad principal</div>
+                          <strong style={{ color: "#0f172a" }}>{currentBenefitPro.category}</strong>
+                        </div>
+                        <div className="ad-card" style={{ padding: "14px", background: "#f8fafc" }}>
+                          <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "4px" }}>Ciudad de cobertura</div>
+                          <strong style={{ color: "#0f172a" }}>{currentBenefitPro.city}</strong>
+                        </div>
+                        <div className="ad-card" style={{ padding: "14px", background: "#f8fafc" }}>
+                          <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "4px" }}>Documento oficial</div>
+                          <strong style={{ color: "#0f172a" }}>{currentBenefitPro.document_id}</strong>
+                        </div>
+                        <div className="ad-card" style={{ padding: "14px", background: "#f8fafc" }}>
+                          <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "4px" }}>Servicios realizados con éxito</div>
+                          <strong style={{ color: "#16a34a" }}>{currentBenefitPro.reviews_count} servicios calificados</strong>
+                        </div>
+                      </div>
+                    )}
+
+                    {benefitRightSubTab === "historial" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "0.82rem" }}>
+                        <div className="ad-card" style={{ padding: "12px", background: "#f8fafc" }}>
+                          <div style={{ fontWeight: 700, color: "#0f172a" }}>🎁 Acreditación de puntos automáticos</div>
+                          <div style={{ color: "#64748b", fontSize: "0.74rem" }}>Servicio completado #1049 (+100 pts)</div>
+                          <div style={{ color: "#94a3b8", fontSize: "0.7rem", marginTop: "2px" }}>Ayer a las 14:30</div>
+                        </div>
+                        <div className="ad-card" style={{ padding: "12px", background: "#f8fafc" }}>
+                          <div style={{ fontWeight: 700, color: "#0f172a" }}>⭐ Ascenso a nivel {currentBenefitPro.level}</div>
+                          <div style={{ color: "#64748b", fontSize: "0.74rem" }}>Cumplimiento de meta de calificación 4.8+</div>
+                          <div style={{ color: "#94a3b8", fontSize: "0.7rem", marginTop: "2px" }}>Hace 2 semanas</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
           )}
