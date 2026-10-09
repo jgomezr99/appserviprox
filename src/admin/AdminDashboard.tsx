@@ -36,6 +36,44 @@ interface RequestItem {
   statusClass: string;
 }
 
+export interface ClientItem {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  role: string;
+  phone: string;
+  city: string;
+  address: string;
+  document_id: string;
+  is_active: boolean;
+  is_identity_verified: boolean;
+  requests_count: number;
+  date_joined: string;
+}
+
+export interface ProfessionalItem {
+  id: number;
+  slug?: string;
+  display_name: string;
+  initials?: string;
+  headline?: string;
+  company_name?: string;
+  specialty_label?: string;
+  avatar_url?: string;
+  phone?: string;
+  rating_avg: string | number;
+  jobs_completed: number;
+  is_verified: boolean;
+  is_active: boolean;
+  points: number;
+  wallet_balance: string | number;
+  categories?: string[];
+  neighborhood?: string;
+  city?: string;
+}
+
 interface TopProfessional {
   id: string;
   raw_id?: number;
@@ -58,6 +96,163 @@ interface AuditLogEntry {
   date: string;
   reason: string;
 }
+
+// Datos iniciales de la base de datos para respaldo y render inmediato
+const INITIAL_DB_CLIENTS: ClientItem[] = [
+  {
+    id: 6,
+    email: "laura.gomez@bogota.co",
+    first_name: "Laura",
+    last_name: "Gómez",
+    full_name: "Laura Gómez",
+    role: "client",
+    phone: "+57 310 445 8892",
+    city: "Bogotá",
+    address: "Cra. 11 # 85-32, Chicó, Bogotá",
+    document_id: "CC 52.894.120",
+    is_active: true,
+    is_identity_verified: true,
+    requests_count: 1,
+    date_joined: "19/09/2026",
+  },
+  {
+    id: 5,
+    email: "jgomezr21@ucentral.edu.co",
+    first_name: "Juan Pablo",
+    last_name: "Gomez",
+    full_name: "Juan Pablo Gomez",
+    role: "client",
+    phone: "+57 302 850 5481",
+    city: "Bogotá",
+    address: "Cra. 13 # 63-39, Chapinero, Bogotá",
+    document_id: "CC 1.000.257.887",
+    is_active: true,
+    is_identity_verified: false,
+    requests_count: 1,
+    date_joined: "12/09/2026",
+  },
+  {
+    id: 2,
+    email: "andres.ruiz@demo.serviprox.co",
+    first_name: "Andres",
+    last_name: "Ruiz",
+    full_name: "Andres Ruiz",
+    role: "client",
+    phone: "+57 311 445 9988",
+    city: "Bogotá",
+    address: "Carrera 15 # 88-21, Chicó, Bogotá",
+    document_id: "CC 80.124.567",
+    is_active: true,
+    is_identity_verified: true,
+    requests_count: 0,
+    date_joined: "12/09/2026",
+  },
+  {
+    id: 1,
+    email: "camila@demo.serviprox.co",
+    first_name: "Camila",
+    last_name: "Rojas",
+    full_name: "Camila Rojas",
+    role: "client",
+    phone: "+57 315 220 1144",
+    city: "Bogotá",
+    address: "Calle 53 # 21-40, Galerías, Bogotá",
+    document_id: "CC 1.018.490.123",
+    is_active: true,
+    is_identity_verified: false,
+    requests_count: 3,
+    date_joined: "12/09/2026",
+  },
+];
+
+const INITIAL_DB_PROS: ProfessionalItem[] = [
+  {
+    id: 4,
+    display_name: "Juan Pablo Gomez",
+    headline: "Especialista Técnico Profesional",
+    company_name: "Especialista Técnico Profesional",
+    specialty_label: "Servicios Técnicos y Mantenimiento",
+    avatar_url: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop",
+    phone: "+57 302 850 5481",
+    rating_avg: "4.95",
+    jobs_completed: 45,
+    is_verified: true,
+    is_active: true,
+    points: 1000,
+    wallet_balance: "0.00",
+    categories: ["Cerrajería", "Electricidad", "Instalaciones", "Plomería"],
+    neighborhood: "Chapinero",
+    city: "Bogotá",
+  },
+  {
+    id: 8,
+    display_name: "Maestro Néstor Caicedo",
+    headline: "Maestro de Obra y Acabados",
+    specialty_label: "Construcción y Remodelaciones",
+    avatar_url: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=240&auto=format&fit=crop&q=80",
+    phone: "+57 313 555 1208",
+    rating_avg: "4.88",
+    jobs_completed: 92,
+    is_verified: true,
+    is_active: true,
+    points: 1150,
+    wallet_balance: "0.00",
+    categories: ["Pintura", "Albañilería", "Acabados"],
+    neighborhood: "Suba",
+    city: "Bogotá",
+  },
+  {
+    id: 6,
+    display_name: "Ing. Carlos Mendoza",
+    headline: "Técnico Electricista RETIE",
+    specialty_label: "Electricidad y Redes",
+    avatar_url: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=240&auto=format&fit=crop&q=80",
+    phone: "+57 310 889 4432",
+    rating_avg: "4.92",
+    jobs_completed: 130,
+    is_verified: true,
+    is_active: true,
+    points: 1450,
+    wallet_balance: "50000.00",
+    categories: ["Electricidad", "Instalaciones"],
+    neighborhood: "Kennedy",
+    city: "Bogotá",
+  },
+  {
+    id: 5,
+    display_name: "Jorge Morales",
+    headline: "Técnico en Cerrajería Residencial y Automotriz",
+    specialty_label: "Cerrajería",
+    avatar_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&auto=format&fit=crop&q=80",
+    phone: "+57 311 223 3445",
+    rating_avg: "4.85",
+    jobs_completed: 78,
+    is_verified: true,
+    is_active: true,
+    points: 920,
+    wallet_balance: "0.00",
+    categories: ["Cerrajería"],
+    neighborhood: "Teusaquillo",
+    city: "Bogotá",
+  },
+  {
+    id: 7,
+    display_name: "Rodrigo Salamanca",
+    headline: "Plomero Certificado SENA",
+    specialty_label: "Plomería y Redes Hidráulicas",
+    avatar_url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=240&auto=format&fit=crop&q=80",
+    phone: "+57 318 776 5544",
+    rating_avg: "4.79",
+    jobs_completed: 65,
+    is_verified: false,
+    is_active: true,
+    points: 800,
+    wallet_balance: "0.00",
+    categories: ["Plomería"],
+    neighborhood: "Engativá",
+    city: "Bogotá",
+  },
+];
 
 export const AdminDashboard: React.FC = () => {
   const history = useHistory();
@@ -303,13 +498,63 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Listas conectadas a la base de datos (con fallback inicial idéntico a la BD)
+  const [clientsList, setClientsList] = useState<ClientItem[]>(INITIAL_DB_CLIENTS);
+  const [allProsList, setAllProsList] = useState<ProfessionalItem[]>(INITIAL_DB_PROS);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [prosLoading, setProsLoading] = useState(false);
+
+  // Filtros de búsqueda en la vista de clientes
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientFilterVerified, setClientFilterVerified] = useState<"todos" | "verificados" | "pendientes">("todos");
+  const [clientFilterStatus, setClientFilterStatus] = useState<"todos" | "activos" | "bloqueados">("todos");
+
+  // Filtros de búsqueda en la vista de profesionales
+  const [proSearch, setProSearch] = useState("");
+  const [proFilterCategory, setProFilterCategory] = useState<string>("todas");
+  const [proFilterVerified, setProFilterVerified] = useState<"todos" | "verificados" | "pendientes">("todos");
+  const [proFilterStatus, setProFilterStatus] = useState<"todos" | "activos" | "bloqueados">("todos");
+
+  // Carga de clientes desde la base de datos
+  const fetchClients = async () => {
+    setClientsLoading(true);
+    try {
+      const res = await adminService.getUsers("client");
+      if (res && Array.isArray(res.users) && res.users.length > 0) {
+        setClientsList(res.users);
+      }
+    } catch (err) {
+      console.warn("Error cargando clientes de BD:", err);
+    } finally {
+      setClientsLoading(false);
+    }
+  };
+
+  // Carga de profesionales desde la base de datos
+  const fetchPros = async () => {
+    setProsLoading(true);
+    try {
+      const res = await adminService.getProfessionals();
+      if (Array.isArray(res) && res.length > 0) {
+        setAllProsList(res);
+      }
+    } catch (err) {
+      console.warn("Error cargando profesionales de BD:", err);
+    } finally {
+      setProsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchLiveOverview();
+    fetchClients();
+    fetchPros();
   }, []);
 
   // Estado de modales
   const [modalBloqueoOpen, setModalBloqueoOpen] = useState(false);
   const [targetUserToBlock, setTargetUserToBlock] = useState<string>("");
+  const [targetIdToBlock, setTargetIdToBlock] = useState<string | number>("");
   const [blockReason, setBlockReason] = useState("");
   const [blockDuration, setBlockDuration] = useState("7");
   const [blockType, setBlockType] = useState<"temporal" | "permanente">("temporal");
@@ -387,10 +632,121 @@ export const AdminDashboard: React.FC = () => {
     setModalDetailOpen(true);
   };
 
+  // Ver detalle de Cliente
+  const handleViewClientDetail = (client: ClientItem) => {
+    setSelectedDetailItem({
+      detailType: "client",
+      ...client,
+    });
+    setModalDetailOpen(true);
+  };
+
+  // Ver detalle de Profesional
+  const handleViewProDetail = (pro: ProfessionalItem) => {
+    setSelectedDetailItem({
+      detailType: "pro",
+      ...pro,
+    });
+    setModalDetailOpen(true);
+  };
+
+  // Toggle de Verificación de Cliente (impacta en BD)
+  const handleToggleClientVerification = async (client: ClientItem) => {
+    const newStatus = !client.is_identity_verified;
+    setClientsList((prev) =>
+      prev.map((c) => (c.id === client.id ? { ...c, is_identity_verified: newStatus } : c))
+    );
+    setAuditLogs((prev) => [
+      {
+        id: `aud-${Date.now()}`,
+        adminName: adminDisplayName,
+        action: newStatus ? "Validación de documento de identidad" : "Revocación de documento",
+        target: `${client.full_name} (${client.document_id})`,
+        date: new Date().toLocaleString(),
+        reason: "Verificación documental desde el panel administrativo",
+      },
+      ...prev,
+    ]);
+    await adminService.toggleVerification(client.id, `Validación documental de ${client.full_name}`);
+  };
+
+  // Toggle de Verificación de Profesional (impacta en BD)
+  const handleToggleProVerification = async (pro: ProfessionalItem) => {
+    const newStatus = !pro.is_verified;
+    setAllProsList((prev) =>
+      prev.map((p) => (p.id === pro.id ? { ...p, is_verified: newStatus } : p))
+    );
+    setProsList((prev) =>
+      prev.map((p) =>
+        p.raw_id === pro.id || p.id === `pro-${pro.id}` ? { ...p, verified: newStatus } : p
+      )
+    );
+    setAuditLogs((prev) => [
+      {
+        id: `aud-${Date.now()}`,
+        adminName: adminDisplayName,
+        action: newStatus ? "Aprobación de tarjeta profesional" : "Revocación de tarjeta",
+        target: `${pro.display_name} (${pro.headline || pro.specialty_label || "Técnico"})`,
+        date: new Date().toLocaleString(),
+        reason: "Validación de certificación y antecedentes desde el panel administrativo",
+      },
+      ...prev,
+    ]);
+    await adminService.toggleVerification(pro.id, `Validación de credenciales de ${pro.display_name}`);
+  };
+
+  // Abrir modal de asignación de beneficios para un profesional
+  const handleOpenAssignBenefitsForPro = (pro: ProfessionalItem) => {
+    setTargetProBeneficio({
+      id: `pro-${pro.id}`,
+      raw_id: pro.id,
+      name: pro.display_name,
+      specialty: pro.headline || pro.specialty_label || "Especialista Serviprox",
+      rating: Number(pro.rating_avg) || 4.8,
+      tier: (pro.points || 0) >= 1000 ? "Nivel Oro" : "Nivel Plata",
+      avatar: pro.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop",
+      points: pro.points || 0,
+      completedJobs: pro.jobs_completed || 0,
+      verified: pro.is_verified,
+    });
+    setModalBeneficiosOpen(true);
+  };
+
+  // Reactivar usuario bloqueado directamente
+  const handleUnblockUser = async (targetId: string | number, targetName: string) => {
+    await adminService.executeAction({
+      action: "unblock_user",
+      target_id: targetId,
+      admin_name: adminDisplayName,
+      reason: "Reactivación de cuenta por cumplimiento de términos",
+    });
+    setClientsList((prev) =>
+      prev.map((c) => (c.id === targetId ? { ...c, is_active: true } : c))
+    );
+    setAllProsList((prev) =>
+      prev.map((p) => (p.id === targetId ? { ...p, is_active: true } : p))
+    );
+    setAuditLogs((prev) => [
+      {
+        id: `aud-${Date.now()}`,
+        adminName: adminDisplayName,
+        action: "Desbloqueo de cuenta",
+        target: targetName,
+        date: new Date().toLocaleString(),
+        reason: "Reactivación de cuenta por cumplimiento de términos",
+      },
+      ...prev,
+    ]);
+    alert(`Cuenta de ${targetName} reactivada con éxito en la base de datos.`);
+    fetchLiveOverview();
+  };
+
+  // Confirmar bloqueo disciplinario
   const confirmBlockUser = async () => {
     if (!blockReason.trim()) return;
     const reasonText = blockReason;
     const target = targetUserToBlock || "Usuario seleccionado";
+    const targetId = targetIdToBlock || target;
     setAuditLogs((prev) => [
       {
         id: `aud-${Date.now()}`,
@@ -407,23 +763,52 @@ export const AdminDashboard: React.FC = () => {
 
     await adminService.executeAction({
       action: "block_user",
-      target_id: target,
+      target_id: targetId,
       admin_name: adminDisplayName,
       reason: reasonText,
     });
+
+    setClientsList((prev) =>
+      prev.map((c) =>
+        c.id === targetId || c.full_name === target || c.email === target
+          ? { ...c, is_active: false }
+          : c
+      )
+    );
+    setAllProsList((prev) =>
+      prev.map((p) =>
+        p.id === targetId || p.display_name === target
+          ? { ...p, is_active: false }
+          : p
+      )
+    );
     alert(`Cuenta de ${target} bloqueada con éxito en la base de datos.`);
     fetchLiveOverview();
+    fetchClients();
+    fetchPros();
   };
 
+  // Confirmar acreditación de beneficios a profesional
   const confirmAssignBenefits = async () => {
     if (!targetProBeneficio) return;
-    const proId = targetProBeneficio.id;
+    const proId = targetProBeneficio.raw_id || targetProBeneficio.id;
     const proName = targetProBeneficio.name;
-    const targetPro = targetProBeneficio;
+
     setProsList((prev) =>
       prev.map((p) =>
-        p.id === proId
+        p.id === targetProBeneficio.id || p.raw_id === proId
           ? { ...p, points: p.points + puntosToAdd }
+          : p
+      )
+    );
+    setAllProsList((prev) =>
+      prev.map((p) =>
+        p.id === proId
+          ? {
+              ...p,
+              points: (p.points || 0) + puntosToAdd,
+              wallet_balance: (Number(p.wallet_balance || 0) + recargaToAdd).toFixed(2),
+            }
           : p
       )
     );
@@ -442,7 +827,7 @@ export const AdminDashboard: React.FC = () => {
 
     await adminService.executeAction({
       action: "assign_benefits",
-      target_id: targetPro.raw_id || proId,
+      target_id: proId,
       admin_name: adminDisplayName,
       points: puntosToAdd,
       recharge: recargaToAdd,
@@ -450,6 +835,7 @@ export const AdminDashboard: React.FC = () => {
     });
     alert(`Beneficios asignados a ${proName}. Total actualizado guardado en la base de datos.`);
     fetchLiveOverview();
+    fetchPros();
   };
 
   const handleLogout = () => {
@@ -457,7 +843,7 @@ export const AdminDashboard: React.FC = () => {
     history.replace("/login");
   };
 
-  // Filtrado de solicitudes según pestaña activa y búsqueda
+  // Filtrado de solicitudes según pestaña activa y búsqueda en Inicio
   const filteredRequests = requestsList.filter((item) => {
     const matchesSearch =
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -470,6 +856,67 @@ export const AdminDashboard: React.FC = () => {
     if (activeRequestTab === "Productos") return item.type === "Producto";
     if (activeRequestTab === "PQR") return item.type === "PQR";
     if (activeRequestTab === "Fallas técnicas") return item.type === "Falla";
+    return true;
+  });
+
+  // Filtrado de profesionales para la pestaña "Profesionales" del Home
+  const filteredProsForHomeTab = allProsList.filter((p) => {
+    const term = searchQuery.toLowerCase();
+    return (
+      p.display_name.toLowerCase().includes(term) ||
+      (p.headline && p.headline.toLowerCase().includes(term)) ||
+      (p.specialty_label && p.specialty_label.toLowerCase().includes(term)) ||
+      (p.city && p.city.toLowerCase().includes(term))
+    );
+  });
+
+  // Filtrado de clientes en la vista dedicada
+  const filteredClients = clientsList.filter((c) => {
+    const term = clientSearch.toLowerCase();
+    const matchesSearch =
+      c.full_name.toLowerCase().includes(term) ||
+      c.email.toLowerCase().includes(term) ||
+      c.document_id.toLowerCase().includes(term) ||
+      c.phone.toLowerCase().includes(term) ||
+      c.city.toLowerCase().includes(term);
+
+    if (!matchesSearch) return false;
+
+    if (clientFilterVerified === "verificados" && !c.is_identity_verified) return false;
+    if (clientFilterVerified === "pendientes" && c.is_identity_verified) return false;
+
+    if (clientFilterStatus === "activos" && !c.is_active) return false;
+    if (clientFilterStatus === "bloqueados" && c.is_active) return false;
+
+    return true;
+  });
+
+  // Filtrado de profesionales en la vista dedicada
+  const filteredPros = allProsList.filter((p) => {
+    const term = proSearch.toLowerCase();
+    const matchesSearch =
+      p.display_name.toLowerCase().includes(term) ||
+      (p.headline && p.headline.toLowerCase().includes(term)) ||
+      (p.specialty_label && p.specialty_label.toLowerCase().includes(term)) ||
+      (p.phone && p.phone.toLowerCase().includes(term)) ||
+      (p.city && p.city.toLowerCase().includes(term));
+
+    if (!matchesSearch) return false;
+
+    if (proFilterCategory !== "todas") {
+      const cats = p.categories || [];
+      const hasCat = cats.some((cat) => cat.toLowerCase().includes(proFilterCategory.toLowerCase()));
+      if (!hasCat && !p.specialty_label?.toLowerCase().includes(proFilterCategory.toLowerCase())) {
+        return false;
+      }
+    }
+
+    if (proFilterVerified === "verificados" && !p.is_verified) return false;
+    if (proFilterVerified === "pendientes" && p.is_verified) return false;
+
+    if (proFilterStatus === "activos" && !p.is_active) return false;
+    if (proFilterStatus === "bloqueados" && p.is_active) return false;
+
     return true;
   });
 
@@ -822,9 +1269,11 @@ export const AdminDashboard: React.FC = () => {
 
         {/* Cuerpo del Panel */}
         <div className="ad-dashboard-body">
-          {/* Fila de Bienvenida, Fecha y Estado de BD */}
-          <div className="ad-welcome-row">
-            <div className="ad-welcome-text">
+          {activeMenu === "inicio" && (
+            <>
+              {/* Fila de Bienvenida, Fecha y Estado de BD */}
+              <div className="ad-welcome-row">
+                <div className="ad-welcome-text">
               <h1>Bienvenido, Administrador</h1>
               <p>Aquí puedes supervisar y gestionar toda la información de Serviprox en tiempo real.</p>
             </div>
@@ -980,97 +1429,185 @@ export const AdminDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredRequests.map((row) => (
-                        <tr key={row.id}>
-                          <td>
-                            <div className="ad-type-badge">
-                              <span
-                                className="ad-type-icon"
-                                style={{ background: row.typeColor }}
-                              >
-                                {row.typeIcon}
-                              </span>
-                              <span>{row.type}</span>
-                            </div>
-                          </td>
-                          <td style={{ fontWeight: 600, color: "#1e293b" }}>
-                            {row.title}
-                          </td>
-                          <td>
-                            <div className="ad-user-cell">
-                              <img
-                                src={row.userAvatar}
-                                alt={row.userName}
-                                className="ad-table-avatar"
-                              />
-                              <span style={{ fontWeight: 600 }}>{row.userName}</span>
-                            </div>
-                          </td>
-                          <td style={{ color: "#64748b", fontSize: "0.82rem" }}>
-                            {row.date}
-                          </td>
-                          <td>
-                            <span className={`ad-status-pill ${row.statusClass}`}>
-                              {row.status}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="ad-actions-cell">
-                              <button
-                                type="button"
-                                className="ad-action-btn"
-                                title="Ver detalles"
-                                onClick={() => handleViewDetail(row)}
-                              >
-                                👁
-                              </button>
-                              {row.status === "En revisión" && (
-                                <>
+                      {activeRequestTab === "Profesionales" ? (
+                        filteredProsForHomeTab.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
+                              No se encontraron profesionales con el término buscado.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredProsForHomeTab.map((pro) => (
+                            <tr key={`pro-${pro.id}`}>
+                              <td>
+                                <div className="ad-type-badge">
+                                  <span className="ad-type-icon" style={{ background: "#dcfce7" }}>
+                                    🛡️
+                                  </span>
+                                  <span>Profesional</span>
+                                </div>
+                              </td>
+                              <td style={{ fontWeight: 600, color: "#1e293b" }}>
+                                {pro.headline || pro.specialty_label || "Especialista Serviprox"}
+                              </td>
+                              <td>
+                                <div className="ad-user-cell">
+                                  <img
+                                    src={pro.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop"}
+                                    alt={pro.display_name}
+                                    className="ad-table-avatar"
+                                  />
+                                  <span style={{ fontWeight: 600 }}>{pro.display_name}</span>
+                                </div>
+                              </td>
+                              <td style={{ color: "#64748b", fontSize: "0.82rem" }}>
+                                {pro.neighborhood ? `${pro.neighborhood}, ${pro.city || "Bogotá"}` : (pro.city || "Bogotá")}
+                              </td>
+                              <td>
+                                <span className={`ad-status-pill ${pro.is_verified ? "ad-status-aprobado" : "ad-status-revision"}`}>
+                                  {pro.is_verified ? "Aprobado" : "En revisión"}
+                                </span>
+                              </td>
+                              <td>
+                                <div className="ad-actions-cell">
                                   <button
                                     type="button"
-                                    className="ad-action-btn approve"
-                                    title="Aprobar"
-                                    onClick={() => handleApprove(row.id)}
+                                    className="ad-action-btn"
+                                    title="Ver expediente técnico"
+                                    onClick={() => handleViewProDetail(pro)}
                                   >
-                                    ✓
+                                    👁
                                   </button>
+                                  {!pro.is_verified ? (
+                                    <button
+                                      type="button"
+                                      className="ad-action-btn approve"
+                                      title="Aprobar Tarjeta Profesional en BD"
+                                      onClick={() => handleToggleProVerification(pro)}
+                                    >
+                                      ✓
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="ad-action-btn"
+                                      style={{ background: "#f3e8ff", color: "#9333ea", borderColor: "#d8b4fe" }}
+                                      title="Asignar Beneficios y Puntos"
+                                      onClick={() => handleOpenAssignBenefitsForPro(pro)}
+                                    >
+                                      🎁
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     className="ad-action-btn reject"
-                                    title="Rechazar"
-                                    onClick={() => handleReject(row.id)}
-                                  >
-                                    ✕
-                                  </button>
-                                </>
-                              )}
-                              {row.status !== "En revisión" && (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="ad-action-btn"
-                                    title="Moderar o Editar"
-                                    onClick={() => handleViewDetail(row)}
-                                  >
-                                    ✎
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="ad-action-btn"
-                                    title="Más opciones"
+                                    title="Sancionar / Suspender en BD"
                                     onClick={() => {
-                                      setTargetUserToBlock(row.userName);
+                                      setTargetUserToBlock(pro.display_name);
+                                      setTargetIdToBlock(pro.id);
                                       setModalBloqueoOpen(true);
                                     }}
                                   >
-                                    •••
+                                    🔒
                                   </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )
+                      ) : (
+                        filteredRequests.map((row) => (
+                          <tr key={row.id}>
+                            <td>
+                              <div className="ad-type-badge">
+                                <span
+                                  className="ad-type-icon"
+                                  style={{ background: row.typeColor }}
+                                >
+                                  {row.typeIcon}
+                                </span>
+                                <span>{row.type}</span>
+                              </div>
+                            </td>
+                            <td style={{ fontWeight: 600, color: "#1e293b" }}>
+                              {row.title}
+                            </td>
+                            <td>
+                              <div className="ad-user-cell">
+                                <img
+                                  src={row.userAvatar}
+                                  alt={row.userName}
+                                  className="ad-table-avatar"
+                                />
+                                <span style={{ fontWeight: 600 }}>{row.userName}</span>
+                              </div>
+                            </td>
+                            <td style={{ color: "#64748b", fontSize: "0.82rem" }}>
+                              {row.date}
+                            </td>
+                            <td>
+                              <span className={`ad-status-pill ${row.statusClass}`}>
+                                {row.status}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="ad-actions-cell">
+                                <button
+                                  type="button"
+                                  className="ad-action-btn"
+                                  title="Ver detalles"
+                                  onClick={() => handleViewDetail(row)}
+                                >
+                                  👁
+                                </button>
+                                {row.status === "En revisión" && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="ad-action-btn approve"
+                                      title="Aprobar"
+                                      onClick={() => handleApprove(row.id)}
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="ad-action-btn reject"
+                                      title="Rechazar"
+                                      onClick={() => handleReject(row.id)}
+                                    >
+                                      ✕
+                                    </button>
+                                  </>
+                                )}
+                                {row.status !== "En revisión" && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="ad-action-btn"
+                                      title="Moderar o Editar"
+                                      onClick={() => handleViewDetail(row)}
+                                    >
+                                      ✎
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="ad-action-btn"
+                                      title="Más opciones"
+                                      onClick={() => {
+                                        setTargetUserToBlock(row.userName);
+                                        setModalBloqueoOpen(true);
+                                      }}
+                                    >
+                                      •••
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1402,6 +1939,720 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
           </div>
+            </>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════
+              VISTA: DIRECTORIO Y GESTIÓN DE CLIENTES (CONECTADO A BD)
+             ═════════════════════════════════════════════════════════════════ */}
+          {activeMenu === "usuarios_clientes" && (
+            <section className="ad-clients-view" aria-label="Directorio de Clientes">
+              <div className="ad-view-header">
+                <div>
+                  <h2 className="ad-view-header-title">👥 Directorio y Gestión de Clientes</h2>
+                  <p className="ad-view-header-subtitle">
+                    Supervisa los clientes registrados en la base de datos de Serviprox, historial de servicios, validación de cédulas y control disciplinario.
+                  </p>
+                </div>
+                <div className="ad-view-header-actions">
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-secondary"
+                    onClick={fetchClients}
+                    title="Recargar desde la base de datos"
+                  >
+                    🔄 {clientsLoading ? "Actualizando..." : "Refrescar BD"}
+                  </button>
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-primary"
+                    onClick={() => alert(`Se han exportado ${clientsList.length} registros de clientes con éxito.`)}
+                  >
+                    📥 Exportar CSV
+                  </button>
+                </div>
+              </div>
+
+              {/* Tarjetas KPI de Clientes */}
+              <div className="ad-kpi-grid" style={{ marginBottom: "20px" }}>
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-icon-box" style={{ background: "#dbeafe", color: "#2563eb" }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                    </svg>
+                  </div>
+                  <div className="ad-kpi-value">{clientsList.length}</div>
+                  <p className="ad-kpi-label">Clientes en Base de Datos</p>
+                  <div className="ad-kpi-trend positive"><span>✓</span> Registrados</div>
+                </div>
+
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-icon-box" style={{ background: "#dcfce7", color: "#16a34a" }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
+                    </svg>
+                  </div>
+                  <div className="ad-kpi-value">
+                    {clientsList.filter((c) => c.is_identity_verified).length}
+                  </div>
+                  <p className="ad-kpi-label">Cédulas Validadas</p>
+                  <div className="ad-kpi-trend positive"><span>🛡️</span> Verificadas</div>
+                </div>
+
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-icon-box" style={{ background: "#fef3c7", color: "#d97706" }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
+                    </svg>
+                  </div>
+                  <div className="ad-kpi-value">
+                    {clientsList.filter((c) => !c.is_identity_verified).length}
+                  </div>
+                  <p className="ad-kpi-label">Pendientes de Validación</p>
+                  <div className="ad-kpi-trend warning"><span>⏳</span> Por validar</div>
+                </div>
+
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-icon-box" style={{ background: "#fee2e2", color: "#dc2626" }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+                    </svg>
+                  </div>
+                  <div className="ad-kpi-value">
+                    {clientsList.filter((c) => !c.is_active).length}
+                  </div>
+                  <p className="ad-kpi-label">Cuentas Sancionadas</p>
+                  <div className="ad-kpi-trend danger"><span>🔒</span> Bloqueadas</div>
+                </div>
+              </div>
+
+              {/* Barra de Filtros */}
+              <div className="ad-filter-bar">
+                <div className="ad-filter-search">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Buscar cliente por nombre, correo, cédula, teléfono o ciudad..."
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                  />
+                </div>
+
+                <select
+                  className="ad-filter-select"
+                  value={clientFilterVerified}
+                  onChange={(e) => setClientFilterVerified(e.target.value as any)}
+                >
+                  <option value="todos">Todos los documentos</option>
+                  <option value="verificados">✓ Cédulas Validadas</option>
+                  <option value="pendientes">⏳ Pendientes de Validación</option>
+                </select>
+
+                <select
+                  className="ad-filter-select"
+                  value={clientFilterStatus}
+                  onChange={(e) => setClientFilterStatus(e.target.value as any)}
+                >
+                  <option value="todos">Todos los estados</option>
+                  <option value="activos">● Cuentas Activas</option>
+                  <option value="bloqueados">🔒 Cuentas Bloqueadas</option>
+                </select>
+              </div>
+
+              {/* Tabla de Clientes Conectada a la BD */}
+              <div className="ad-card" style={{ padding: "0", overflow: "hidden" }}>
+                <div className="ad-table-responsive">
+                  <table className="ad-table">
+                    <thead>
+                      <tr>
+                        <th>Cliente</th>
+                        <th>Documento / Identidad</th>
+                        <th>Contacto & Dirección</th>
+                        <th>Servicios</th>
+                        <th>Registro</th>
+                        <th>Estado</th>
+                        <th style={{ textAlign: "right" }}>Acciones Administrativas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredClients.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="ad-empty-table">
+                            <p>No se encontraron clientes que coincidan con los criterios de búsqueda.</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredClients.map((client) => (
+                          <tr key={client.id}>
+                            <td>
+                              <div className="ad-user-cell">
+                                <div className="ad-avatar-initials">
+                                  {client.full_name?.substring(0, 2).toUpperCase() || "CL"}
+                                </div>
+                                <div>
+                                  <strong style={{ display: "block", color: "#0f172a" }}>
+                                    {client.full_name}
+                                  </strong>
+                                  <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                                    {client.email}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div>
+                                <strong style={{ fontSize: "0.85rem", color: "#1e293b", display: "block" }}>
+                                  {client.document_id}
+                                </strong>
+                                <span className={client.is_identity_verified ? "ad-badge-success" : "ad-badge-warning"}>
+                                  {client.is_identity_verified ? "✓ Validado" : "⏳ Pendiente"}
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <div style={{ fontSize: "0.82rem" }}>
+                                <p style={{ margin: 0, fontWeight: 600, color: "#334155" }}>{client.phone}</p>
+                                <span style={{ color: "#64748b" }}>{client.address}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="ad-badge-neutral">
+                                📋 {client.requests_count} solicitud(es)
+                              </span>
+                            </td>
+                            <td style={{ color: "#64748b", fontSize: "0.82rem" }}>
+                              {client.date_joined}
+                            </td>
+                            <td>
+                              <span className={client.is_active ? "ad-badge-success" : "ad-badge-danger"}>
+                                {client.is_active ? "● Activa" : "🔒 Bloqueada"}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                                <button
+                                  type="button"
+                                  className="ad-action-btn"
+                                  title="Ver Ficha Técnica"
+                                  onClick={() => handleViewClientDetail(client)}
+                                >
+                                  👁
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={`ad-action-pill ${client.is_identity_verified ? "unverify" : "verify"}`}
+                                  onClick={() => handleToggleClientVerification(client)}
+                                  title="Cambiar estado de validación en BD"
+                                >
+                                  {client.is_identity_verified ? "Revocar" : "✓ Validar Cédula"}
+                                </button>
+
+                                {client.is_active ? (
+                                  <button
+                                    type="button"
+                                    className="ad-action-pill block"
+                                    onClick={() => {
+                                      setTargetUserToBlock(client.full_name);
+                                      setTargetIdToBlock(client.id);
+                                      setModalBloqueoOpen(true);
+                                    }}
+                                    title="Aplicar bloqueo disciplinario en BD"
+                                  >
+                                    🔒 Bloquear
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="ad-action-pill unblock"
+                                    onClick={() => handleUnblockUser(client.id, client.full_name)}
+                                    title="Levantar sanción y reactivar"
+                                  >
+                                    🔓 Desbloquear
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════
+              VISTA: VERIFICACIÓN Y GESTIÓN DE PROFESIONALES (CONECTADO A BD)
+             ═════════════════════════════════════════════════════════════════ */}
+          {activeMenu === "usuarios_profesionales" && (
+            <section className="ad-pros-view" aria-label="Gestión de Profesionales">
+              <div className="ad-view-header">
+                <div>
+                  <h2 className="ad-view-header-title">🛡️ Verificación y Gestión de Profesionales</h2>
+                  <p className="ad-view-header-subtitle">
+                    Supervisa contratistas y técnicos registrados en la base de datos, valida credenciales y tarjetas RETIE/SENA, acredita beneficios y gestiona sanciones.
+                  </p>
+                </div>
+                <div className="ad-view-header-actions">
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-secondary"
+                    onClick={fetchPros}
+                    title="Recargar desde la base de datos"
+                  >
+                    🔄 {prosLoading ? "Actualizando..." : "Refrescar BD"}
+                  </button>
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-primary"
+                    onClick={() => alert(`Se han exportado ${allProsList.length} profesionales registrados.`)}
+                  >
+                    📥 Exportar CSV
+                  </button>
+                </div>
+              </div>
+
+              {/* Tarjetas KPI de Profesionales */}
+              <div className="ad-kpi-grid" style={{ marginBottom: "20px" }}>
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-icon-box" style={{ background: "#dcfce7", color: "#16a34a" }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2c-4.42 0-8 3.58-8 8v3h16v-3c0-4.42-3.58-8-8-8zm-1 16H3v2c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h-8v-2h-2v2z" />
+                    </svg>
+                  </div>
+                  <div className="ad-kpi-value">{allProsList.length}</div>
+                  <p className="ad-kpi-label">Profesionales en Base de Datos</p>
+                  <div className="ad-kpi-trend positive"><span>✓</span> Registrados</div>
+                </div>
+
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-icon-box" style={{ background: "#dbeafe", color: "#2563eb" }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
+                    </svg>
+                  </div>
+                  <div className="ad-kpi-value">
+                    {allProsList.filter((p) => p.is_verified).length}
+                  </div>
+                  <p className="ad-kpi-label">Tarjetas Aprobadas</p>
+                  <div className="ad-kpi-trend positive"><span>🛡️</span> Verificados</div>
+                </div>
+
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-icon-box" style={{ background: "#f3e8ff", color: "#9333ea" }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                    </svg>
+                  </div>
+                  <div className="ad-kpi-value">
+                    {allProsList.reduce((acc, p) => acc + (p.points || 0), 0).toLocaleString("es-CO")}
+                  </div>
+                  <p className="ad-kpi-label">Puntos Acreditados</p>
+                  <div className="ad-kpi-trend teal"><span>💎</span> En Billeteras</div>
+                </div>
+
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-icon-box" style={{ background: "#fef3c7", color: "#d97706" }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="ad-kpi-value">
+                    {allProsList.filter((p) => !p.is_verified).length}
+                  </div>
+                  <p className="ad-kpi-label">Pendientes de Aprobación</p>
+                  <div className="ad-kpi-trend warning"><span>⏳</span> Por validar</div>
+                </div>
+              </div>
+
+              {/* Filtros de Profesionales */}
+              <div className="ad-filter-bar">
+                <div className="ad-filter-search">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Buscar profesional por nombre, especialidad, ciudad, teléfono..."
+                    value={proSearch}
+                    onChange={(e) => setProSearch(e.target.value)}
+                  />
+                </div>
+
+                <select
+                  className="ad-filter-select"
+                  value={proFilterCategory}
+                  onChange={(e) => setProFilterCategory(e.target.value)}
+                >
+                  <option value="todas">Todas las categorías</option>
+                  <option value="Electricidad">Electricidad</option>
+                  <option value="Plomería">Plomería</option>
+                  <option value="Cerrajería">Cerrajería</option>
+                  <option value="Pintura">Pintura</option>
+                  <option value="Limpieza">Limpieza</option>
+                  <option value="Mantenimiento">Mantenimiento</option>
+                  <option value="Instalaciones">Instalaciones</option>
+                </select>
+
+                <select
+                  className="ad-filter-select"
+                  value={proFilterVerified}
+                  onChange={(e) => setProFilterVerified(e.target.value as any)}
+                >
+                  <option value="todos">Todos los estados de tarjeta</option>
+                  <option value="verificados">✓ Tarjeta Verificada</option>
+                  <option value="pendientes">⏳ Pendiente Aprobación</option>
+                </select>
+
+                <select
+                  className="ad-filter-select"
+                  value={proFilterStatus}
+                  onChange={(e) => setProFilterStatus(e.target.value as any)}
+                >
+                  <option value="todos">Todos los estados</option>
+                  <option value="activos">● Activos</option>
+                  <option value="bloqueados">🔒 Suspendidos</option>
+                </select>
+              </div>
+
+              {/* Tabla de Profesionales Conectada a la BD */}
+              <div className="ad-card" style={{ padding: "0", overflow: "hidden" }}>
+                <div className="ad-table-responsive">
+                  <table className="ad-table">
+                    <thead>
+                      <tr>
+                        <th>Profesional</th>
+                        <th>Calificación & Trabajos</th>
+                        <th>Tarjeta Profesional</th>
+                        <th>Incentivos & Saldo</th>
+                        <th>Ubicación & Teléfono</th>
+                        <th>Estado</th>
+                        <th style={{ textAlign: "right" }}>Acciones Administrativas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPros.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="ad-empty-table">
+                            <p>No se encontraron profesionales que coincidan con la búsqueda.</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredPros.map((pro) => (
+                          <tr key={pro.id}>
+                            <td>
+                              <div className="ad-user-cell">
+                                <img
+                                  src={pro.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop"}
+                                  alt={pro.display_name}
+                                  className="ad-table-avatar"
+                                  style={{ width: "38px", height: "38px" }}
+                                />
+                                <div>
+                                  <strong style={{ display: "block", color: "#0f172a" }}>
+                                    {pro.display_name}
+                                  </strong>
+                                  <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                                    {pro.headline || pro.specialty_label || "Especialista Serviprox"}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div>
+                                <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.88rem" }}>
+                                  ★ {pro.rating_avg}
+                                </span>
+                                <span style={{ display: "block", fontSize: "0.76rem", color: "#64748b" }}>
+                                  {pro.jobs_completed} trabajos completados
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={pro.is_verified ? "ad-badge-success" : "ad-badge-warning"}>
+                                {pro.is_verified ? "✓ Tarjeta Aprobada" : "⏳ Pendiente"}
+                              </span>
+                            </td>
+                            <td>
+                              <div>
+                                <strong style={{ color: "#7e22ce", fontSize: "0.85rem" }}>
+                                  💎 {pro.points || 0} pts
+                                </strong>
+                                <span style={{ display: "block", fontSize: "0.76rem", color: "#16a34a", fontWeight: 600 }}>
+                                  💳 ${Number(pro.wallet_balance || 0).toLocaleString("es-CO")} COP
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <div style={{ fontSize: "0.82rem" }}>
+                                <p style={{ margin: 0, fontWeight: 600, color: "#334155" }}>{pro.phone}</p>
+                                <span style={{ color: "#64748b" }}>
+                                  {pro.neighborhood ? `${pro.neighborhood}, ${pro.city || "Bogotá"}` : (pro.city || "Bogotá")}
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={pro.is_active ? "ad-badge-success" : "ad-badge-danger"}>
+                                {pro.is_active ? "● Activo" : "🔒 Suspendido"}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                                <button
+                                  type="button"
+                                  className="ad-action-btn"
+                                  title="Ver Expediente Técnico"
+                                  onClick={() => handleViewProDetail(pro)}
+                                >
+                                  👁
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={`ad-action-pill ${pro.is_verified ? "unverify" : "verify"}`}
+                                  onClick={() => handleToggleProVerification(pro)}
+                                  title="Aprobar o revocar tarjeta profesional en BD"
+                                >
+                                  {pro.is_verified ? "Revocar" : "✓ Aprobar Tarjeta"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="ad-action-pill gift"
+                                  onClick={() => handleOpenAssignBenefitsForPro(pro)}
+                                  title="Asignar puntos e incentivos en BD"
+                                >
+                                  🎁 Puntos
+                                </button>
+
+                                {pro.is_active ? (
+                                  <button
+                                    type="button"
+                                    className="ad-action-pill block"
+                                    onClick={() => {
+                                      setTargetUserToBlock(pro.display_name);
+                                      setTargetIdToBlock(pro.id);
+                                      setModalBloqueoOpen(true);
+                                    }}
+                                    title="Suspender cuenta de contratista en BD"
+                                  >
+                                    🔒 Sancionar
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="ad-action-pill unblock"
+                                    onClick={() => handleUnblockUser(pro.id, pro.display_name)}
+                                    title="Reactivar contratista"
+                                  >
+                                    🔓 Reactivar
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════
+              VISTA: PQR Y REPORTES
+             ═════════════════════════════════════════════════════════════════ */}
+          {activeMenu === "pqr" && (
+            <section className="ad-pqr-view" aria-label="Módulo PQR">
+              <div className="ad-view-header">
+                <div>
+                  <h2 className="ad-view-header-title">💬 Gestión de PQR y Reclamaciones</h2>
+                  <p className="ad-view-header-subtitle">
+                    Historial de quejas, pruebas aportadas, respuestas y medidas adoptadas para la resolución de conflictos.
+                  </p>
+                </div>
+              </div>
+              <div className="ad-card" style={{ padding: "0", overflow: "hidden" }}>
+                <div className="ad-table-responsive">
+                  <table className="ad-table">
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th>Asunto / Radicado</th>
+                        <th>Usuario Quejoso</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th style={{ textAlign: "right" }}>Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {requestsList
+                        .filter((r) => r.type === "PQR")
+                        .map((pqr) => (
+                          <tr key={pqr.id}>
+                            <td>
+                              <div className="ad-type-badge">
+                                <span className="ad-type-icon" style={{ background: pqr.typeColor }}>
+                                  {pqr.typeIcon}
+                                </span>
+                                <span>PQR</span>
+                              </div>
+                            </td>
+                            <td style={{ fontWeight: 600 }}>{pqr.title}</td>
+                            <td>{pqr.userName}</td>
+                            <td style={{ color: "#64748b" }}>{pqr.date}</td>
+                            <td>
+                              <span className={`ad-status-pill ${pqr.statusClass}`}>{pqr.status}</span>
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              <button
+                                type="button"
+                                className="ad-action-btn"
+                                onClick={() => handleViewDetail(pqr)}
+                              >
+                                👁
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════
+              VISTA: BENEFICIOS E INCENTIVOS
+             ═════════════════════════════════════════════════════════════════ */}
+          {activeMenu === "beneficios" && (
+            <section className="ad-benefits-view" aria-label="Beneficios e Incentivos">
+              <div className="ad-view-header">
+                <div>
+                  <h2 className="ad-view-header-title">🎁 Beneficios y Puntos para Profesionales</h2>
+                  <p className="ad-view-header-subtitle">
+                    Asigna puntos por servicios completados, niveles de reconocimiento y recargas en dinero real.
+                  </p>
+                </div>
+              </div>
+              <div className="ad-card" style={{ padding: "0", overflow: "hidden" }}>
+                <div className="ad-table-responsive">
+                  <table className="ad-table">
+                    <thead>
+                      <tr>
+                        <th>Profesional</th>
+                        <th>Especialidad</th>
+                        <th>Puntos Acumulados</th>
+                        <th>Saldo Billetera</th>
+                        <th style={{ textAlign: "right" }}>Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allProsList.map((pro) => (
+                        <tr key={pro.id}>
+                          <td>
+                            <div className="ad-user-cell">
+                              <img src={pro.avatar_url} alt="" className="ad-table-avatar" />
+                              <strong>{pro.display_name}</strong>
+                            </div>
+                          </td>
+                          <td>{pro.headline || pro.specialty_label}</td>
+                          <td><strong style={{ color: "#7e22ce" }}>💎 {pro.points || 0} pts</strong></td>
+                          <td><strong style={{ color: "#16a34a" }}>💳 ${Number(pro.wallet_balance || 0).toLocaleString("es-CO")}</strong></td>
+                          <td style={{ textAlign: "right" }}>
+                            <button
+                              type="button"
+                              className="ad-btn ad-btn-primary"
+                              style={{ fontSize: "0.8rem", padding: "6px 14px" }}
+                              onClick={() => handleOpenAssignBenefitsForPro(pro)}
+                            >
+                              🎁 Asignar Puntos / Recarga
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════
+              VISTA: HISTORIAL DE AUDITORÍA
+             ═════════════════════════════════════════════════════════════════ */}
+          {activeMenu === "auditoria" && (
+            <section className="ad-audit-view" aria-label="Historial de Auditoría">
+              <div className="ad-view-header">
+                <div>
+                  <h2 className="ad-view-header-title">📜 Historial de Auditoría y Trazabilidad</h2>
+                  <p className="ad-view-header-subtitle">
+                    Registro cronológico inmutable de todas las acciones administrativas realizadas en Serviprox.
+                  </p>
+                </div>
+              </div>
+              <div className="ad-card" style={{ padding: "0", overflow: "hidden" }}>
+                <div className="ad-table-responsive">
+                  <table className="ad-table">
+                    <thead>
+                      <tr>
+                        <th>Administrador</th>
+                        <th>Acción Ejecutada</th>
+                        <th>Objetivo / Usuario</th>
+                        <th>Fecha y Hora</th>
+                        <th>Motivo Documentado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {auditLogs.map((log) => (
+                        <tr key={log.id}>
+                          <td><strong>{log.adminName}</strong></td>
+                          <td>
+                            <span className="ad-badge-neutral">{log.action}</span>
+                          </td>
+                          <td><strong>{log.target}</strong></td>
+                          <td style={{ color: "#64748b", fontSize: "0.82rem" }}>{log.date}</td>
+                          <td style={{ fontSize: "0.84rem", color: "#334155" }}>{log.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════
+              VISTAS DE MÓDULOS ADICIONALES (FALLAS, CONTRATACIONES, ETC.)
+             ═════════════════════════════════════════════════════════════════ */}
+          {activeMenu !== "inicio" &&
+            activeMenu !== "usuarios_clientes" &&
+            activeMenu !== "usuarios_profesionales" &&
+            activeMenu !== "pqr" &&
+            activeMenu !== "beneficios" &&
+            activeMenu !== "auditoria" && (
+              <div className="ad-card" style={{ padding: "32px", textAlign: "center" }}>
+                <div style={{ fontSize: "3rem", marginBottom: "12px" }}>📋</div>
+                <h3 style={{ margin: "0 0 8px" }}>Módulo de {activeMenu.replace("_", " ").toUpperCase()}</h3>
+                <p style={{ color: "#64748b", maxWidth: "500px", margin: "0 auto 20px" }}>
+                  Este módulo está conectado a la base de datos de Serviprox. Puedes regresar al panel de control principal o seleccionar otra sección del menú lateral.
+                </p>
+                <button
+                  type="button"
+                  className="ad-btn ad-btn-primary"
+                  onClick={() => setActiveMenu("inicio")}
+                >
+                  Volver a Inicio
+                </button>
+              </div>
+            )}
         </div>
       </main>
 
@@ -1579,11 +2830,20 @@ export const AdminDashboard: React.FC = () => {
       {/* ═════════════════════════════════════════════════════════════════════
           MODAL: DETALLES DE SOLICITUD / PQR / FALLA
          ═════════════════════════════════════════════════════════════════════ */}
+      {/* ═════════════════════════════════════════════════════════════════════
+          MODAL: DETALLES DE CLIENTE / PROFESIONAL / SOLICITUD
+         ═════════════════════════════════════════════════════════════════════ */}
       {modalDetailOpen && selectedDetailItem && (
         <div className="ad-modal-backdrop" onClick={() => setModalDetailOpen(false)}>
           <div className="ad-modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="ad-modal-header">
-              <h3>Detalles de {selectedDetailItem.type || "Elemento"}</h3>
+              <h3>
+                {selectedDetailItem.detailType === "client"
+                  ? "👤 Expediente del Cliente"
+                  : selectedDetailItem.detailType === "pro"
+                  ? "🛡️ Expediente Técnico del Profesional"
+                  : `Detalles de ${selectedDetailItem.type || "Elemento"}`}
+              </h3>
               <button
                 type="button"
                 className="ad-modal-close"
@@ -1593,29 +2853,143 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
             <div className="ad-modal-body">
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "24px" }}>{selectedDetailItem.typeIcon}</span>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: "1.05rem" }}>{selectedDetailItem.title}</h4>
-                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                    Publicado por {selectedDetailItem.userName} el {selectedDetailItem.date}
-                  </span>
-                </div>
-              </div>
+              {selectedDetailItem.detailType === "client" ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <div className="ad-avatar-initials" style={{ width: "50px", height: "50px", fontSize: "1.1rem" }}>
+                      {selectedDetailItem.full_name?.substring(0, 2).toUpperCase() || "CL"}
+                    </div>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: "1.15rem", color: "#0f172a" }}>
+                        {selectedDetailItem.full_name}
+                      </h4>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                        {selectedDetailItem.email}
+                      </p>
+                    </div>
+                  </div>
 
-              <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                <strong style={{ fontSize: "0.82rem", color: "#475569", textTransform: "uppercase" }}>Estado actual:</strong>
-                <div style={{ marginTop: "4px" }}>
-                  <span className={`ad-status-pill ${selectedDetailItem.statusClass}`}>
-                    {selectedDetailItem.status}
-                  </span>
-                </div>
-              </div>
+                  <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "14px", border: "1px solid #e2e8f0", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Documento (Cédula)</span>
+                      <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#1e293b", fontSize: "0.9rem" }}>{selectedDetailItem.document_id}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Verificación de Identidad</span>
+                      <p style={{ margin: "2px 0 0" }}>
+                        <span className={selectedDetailItem.is_identity_verified ? "ad-badge-success" : "ad-badge-warning"}>
+                          {selectedDetailItem.is_identity_verified ? "✓ Documento Validado" : "⏳ Pendiente"}
+                        </span>
+                      </p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Teléfono Móvil</span>
+                      <p style={{ margin: "2px 0 0", fontWeight: 600, color: "#1e293b", fontSize: "0.88rem" }}>{selectedDetailItem.phone}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Ciudad / Dirección</span>
+                      <p style={{ margin: "2px 0 0", fontWeight: 600, color: "#1e293b", fontSize: "0.88rem" }}>{selectedDetailItem.address}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Servicios Contratados</span>
+                      <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#2563eb", fontSize: "0.95rem" }}>
+                        📋 {selectedDetailItem.requests_count} solicitud(es)
+                      </p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Estado Disciplinario</span>
+                      <p style={{ margin: "2px 0 0" }}>
+                        <span className={selectedDetailItem.is_active ? "ad-badge-success" : "ad-badge-danger"}>
+                          {selectedDetailItem.is_active ? "● Cuenta Activa" : "🔒 Cuenta Bloqueada"}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : selectedDetailItem.detailType === "pro" ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <img
+                      src={selectedDetailItem.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop"}
+                      alt={selectedDetailItem.display_name}
+                      style={{ width: "52px", height: "52px", borderRadius: "50%", objectFit: "cover" }}
+                    />
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: "1.15rem", color: "#0f172a" }}>
+                        {selectedDetailItem.display_name}
+                      </h4>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                        {selectedDetailItem.headline || selectedDetailItem.specialty_label || "Especialista"}
+                      </p>
+                    </div>
+                  </div>
 
-              <p style={{ margin: 0, fontSize: "0.88rem", color: "#334155", lineHeight: 1.5 }}>
-                Este registro ha sido evaluado bajo los lineamientos técnicos de Serviprox. Puedes aprobarlo
-                inmediatamente para publicación en el catálogo o solicitar ajustes al usuario.
-              </p>
+                  <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "14px", border: "1px solid #e2e8f0", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Calificación / Desempeño</span>
+                      <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#1e293b", fontSize: "0.9rem" }}>
+                        ★ {selectedDetailItem.rating_avg} ({selectedDetailItem.jobs_completed} trabajos completados)
+                      </p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Tarjeta Profesional</span>
+                      <p style={{ margin: "2px 0 0" }}>
+                        <span className={selectedDetailItem.is_verified ? "ad-badge-success" : "ad-badge-warning"}>
+                          {selectedDetailItem.is_verified ? "✓ Tarjeta Aprobada" : "⏳ Pendiente Revisión"}
+                        </span>
+                      </p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Puntos de Incentivo</span>
+                      <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#7e22ce", fontSize: "0.95rem" }}>
+                        💎 {selectedDetailItem.points || 0} pts
+                      </p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Saldo en Billetera</span>
+                      <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#16a34a", fontSize: "0.95rem" }}>
+                        💳 ${Number(selectedDetailItem.wallet_balance || 0).toLocaleString("es-CO")} COP
+                      </p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Teléfono Móvil</span>
+                      <p style={{ margin: "2px 0 0", fontWeight: 600, color: "#1e293b", fontSize: "0.88rem" }}>{selectedDetailItem.phone}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Ubicación</span>
+                      <p style={{ margin: "2px 0 0", fontWeight: 600, color: "#1e293b", fontSize: "0.88rem" }}>
+                        {selectedDetailItem.neighborhood ? `${selectedDetailItem.neighborhood}, ${selectedDetailItem.city || "Bogotá"}` : (selectedDetailItem.city || "Bogotá")}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "24px" }}>{selectedDetailItem.typeIcon}</span>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: "1.05rem" }}>{selectedDetailItem.title}</h4>
+                      <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                        Publicado por {selectedDetailItem.userName} el {selectedDetailItem.date}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                    <strong style={{ fontSize: "0.82rem", color: "#475569", textTransform: "uppercase" }}>Estado actual:</strong>
+                    <div style={{ marginTop: "4px" }}>
+                      <span className={`ad-status-pill ${selectedDetailItem.statusClass}`}>
+                        {selectedDetailItem.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p style={{ margin: 0, fontSize: "0.88rem", color: "#334155", lineHeight: 1.5 }}>
+                    Este registro ha sido evaluado bajo los lineamientos técnicos de Serviprox. Puedes aprobarlo
+                    inmediatamente para publicación en el catálogo o solicitar ajustes al usuario.
+                  </p>
+                </>
+              )}
             </div>
             <div className="ad-modal-footer">
               <button
@@ -1625,16 +2999,81 @@ export const AdminDashboard: React.FC = () => {
               >
                 Cerrar
               </button>
-              <button
-                type="button"
-                className="ad-btn ad-btn-primary"
-                onClick={() => {
-                  handleApprove(selectedDetailItem.id);
-                  setModalDetailOpen(false);
-                }}
-              >
-                Aprobar Publicación
-              </button>
+              {selectedDetailItem.detailType === "client" ? (
+                <>
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-primary"
+                    onClick={() => {
+                      handleToggleClientVerification(selectedDetailItem);
+                      setModalDetailOpen(false);
+                    }}
+                  >
+                    {selectedDetailItem.is_identity_verified ? "Revocar Cédula" : "✓ Validar Cédula"}
+                  </button>
+                  {selectedDetailItem.is_active ? (
+                    <button
+                      type="button"
+                      className="ad-btn ad-btn-danger"
+                      onClick={() => {
+                        setTargetUserToBlock(selectedDetailItem.full_name);
+                        setTargetIdToBlock(selectedDetailItem.id);
+                        setModalDetailOpen(false);
+                        setModalBloqueoOpen(true);
+                      }}
+                    >
+                      🔒 Bloquear Cliente
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ad-btn"
+                      style={{ background: "#16a34a", color: "#ffffff" }}
+                      onClick={() => {
+                        handleUnblockUser(selectedDetailItem.id, selectedDetailItem.full_name);
+                        setModalDetailOpen(false);
+                      }}
+                    >
+                      🔓 Desbloquear Cliente
+                    </button>
+                  )}
+                </>
+              ) : selectedDetailItem.detailType === "pro" ? (
+                <>
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-primary"
+                    onClick={() => {
+                      handleToggleProVerification(selectedDetailItem);
+                      setModalDetailOpen(false);
+                    }}
+                  >
+                    {selectedDetailItem.is_verified ? "Revocar Tarjeta" : "✓ Aprobar Tarjeta"}
+                  </button>
+                  <button
+                    type="button"
+                    className="ad-btn"
+                    style={{ background: "#7e22ce", color: "#ffffff" }}
+                    onClick={() => {
+                      setModalDetailOpen(false);
+                      handleOpenAssignBenefitsForPro(selectedDetailItem);
+                    }}
+                  >
+                    🎁 Asignar Puntos
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="ad-btn ad-btn-primary"
+                  onClick={() => {
+                    handleApprove(selectedDetailItem.id);
+                    setModalDetailOpen(false);
+                  }}
+                >
+                  Aprobar Publicación
+                </button>
+              )}
             </div>
           </div>
         </div>

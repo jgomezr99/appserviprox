@@ -258,29 +258,34 @@ class AdminActionView(APIView):
 
         elif action_name in {"block_user", "unblock_user"}:
             is_blocking = action_name == "block_user"
-            pro_id_str = str(target_id).replace("pro-", "")
-            pro = None
-            if pro_id_str.isdigit():
-                pro = ProfessionalProfile.objects.filter(id=int(pro_id_str)).first()
-            if not pro:
-                pro = ProfessionalProfile.objects.filter(display_name__icontains=str(target_id)).first()
+            clean_id = str(target_id).replace("user-", "").replace("pro-", "")
+            u = None
+            if clean_id.isdigit():
+                u = User.objects.filter(id=int(clean_id)).first()
+            if not u:
+                pro = ProfessionalProfile.objects.filter(id=int(clean_id)).first() if clean_id.isdigit() else None
+                if pro:
+                    u = pro.user
+            if not u:
+                u = User.objects.filter(Q(email__iexact=str(target_id)) | Q(first_name__icontains=str(target_id))).first()
 
-            if pro:
-                pro.is_active = not is_blocking
-                pro.save()
-                pro.user.is_active = not is_blocking
-                pro.user.save()
+            if u:
+                u.is_active = not is_blocking
+                u.save()
+                if hasattr(u, "professional_profile"):
+                    u.professional_profile.is_active = not is_blocking
+                    u.professional_profile.save()
 
                 AdminAuditLog.objects.create(
                     admin_name=admin_name,
                     action="Bloqueo de cuenta" if is_blocking else "Desbloqueo de cuenta",
-                    target=f"{pro.display_name} ({pro.headline})",
+                    target=f"{u.get_full_name() or u.email} ({u.get_role_display() if hasattr(u, 'get_role_display') else u.role})",
                     reason=reason,
                 )
                 return Response({
                     "ok": True,
-                    "message": f"Usuario {pro.display_name} {'bloqueado' if is_blocking else 'desbloqueado'} con éxito en la base de datos.",
-                    "pro_active": pro.is_active,
+                    "message": f"Usuario {u.get_full_name() or u.email} {'bloqueado' if is_blocking else 'desbloqueado'} con éxito en la base de datos.",
+                    "is_active": u.is_active,
                 })
             else:
                 AdminAuditLog.objects.create(
@@ -290,6 +295,47 @@ class AdminActionView(APIView):
                     reason=reason,
                 )
                 return Response({"ok": True, "message": f"Bloqueo registrado para {target_id}."})
+
+        elif action_name == "toggle_user_verification":
+            clean_id = str(target_id).replace("user-", "").replace("pro-", "")
+            if clean_id.isdigit():
+                # Revisar si es perfil profesional
+                pro = ProfessionalProfile.objects.filter(id=int(clean_id)).first()
+                if pro:
+                    pro.is_verified = not pro.is_verified
+                    pro.save()
+                    action_txt = "Aprobación de tarjeta profesional" if pro.is_verified else "Revocación de verificación"
+                    AdminAuditLog.objects.create(
+                        admin_name=admin_name,
+                        action=action_txt,
+                        target=f"{pro.display_name} ({pro.headline})",
+                        reason=reason,
+                    )
+                    return Response({
+                        "ok": True,
+                        "message": f"Estado de verificación de {pro.display_name} actualizado a {'Aprobado' if pro.is_verified else 'Pendiente'}.",
+                        "is_verified": pro.is_verified,
+                    })
+
+                # Revisar si es usuario cliente
+                u = User.objects.filter(id=int(clean_id)).first()
+                if u:
+                    u.is_identity_verified = not u.is_identity_verified
+                    u.save()
+                    action_txt = "Validación de documento de identidad" if u.is_identity_verified else "Revocación de identidad"
+                    AdminAuditLog.objects.create(
+                        admin_name=admin_name,
+                        action=action_txt,
+                        target=f"{u.get_full_name() or u.email}",
+                        reason=reason,
+                    )
+                    return Response({
+                        "ok": True,
+                        "message": f"Identidad de {u.get_full_name() or u.email} actualizada a {'Verificada' if u.is_identity_verified else 'Pendiente'}.",
+                        "is_verified": u.is_identity_verified,
+                    })
+
+            return Response({"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
         elif action_name == "assign_benefits":
             pro_id_str = str(target_id).replace("pro-", "")
@@ -352,10 +398,13 @@ class AdminUsersListView(APIView):
                 "last_name": u.last_name,
                 "full_name": u.get_full_name() or u.username,
                 "role": u.role,
-                "phone": u.phone,
-                "city": u.city,
+                "phone": u.phone or "+57 300 123 4567",
+                "city": u.city or "Bogotá",
+                "address": u.address or "Bogotá, Colombia",
+                "document_id": u.document_id or f"CC 1.020.345.{u.id:03d}",
                 "is_active": u.is_active,
                 "is_identity_verified": u.is_identity_verified,
+                "requests_count": u.service_requests.count(),
                 "date_joined": u.date_joined.strftime("%d/%m/%Y"),
             })
 

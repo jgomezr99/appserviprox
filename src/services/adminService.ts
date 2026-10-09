@@ -144,5 +144,31 @@ export const adminService = {
       return [];
     }
   },
+
+  /**
+   * Consulta listado completo de profesionales desde la base de datos.
+   */
+  async getProfessionals(): Promise<any[]> {
+    try {
+      const res = await api.get<any>("professionals/");
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.results)) return res.results;
+      return [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Cambia el estado de verificación de un profesional o cliente en la base de datos.
+   */
+  async toggleVerification(targetId: string | number, reason?: string): Promise<any> {
+    return await this.executeAction({
+      action: "toggle_user_verification" as any,
+      target_id: targetId,
+      reason: reason || "Revisión documental desde el panel administrativo",
+    });
+  },
 };
+
 
