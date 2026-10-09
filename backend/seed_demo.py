@@ -382,6 +382,30 @@ def reset_demo() -> None:
     ServiceCategory.objects.all().delete()
 
 
+def seed_admin() -> User:
+    admin_user, created = User.objects.get_or_create(
+        email="admin@serviprox.com",
+        defaults={
+            "username": "admin",
+            "first_name": "Administrador",
+            "last_name": "Serviprox",
+            "role": UserRole.STAFF,
+            "phone": "+57 300 123 4567",
+            "city": "Bogotá",
+            "is_identity_verified": True,
+            "onboarding_completed": True,
+            "is_staff": True,
+            "is_superuser": True,
+        },
+    )
+    admin_user.set_password(DEMO_PASSWORD)
+    admin_user.is_staff = True
+    admin_user.is_superuser = True
+    admin_user.role = UserRole.STAFF
+    admin_user.save()
+    return admin_user
+
+
 @transaction.atomic
 def run(reset: bool = False) -> None:
     if reset:
@@ -390,6 +414,7 @@ def run(reset: bool = False) -> None:
     seed_questions()
     seed_client()
     seed_professionals(categories)
+    seed_admin()
 
 
 if __name__ == "__main__":
@@ -397,3 +422,4 @@ if __name__ == "__main__":
     print("Datos demo listos.")
     print(f"  Cliente:      camila@demo.serviprox.co / {DEMO_PASSWORD}")
     print(f"  Profesional:  andres.ruiz@demo.serviprox.co / {DEMO_PASSWORD}")
+    print(f"  Administrador: admin@serviprox.com o admin / {DEMO_PASSWORD}")

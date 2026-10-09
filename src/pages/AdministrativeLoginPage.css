@@ -143,6 +143,7 @@
 
 .admin-login-page .admin-login-error {
   margin: 0;
+  text-decoration: none;
   padding: 10px 14px;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.25);
@@ -154,11 +155,11 @@
 .admin-login-page .admin-login-support {
   border: 0;
   padding: 6px;
+  text-decoration: none;
   background: transparent;
   color: #ffffff;
   font-size: 0.86rem;
   font-weight: 700;
-  text-decoration: underline;
   cursor: pointer;
   text-align: center;
   transition: opacity 0.15s;
