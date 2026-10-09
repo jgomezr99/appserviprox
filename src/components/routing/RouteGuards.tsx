@@ -2,8 +2,9 @@ import React from "react";
 import { IonContent, IonPage, IonSpinner } from "@ionic/react";
 import { Redirect, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import type { UserRole } from "../../types/serviprox";
+import type { UserRole, BlockedAccountInfo } from "../../types/serviprox";
 import { getEntryRoute, getOnboardingRoute, getRoleHomeRoute } from "../../utils/routes";
+import { BlockedAccountModal } from "../BlockedAccountModal";
 import "../../pages/RolePages.css";
 
 export const RouteLoading: React.FC = () => (
@@ -38,6 +39,54 @@ export const RequireAuth: React.FC<GuardProps> = ({
 
   if (isLoading) return <RouteLoading />;
   if (!isAuthenticated || !user) return <Redirect to="/login" />;
+
+  // Verificación de suspensión disciplinaria por el administrador
+  const checkIsBlocked = (): BlockedAccountInfo | null => {
+    if (user.role === "staff") return null;
+
+    if (user.is_blocked || (user.is_active === false && user.block_reason)) {
+      return {
+        is_blocked: true,
+        block_type: user.block_type || "temporal",
+        block_duration_days: user.block_duration_days || 7,
+        block_reason: user.block_reason || "Suspensión administrativa",
+        blocked_until: user.blocked_until,
+        blocked_at: user.blocked_at,
+        user_name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username,
+        role: user.role,
+      };
+    }
+
+    try {
+      const stored = JSON.parse(localStorage.getItem("serviprox_blocked_users") || "{}");
+      const emailKey = user.email?.toLowerCase();
+      const idKey = String(user.id);
+      const nameKey = `${user.first_name} ${user.last_name}`.toLowerCase();
+      const blockedData = stored[emailKey] || stored[idKey] || stored[nameKey];
+
+      if (blockedData && blockedData.is_blocked) {
+        return {
+          ...blockedData,
+          user_name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username,
+          role: user.role,
+        };
+      }
+    } catch {}
+
+    return null;
+  };
+
+  const blockedInfo = checkIsBlocked();
+  if (blockedInfo) {
+    return (
+      <IonPage>
+        <IonContent fullscreen className="sp-role-content">
+          <BlockedAccountModal info={blockedInfo} allowClose={false} />
+        </IonContent>
+      </IonPage>
+    );
+  }
+
   if (role && user.role !== role) return <Redirect to={getEntryRoute(user)} />;
   if (user.role === "staff" && role !== "staff") return <Redirect to="/staff" />;
 

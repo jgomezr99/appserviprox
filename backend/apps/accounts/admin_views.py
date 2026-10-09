@@ -269,16 +269,45 @@ class AdminActionView(APIView):
             if not u:
                 u = User.objects.filter(Q(email__iexact=str(target_id)) | Q(first_name__icontains=str(target_id))).first()
 
+            block_type = request.data.get("block_type", "temporal")
+            block_duration = int(request.data.get("block_duration", 7) or 7)
+
             if u:
-                u.is_active = not is_blocking
+                from datetime import timedelta
+                from django.utils import timezone
+
+                now = timezone.now()
+                if is_blocking:
+                    u.is_active = False
+                    u.is_blocked = True
+                    u.block_type = block_type
+                    u.block_reason = reason
+                    u.block_duration_days = block_duration if block_type == "temporal" else 0
+                    u.blocked_at = now
+                    u.blocked_until = now + timedelta(days=block_duration) if block_type == "temporal" else None
+                else:
+                    u.is_active = True
+                    u.is_blocked = False
+                    u.block_type = ""
+                    u.block_reason = ""
+                    u.block_duration_days = 0
+                    u.blocked_at = None
+                    u.blocked_until = None
                 u.save()
+
                 if hasattr(u, "professional_profile"):
                     u.professional_profile.is_active = not is_blocking
                     u.professional_profile.save()
 
+                action_desc = (
+                    f"Bloqueo temporal ({block_duration} días hasta {u.blocked_until.strftime('%d/%m/%Y %H:%M')})"
+                    if (is_blocking and block_type == "temporal" and u.blocked_until)
+                    else ("Bloqueo definitivo de cuenta" if is_blocking else "Desbloqueo de cuenta")
+                )
+
                 AdminAuditLog.objects.create(
                     admin_name=admin_name,
-                    action="Bloqueo de cuenta" if is_blocking else "Desbloqueo de cuenta",
+                    action=action_desc,
                     target=f"{u.get_full_name() or u.email} ({u.get_role_display() if hasattr(u, 'get_role_display') else u.role})",
                     reason=reason,
                 )
@@ -286,6 +315,12 @@ class AdminActionView(APIView):
                     "ok": True,
                     "message": f"Usuario {u.get_full_name() or u.email} {'bloqueado' if is_blocking else 'desbloqueado'} con éxito en la base de datos.",
                     "is_active": u.is_active,
+                    "is_blocked": u.is_blocked,
+                    "block_type": u.block_type,
+                    "block_duration_days": u.block_duration_days,
+                    "block_reason": u.block_reason,
+                    "blocked_until": u.blocked_until.isoformat() if u.blocked_until else None,
+                    "blocked_at": u.blocked_at.isoformat() if u.blocked_at else None,
                 })
             else:
                 AdminAuditLog.objects.create(
@@ -482,6 +517,13 @@ class AdminUsersListView(APIView):
                 "address": u.address or "Bogotá, Colombia",
                 "document_id": u.document_id or f"CC 1.020.345.{u.id:03d}",
                 "is_active": u.is_active,
+                "is_blocked": u.is_blocked,
+                "block_type": u.block_type,
+                "block_duration_days": u.block_duration_days,
+                "block_reason": u.block_reason,
+                "blocked_until": u.blocked_until.isoformat() if u.blocked_until else None,
+                "blocked_at": u.blocked_at.isoformat() if u.blocked_at else None,
+                "is_currently_blocked": u.is_currently_blocked,
                 "is_identity_verified": u.is_identity_verified,
                 "requests_count": u.service_requests.count(),
                 "date_joined": u.date_joined.strftime("%d/%m/%Y"),

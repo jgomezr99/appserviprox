@@ -1,0 +1,346 @@
+/* ═════════════════════════════════════════════════════════════════════
+   AVISO OFICIAL DE SUSPENSIÓN / BLOQUEO DISCIPLINARIO (SERVIPROX)
+   ═════════════════════════════════════════════════════════════════════ */
+
+.sp-blocked-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: spBlockedFadeIn 0.25s ease-out;
+}
+
+@keyframes spBlockedFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.sp-blocked-card {
+  background: #ffffff;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 28px 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  border: 1px solid #fee2e2;
+}
+
+.sp-blocked-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-blocked-icon-box {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 8px #fef2f2;
+}
+
+.sp-blocked-icon-box svg {
+  width: 32px;
+  height: 32px;
+}
+
+.sp-blocked-badge {
+  display: inline-block;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+}
+
+.sp-blocked-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 4px 0 0;
+  line-height: 1.25;
+}
+
+.sp-blocked-subtitle {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Caja de Temporizador / Vigencia de la Sanción */
+.sp-blocked-timer-box {
+  background: #fffbeb;
+  border: 1.5px solid #fde68a;
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sp-blocked-timer-box.permanent {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.sp-blocked-timer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sp-blocked-timer-icon {
+  font-size: 26px;
+}
+
+.sp-blocked-timer-main {
+  margin: 2px 0 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #b45309;
+}
+
+.sp-blocked-timer-box.permanent .sp-blocked-timer-main {
+  color: #dc2626;
+}
+
+.sp-blocked-timer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  padding-top: 6px;
+  border-top: 1px dashed #fde68a;
+}
+
+.sp-blocked-label {
+  color: #78350f;
+  font-weight: 600;
+}
+
+.sp-blocked-value.highlight {
+  color: #92400e;
+  font-weight: 700;
+  text-align: right;
+}
+
+.sp-blocked-value.countdown {
+  color: #b45309;
+  font-weight: 800;
+  background: #fef3c7;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* Motivo Justificado */
+.sp-blocked-reason-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sp-blocked-reason-header {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+}
+
+.sp-blocked-reason-quote {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #1e293b;
+  font-style: italic;
+  line-height: 1.45;
+  border-left: 3px solid #dc2626;
+  padding-left: 10px;
+}
+
+.sp-blocked-reason-date {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.sp-blocked-info-text {
+  font-size: 0.78rem;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 10px 12px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.sp-blocked-info-text p {
+  margin: 0;
+}
+
+/* Formulario de Apelación */
+.sp-blocked-appeal-form {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sp-blocked-appeal-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1e40af;
+}
+
+.sp-blocked-appeal-form textarea {
+  width: 100%;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.84rem;
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+}
+
+.sp-blocked-appeal-form textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.sp-blocked-appeal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sp-blocked-appeal-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.sp-blocked-help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #64748b;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sp-link-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.sp-link-btn:hover {
+  text-decoration: underline;
+}
+
+/* Botones Principales */
+.sp-blocked-footer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.sp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.sp-btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.sp-btn-danger:hover {
+  background: #b91c1c;
+}
+
+.sp-btn-outline {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.sp-btn-outline:hover {
+  background: #f1f5f9;
+}
+
+.sp-btn-secondary {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.sp-btn-secondary:hover {
+  background: #cbd5e1;
+}
+
+.sp-btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.sp-btn-primary:hover {
+  background: #1d4ed8;
+}
+

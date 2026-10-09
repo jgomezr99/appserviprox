@@ -23,6 +23,14 @@ class User(AbstractUser):
     avatar_url = models.URLField(_("url de avatar"), blank=True, default="")
     is_identity_verified = models.BooleanField(_("identidad verificada"), default=False)
 
+    # Control disciplinario y suspensiones administrativas
+    is_blocked = models.BooleanField(_("cuenta bloqueada"), default=False)
+    block_type = models.CharField(_("tipo de bloqueo"), max_length=30, blank=True, default="")
+    block_duration_days = models.IntegerField(_("días de suspensión"), default=0)
+    block_reason = models.TextField(_("motivo de la sanción"), blank=True, default="")
+    blocked_until = models.DateTimeField(_("bloqueado hasta"), null=True, blank=True)
+    blocked_at = models.DateTimeField(_("fecha de bloqueo"), null=True, blank=True)
+
     onboarding_completed = models.BooleanField(_("onboarding completado"), default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -48,6 +56,16 @@ class User(AbstractUser):
     @property
     def is_professional(self) -> bool:
         return self.role == UserRole.PROFESSIONAL
+
+    @property
+    def is_currently_blocked(self) -> bool:
+        if not self.is_blocked:
+            return False
+        if self.block_type == "temporal" and self.blocked_until:
+            from django.utils import timezone
+            if timezone.now() >= self.blocked_until:
+                return False
+        return True
 
 
 class PasswordResetCode(models.Model):

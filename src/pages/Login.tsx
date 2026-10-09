@@ -30,6 +30,8 @@ import { ServerConnectionModal } from "../components/ServerConnectionModal";
 import logo from "../Assets/logo.png";
 import imagemain from "../Assets/imag/Categorías de servicios para el hogar.png";
 import contractorImage from "../Assets/imag/contratista .png";
+import { BlockedAccountModal } from "../components/BlockedAccountModal";
+import type { BlockedAccountInfo } from "../types/serviprox";
 import styles from "./Login.module.css";
 
 const emailOk = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
@@ -101,6 +103,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   const [isAdminLogin, setIsAdminLogin] = useState(administrative);
   const [serverModalOpen, setServerModalOpen] = useState(false);
   const [serverConnected, setServerConnected] = useState<boolean | null>(null);
+  const [blockedAccountInfo, setBlockedAccountInfo] = useState<BlockedAccountInfo | null>(null);
 
   useEffect(() => {
     checkBackendHealth().then((res) => {
@@ -165,8 +168,39 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
 
     setError("");
     setIsSubmitting(true);
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // 1. Revisar si la cuenta está suspendida en almacenamiento local (ej. demo o bloqueo reciente)
     try {
-      const currentUser = await login({ email: email.trim().toLowerCase(), password });
+      const stored = JSON.parse(localStorage.getItem("serviprox_blocked_users") || "{}");
+      if (stored[normalizedEmail] && stored[normalizedEmail].is_blocked) {
+        setBlockedAccountInfo({
+          ...stored[normalizedEmail],
+          user_name: normalizedEmail,
+        });
+        setIsSubmitting(false);
+        return;
+      }
+    } catch {}
+
+    try {
+      const currentUser = await login({ email: normalizedEmail, password });
+
+      // Si el usuario autenticado tiene indicador de suspensión
+      if (currentUser?.is_blocked || (currentUser?.is_active === false && currentUser?.block_reason)) {
+        setBlockedAccountInfo({
+          is_blocked: true,
+          block_type: currentUser.block_type || "temporal",
+          block_duration_days: currentUser.block_duration_days || 7,
+          block_reason: currentUser.block_reason || "Suspensión administrativa",
+          blocked_until: currentUser.blocked_until,
+          blocked_at: currentUser.blocked_at,
+          user_name: `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || currentUser.username,
+          role: currentUser.role,
+        });
+        return;
+      }
+
       if (administrative && currentUser.role !== "staff") {
         setError("Esta cuenta no tiene permisos administrativos.");
         return;
@@ -176,7 +210,13 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
       } else {
         history.replace(getEntryRoute(currentUser));
       }
-    } catch (err) {
+    } catch (err: any) {
+      // 2. Revisar si la API devolvió rechazo por cuenta suspendida
+      const payload = err?.payload;
+      if (payload && payload.is_blocked) {
+        setBlockedAccountInfo(payload);
+        return;
+      }
       setError(getLoginErrorMessage(err));
     } finally {
       setIsSubmitting(false);
@@ -541,6 +581,13 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
           setShowLoginForm(true);
         }}
       />
+      {blockedAccountInfo && (
+        <BlockedAccountModal
+          info={blockedAccountInfo}
+          allowClose={true}
+          onClose={() => setBlockedAccountInfo(null)}
+        />
+      )}
     </IonPage>
   );
 };

@@ -51,6 +51,12 @@ export interface ClientItem {
   is_identity_verified: boolean;
   requests_count: number;
   date_joined: string;
+  is_blocked?: boolean;
+  block_type?: string;
+  block_duration_days?: number;
+  block_reason?: string;
+  blocked_until?: string | null;
+  blocked_at?: string | null;
 }
 
 export interface ProfessionalItem {
@@ -72,6 +78,12 @@ export interface ProfessionalItem {
   categories?: string[];
   neighborhood?: string;
   city?: string;
+  is_blocked?: boolean;
+  block_type?: string;
+  block_duration_days?: number;
+  block_reason?: string;
+  blocked_until?: string | null;
+  blocked_at?: string | null;
 }
 
 interface TopProfessional {
@@ -1388,10 +1400,34 @@ export const AdminDashboard: React.FC = () => {
       reason: "Reactivación de cuenta por cumplimiento de términos",
     });
     setClientsList((prev) =>
-      prev.map((c) => (c.id === targetId ? { ...c, is_active: true } : c))
+      prev.map((c) =>
+        c.id === targetId
+          ? {
+              ...c,
+              is_active: true,
+              is_blocked: false,
+              block_type: "",
+              block_duration_days: 0,
+              block_reason: "",
+              blocked_until: null,
+            }
+          : c
+      )
     );
     setAllProsList((prev) =>
-      prev.map((p) => (p.id === targetId ? { ...p, is_active: true } : p))
+      prev.map((p) =>
+        p.id === targetId
+          ? {
+              ...p,
+              is_active: true,
+              is_blocked: false,
+              block_type: "",
+              block_duration_days: 0,
+              block_reason: "",
+              blocked_until: null,
+            }
+          : p
+      )
     );
     setAuditLogs((prev) => [
       {
@@ -1414,11 +1450,17 @@ export const AdminDashboard: React.FC = () => {
     const reasonText = blockReason;
     const target = targetUserToBlock || "Usuario seleccionado";
     const targetId = targetIdToBlock || target;
+    const durationDays = blockType === "permanente" ? 0 : Number(blockDuration) || 7;
+    const blockedUntilDate =
+      blockType === "permanente"
+        ? null
+        : new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+
     setAuditLogs((prev) => [
       {
         id: `aud-${Date.now()}`,
         adminName: adminDisplayName,
-        action: blockType === "temporal" ? `Bloqueo temporal (${blockDuration} días)` : "Bloqueo permanente",
+        action: blockType === "temporal" ? `Bloqueo temporal (${durationDays} días)` : "Bloqueo permanente",
         target: target,
         date: new Date().toLocaleString(),
         reason: reasonText,
@@ -1433,19 +1475,37 @@ export const AdminDashboard: React.FC = () => {
       target_id: targetId,
       admin_name: adminDisplayName,
       reason: reasonText,
+      block_type: blockType,
+      block_duration: durationDays,
     });
 
     setClientsList((prev) =>
       prev.map((c) =>
         c.id === targetId || c.full_name === target || c.email === target
-          ? { ...c, is_active: false }
+          ? {
+              ...c,
+              is_active: false,
+              is_blocked: true,
+              block_type: blockType,
+              block_duration_days: durationDays,
+              block_reason: reasonText,
+              blocked_until: blockedUntilDate,
+            }
           : c
       )
     );
     setAllProsList((prev) =>
       prev.map((p) =>
         p.id === targetId || p.display_name === target
-          ? { ...p, is_active: false }
+          ? {
+              ...p,
+              is_active: false,
+              is_blocked: true,
+              block_type: blockType,
+              block_duration_days: durationDays,
+              block_reason: reasonText,
+              blocked_until: blockedUntilDate,
+            }
           : p
       )
     );
@@ -1456,7 +1516,11 @@ export const AdminDashboard: React.FC = () => {
           : bp
       )
     );
-    alert(`Cuenta de ${target} bloqueada con éxito en la base de datos.`);
+    alert(
+      `Cuenta de ${target} bloqueada con éxito en la base de datos (${
+        blockType === "permanente" ? "Permanente" : `${durationDays} días`
+      }).`
+    );
     fetchLiveOverview();
     fetchClients();
     fetchPros();
@@ -3130,9 +3194,20 @@ export const AdminDashboard: React.FC = () => {
                               {client.date_joined}
                             </td>
                             <td>
-                              <span className={client.is_active ? "ad-badge-success" : "ad-badge-danger"}>
-                                {client.is_active ? "● Activa" : "🔒 Bloqueada"}
-                              </span>
+                              {client.is_active && !client.is_blocked ? (
+                                <span className="ad-badge-success">● Activa</span>
+                              ) : (
+                                <div style={{ display: "inline-flex", flexDirection: "column", gap: "2px", alignItems: "flex-start" }}>
+                                  <span className="ad-badge-danger" title={client.block_reason || "Cuenta suspendida"}>
+                                    🔒 {client.block_type === "permanente" ? "Bloqueo Permanente" : `Suspendida (${client.block_duration_days || 7}d)`}
+                                  </span>
+                                  {client.blocked_until && (
+                                    <span style={{ fontSize: "0.72rem", color: "#dc2626", fontWeight: 600 }}>
+                                      Hasta {new Date(client.blocked_until).toLocaleDateString("es-CO")}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td style={{ textAlign: "right" }}>
                               <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
@@ -3154,7 +3229,7 @@ export const AdminDashboard: React.FC = () => {
                                   {client.is_identity_verified ? "Revocar" : "✓ Validar Cédula"}
                                 </button>
 
-                                {client.is_active ? (
+                                {client.is_active && !client.is_blocked ? (
                                   <button
                                     type="button"
                                     className="ad-action-pill block"
@@ -3401,9 +3476,20 @@ export const AdminDashboard: React.FC = () => {
                               </div>
                             </td>
                             <td>
-                              <span className={pro.is_active ? "ad-badge-success" : "ad-badge-danger"}>
-                                {pro.is_active ? "● Activo" : "🔒 Suspendido"}
-                              </span>
+                              {pro.is_active && !pro.is_blocked ? (
+                                <span className="ad-badge-success">● Activo</span>
+                              ) : (
+                                <div style={{ display: "inline-flex", flexDirection: "column", gap: "2px", alignItems: "flex-start" }}>
+                                  <span className="ad-badge-danger" title={pro.block_reason || "Cuenta suspendida"}>
+                                    🔒 {pro.block_type === "permanente" ? "Bloqueo Permanente" : `Suspendido (${pro.block_duration_days || 7}d)`}
+                                  </span>
+                                  {pro.blocked_until && (
+                                    <span style={{ fontSize: "0.72rem", color: "#dc2626", fontWeight: 600 }}>
+                                      Hasta {new Date(pro.blocked_until).toLocaleDateString("es-CO")}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td style={{ textAlign: "right" }}>
                               <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
@@ -3434,7 +3520,7 @@ export const AdminDashboard: React.FC = () => {
                                   🎁 Puntos
                                 </button>
 
-                                {pro.is_active ? (
+                                {pro.is_active && !pro.is_blocked ? (
                                   <button
                                     type="button"
                                     className="ad-action-pill block"
@@ -5417,12 +5503,30 @@ export const AdminDashboard: React.FC = () => {
                     <div>
                       <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Estado Disciplinario</span>
                       <p style={{ margin: "2px 0 0" }}>
-                        <span className={selectedDetailItem.is_active ? "ad-badge-success" : "ad-badge-danger"}>
-                          {selectedDetailItem.is_active ? "● Cuenta Activa" : "🔒 Cuenta Bloqueada"}
+                        <span className={selectedDetailItem.is_active && !selectedDetailItem.is_blocked ? "ad-badge-success" : "ad-badge-danger"}>
+                          {selectedDetailItem.is_active && !selectedDetailItem.is_blocked
+                            ? "● Cuenta Activa"
+                            : `🔒 Suspendida (${selectedDetailItem.block_type === "permanente" ? "Permanente" : `${selectedDetailItem.block_duration_days || 7} días`})`}
                         </span>
                       </p>
                     </div>
                   </div>
+
+                  {(!selectedDetailItem.is_active || selectedDetailItem.is_blocked) && (
+                    <div style={{ marginTop: "14px", padding: "14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "12px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, color: "#991b1b", fontSize: "0.9rem" }}>
+                        <span>⚠️</span> Sanción Disciplinaria Aplicada por Administración
+                      </div>
+                      <p style={{ margin: "6px 0 4px", fontSize: "0.85rem", color: "#b91c1c", lineHeight: 1.4 }}>
+                        <strong>Motivo oficial:</strong> "{selectedDetailItem.block_reason || "Incumplimiento de las normas de la comunidad Serviprox"}"
+                      </p>
+                      {selectedDetailItem.blocked_until && (
+                        <p style={{ margin: "4px 0 0", fontSize: "0.8rem", color: "#dc2626" }}>
+                          <strong>Fecha de reactivación automática:</strong> {new Date(selectedDetailItem.blocked_until).toLocaleString("es-CO")}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : selectedDetailItem.detailType === "pro" ? (
                 <>
@@ -5474,12 +5578,38 @@ export const AdminDashboard: React.FC = () => {
                       <p style={{ margin: "2px 0 0", fontWeight: 600, color: "#1e293b", fontSize: "0.88rem" }}>{selectedDetailItem.phone}</p>
                     </div>
                     <div>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Estado Disciplinario</span>
+                      <p style={{ margin: "2px 0 0" }}>
+                        <span className={selectedDetailItem.is_active && !selectedDetailItem.is_blocked ? "ad-badge-success" : "ad-badge-danger"}>
+                          {selectedDetailItem.is_active && !selectedDetailItem.is_blocked
+                            ? "● Cuenta Activa"
+                            : `🔒 Suspendido (${selectedDetailItem.block_type === "permanente" ? "Permanente" : `${selectedDetailItem.block_duration_days || 7} días`})`}
+                        </span>
+                      </p>
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
                       <span style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Ubicación</span>
                       <p style={{ margin: "2px 0 0", fontWeight: 600, color: "#1e293b", fontSize: "0.88rem" }}>
                         {selectedDetailItem.neighborhood ? `${selectedDetailItem.neighborhood}, ${selectedDetailItem.city || "Bogotá"}` : (selectedDetailItem.city || "Bogotá")}
                       </p>
                     </div>
                   </div>
+
+                  {(!selectedDetailItem.is_active || selectedDetailItem.is_blocked) && (
+                    <div style={{ marginTop: "14px", padding: "14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "12px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, color: "#991b1b", fontSize: "0.9rem" }}>
+                        <span>⚠️</span> Sanción Disciplinaria Aplicada al Contratista
+                      </div>
+                      <p style={{ margin: "6px 0 4px", fontSize: "0.85rem", color: "#b91c1c", lineHeight: 1.4 }}>
+                        <strong>Motivo oficial:</strong> "{selectedDetailItem.block_reason || "Incumplimiento de términos o reporte grave en servicio"}"
+                      </p>
+                      {selectedDetailItem.blocked_until && (
+                        <p style={{ margin: "4px 0 0", fontSize: "0.8rem", color: "#dc2626" }}>
+                          <strong>Fecha de reactivación automática:</strong> {new Date(selectedDetailItem.blocked_until).toLocaleString("es-CO")}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
@@ -5823,4 +5953,3 @@ export const AdminDashboard: React.FC = () => {
 };
 
 export default AdminDashboard;
-

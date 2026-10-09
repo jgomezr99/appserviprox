@@ -244,3 +244,11 @@ class CompleteOnboardingView(APIView):
         user.onboarding_completed = True
         user.save(update_fields=["onboarding_completed"])
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import CustomTokenObtainPairSerializer
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """Obtención de token JWT con verificación disciplinaria y aviso de suspensión administrativa."""
+    serializer_class = CustomTokenObtainPairSerializer

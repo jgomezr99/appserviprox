@@ -96,12 +96,44 @@ export const adminService = {
     target_id: string | number;
     reason?: string;
     admin_name?: string;
+    block_type?: "temporal" | "permanente" | string;
+    block_duration?: number;
     points?: number;
     recharge?: number;
     response_text?: string;
     new_status?: string;
     send_notification?: boolean;
   }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+    // Sincronizar en almacenamiento local para sesiones demo / sin conexión
+    const BLOCKED_KEY = "serviprox_blocked_users";
+    try {
+      const stored = JSON.parse(localStorage.getItem(BLOCKED_KEY) || "{}");
+      const targetStr = String(params.target_id).toLowerCase();
+      if (params.action === "block_user") {
+        const now = new Date();
+        const duration = Number(params.block_duration) || 7;
+        const isTemporal = params.block_type !== "permanente";
+        const blockedUntil = isTemporal
+          ? new Date(now.getTime() + duration * 24 * 60 * 60 * 1000).toISOString()
+          : null;
+
+        stored[targetStr] = {
+          is_blocked: true,
+          block_type: params.block_type || "temporal",
+          block_duration_days: duration,
+          block_reason: params.reason || "Suspensión disciplinaria por la administración.",
+          blocked_at: now.toISOString(),
+          blocked_until: blockedUntil,
+        };
+        localStorage.setItem(BLOCKED_KEY, JSON.stringify(stored));
+      } else if (params.action === "unblock_user") {
+        delete stored[targetStr];
+        localStorage.setItem(BLOCKED_KEY, JSON.stringify(stored));
+      }
+    } catch {
+      // Ignorar fallas de localStorage
+    }
+
     try {
       return await api.post("admin/action/", params);
     } catch (err: any) {

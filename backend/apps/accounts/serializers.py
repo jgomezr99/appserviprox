@@ -20,6 +20,7 @@ class ClientProfileSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     initials = serializers.CharField(read_only=True)
     client_profile = ClientProfileSerializer(read_only=True)
+    is_currently_blocked = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -38,6 +39,14 @@ class UserSerializer(serializers.ModelSerializer):
             "initials",
             "is_identity_verified",
             "onboarding_completed",
+            "is_active",
+            "is_blocked",
+            "block_type",
+            "block_duration_days",
+            "block_reason",
+            "blocked_until",
+            "blocked_at",
+            "is_currently_blocked",
             "client_profile",
             "created_at",
         ]
@@ -48,6 +57,14 @@ class UserSerializer(serializers.ModelSerializer):
             "initials",
             "is_identity_verified",
             "onboarding_completed",
+            "is_active",
+            "is_blocked",
+            "block_type",
+            "block_duration_days",
+            "block_reason",
+            "blocked_until",
+            "blocked_at",
+            "is_currently_blocked",
             "client_profile",
             "created_at",
         ]
@@ -167,4 +184,37 @@ class RegisterSerializer(serializers.ModelSerializer):
                     )
 
         return user
+
+
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import exceptions
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        email_or_username = attrs.get(self.username_field, "").strip()
+        user = User.objects.filter(email__iexact=email_or_username).first()
+        if not user:
+            user = User.objects.filter(username__iexact=email_or_username).first()
+
+        if user and user.is_currently_blocked:
+            if user.block_type == "temporal" and user.blocked_until and timezone.now() >= user.blocked_until:
+                user.is_blocked = False
+                user.is_active = True
+                user.save()
+            else:
+                raise exceptions.AuthenticationFailed({
+                    "detail": "Tu cuenta se encuentra suspendida por la administración de Serviprox.",
+                    "is_blocked": True,
+                    "block_type": user.block_type or "temporal",
+                    "block_duration_days": user.block_duration_days or 7,
+                    "block_reason": user.block_reason or "Incumplimiento de los Términos y Condiciones de la plataforma.",
+                    "blocked_until": user.blocked_until.isoformat() if user.blocked_until else None,
+                    "blocked_at": user.blocked_at.isoformat() if user.blocked_at else None,
+                    "user_name": user.get_full_name() or user.username,
+                    "role": user.role,
+                })
+
+        data = super().validate(attrs)
+        data["user"] = UserSerializer(self.user).data
+        return data
 

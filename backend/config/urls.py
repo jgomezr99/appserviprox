@@ -24,9 +24,11 @@ def health_check(request):
         }, status=503)
 
 
+from apps.accounts.views import CustomTokenObtainPairView
+
 api_v1 = [
     path("health/", health_check, name="api-health"),
-    path("auth/token/", TokenObtainPairView.as_view(), name="token-obtain"),
+    path("auth/token/", CustomTokenObtainPairView.as_view(), name="token-obtain"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("", include("apps.accounts.urls")),
     path("", include("apps.households.urls")),

@@ -1,6 +1,18 @@
 export type UserRole = "client" | "professional" | "staff";
 export type PublicRegisterRole = Exclude<UserRole, "staff">;
 
+export interface BlockedAccountInfo {
+  is_blocked: boolean;
+  block_type?: "temporal" | "permanente" | string;
+  block_duration_days?: number;
+  block_reason?: string;
+  blocked_until?: string | null;
+  blocked_at?: string | null;
+  user_name?: string;
+  role?: string;
+  detail?: string;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -16,6 +28,14 @@ export interface User {
   initials: string;
   is_identity_verified: boolean;
   onboarding_completed: boolean;
+  is_active?: boolean;
+  is_blocked?: boolean;
+  block_type?: "temporal" | "permanente" | string;
+  block_duration_days?: number;
+  block_reason?: string;
+  blocked_until?: string | null;
+  blocked_at?: string | null;
+  is_currently_blocked?: boolean;
   created_at: string;
 }
 
