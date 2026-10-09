@@ -1941,5 +1941,324 @@
   color: #ffffff;
 }
 
+/* ═════════════════════════════════════════════════════════════════
+   ESTILOS OFICIALES: MÓDULO PQR Y REPORTES (DISEÑO EXACTO)
+   ═════════════════════════════════════════════════════════════════ */
+
+.ad-pqr-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Grilla de 4 KPIs con gradientes y sparklines */
+.ad-pqr-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .ad-pqr-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .ad-pqr-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ad-pqr-kpi-card {
+  background: #ffffff;
+  border: 1px solid var(--ad-border);
+  border-radius: 16px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.ad-pqr-kpi-card.blue {
+  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+  border-color: #dbeafe;
+}
+.ad-pqr-kpi-card.red {
+  background: linear-gradient(180deg, #fef2f2 0%, #ffffff 100%);
+  border-color: #fee2e2;
+}
+.ad-pqr-kpi-card.orange {
+  background: linear-gradient(180deg, #fffbeb 0%, #ffffff 100%);
+  border-color: #fef3c7;
+}
+.ad-pqr-kpi-card.purple {
+  background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
+  border-color: #f3e8ff;
+}
+
+.ad-pqr-kpi-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.ad-pqr-kpi-value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.ad-pqr-kpi-label {
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 600;
+  margin: 0;
+}
+
+.ad-pqr-kpi-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.ad-pqr-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.ad-pqr-trend.green {
+  color: #16a34a;
+}
+.ad-pqr-trend.red {
+  color: #dc2626;
+}
+.ad-pqr-trend.orange {
+  color: #ea580c;
+}
+.ad-pqr-trend.purple {
+  color: #9333ea;
+}
+
+/* Layout dividido 2 columnas */
+.ad-pqr-layout {
+  display: grid;
+  grid-template-columns: 1fr 390px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .ad-pqr-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Pestañas de tipos arriba de la tabla */
+.ad-pqr-tabs {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid var(--ad-border);
+  padding: 0 16px;
+  background: #ffffff;
+  border-radius: 16px 16px 0 0;
+  overflow-x: auto;
+}
+
+.ad-pqr-tab-btn {
+  background: transparent;
+  border: none;
+  padding: 14px 4px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.ad-pqr-tab-btn:hover {
+  color: #0f172a;
+}
+
+.ad-pqr-tab-btn.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  font-weight: 700;
+}
+
+/* Pastillas de Prioridad */
+.ad-priority-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.ad-priority-pill.alta {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fee2e2;
+}
+.ad-priority-pill.media {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fef3c7;
+}
+.ad-priority-pill.baja {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #dcfce7;
+}
+
+/* Pastillas de Estado PQR */
+.ad-pqr-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.ad-pqr-status-pill.revision {
+  background: #fef9c3;
+  color: #854d0e;
+  border: 1px solid #fef08a;
+}
+.ad-pqr-status-pill.abierta {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+}
+.ad-pqr-status-pill.proceso {
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+.ad-pqr-status-pill.resuelta {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #dcfce7;
+}
+
+/* Panel Lateral Derecho: Detalle de la Solicitud */
+.ad-pqr-detail-panel {
+  background: #ffffff;
+  border: 1px solid var(--ad-border);
+  border-radius: 20px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.ad-pqr-detail-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ad-pqr-party-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ad-pqr-party-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ad-pqr-party-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.ad-pqr-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  padding-left: 12px;
+  border-left: 2px solid #e2e8f0;
+  margin-left: 6px;
+}
+
+.ad-pqr-timeline-item {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78rem;
+  color: #334155;
+  position: relative;
+}
+
+.ad-pqr-timeline-dot {
+  position: absolute;
+  left: -17px;
+  top: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 2px solid #ffffff;
+}
+
+.ad-pqr-attachments {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.ad-pqr-thumb {
+  width: 100%;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+}
+
+.ad-pqr-thumb-more {
+  width: 100%;
+  height: 56px;
+  border-radius: 8px;
+  background: #1e293b;
+  color: #ffffff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.ad-pqr-actions-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 
 

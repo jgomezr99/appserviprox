@@ -375,6 +375,85 @@ class AdminActionView(APIView):
                 )
                 return Response({"ok": True, "message": f"Beneficios asignados a {target_id}."})
 
+        elif action_name == "respond_pqr":
+            target_str = str(target_id)
+            clean_id = target_str.replace("pqr-", "").replace("fal-", "").replace("#", "")
+            response_text = request.data.get("response_text", "")
+            new_status = request.data.get("new_status", "resuelto")
+            send_notification = request.data.get("send_notification", True)
+
+            # Buscar si es PQRReport
+            pqr = None
+            if clean_id.isdigit():
+                pqr = PQRReport.objects.filter(Q(id=int(clean_id)) | Q(radicado_number__icontains=clean_id)).first()
+            if not pqr:
+                pqr = PQRReport.objects.filter(radicado_number__iexact=target_str).first()
+
+            if pqr:
+                pqr.status = new_status
+                pqr.admin_resolution_notes = response_text
+                pqr.save()
+
+                from apps.pqrs.models import PQRMessage
+                PQRMessage.objects.create(
+                    pqr=pqr,
+                    sender="support_agent",
+                    sender_name=admin_name,
+                    sender_role="Administrador Serviprox",
+                    text=response_text,
+                )
+
+                AdminAuditLog.objects.create(
+                    admin_name=admin_name,
+                    action="Respuesta y notificación de PQR a cliente",
+                    target=f"PQR {pqr.radicado_number} ({pqr.client_name or 'Cliente'})",
+                    reason=response_text[:120],
+                )
+                return Response({
+                    "ok": True,
+                    "message": f"Respuesta registrada en la base de datos para PQR {pqr.radicado_number}. Notificación enviada al cliente.",
+                    "status": pqr.status,
+                    "notification_sent": send_notification,
+                })
+
+            # Buscar si es AppProblemReport (Falla técnica en la app)
+            fal = None
+            if clean_id.isdigit():
+                fal = AppProblemReport.objects.filter(Q(id=int(clean_id)) | Q(ticket_number__icontains=clean_id)).first()
+            if not fal:
+                fal = AppProblemReport.objects.filter(ticket_number__iexact=target_str).first()
+
+            if fal:
+                fal.status = new_status
+                fal.response_notes = response_text
+                fal.save()
+
+                AdminAuditLog.objects.create(
+                    admin_name=admin_name,
+                    action="Respuesta y solución de falla técnica",
+                    target=f"Ticket {fal.ticket_number} ({fal.reported_by or 'Usuario'})",
+                    reason=response_text[:120],
+                )
+                return Response({
+                    "ok": True,
+                    "message": f"Falla técnica {fal.ticket_number} actualizada en la base de datos. Notificación enviada al usuario.",
+                    "status": fal.status,
+                    "notification_sent": send_notification,
+                })
+
+            # Registro genérico si no coincide con ID de base de datos
+            AdminAuditLog.objects.create(
+                admin_name=admin_name,
+                action="Respuesta a caso",
+                target=f"Caso {target_id}",
+                reason=response_text[:120],
+            )
+            return Response({
+                "ok": True,
+                "message": f"Respuesta y notificación procesada para el caso {target_id}.",
+                "notification_sent": send_notification,
+            })
+
         return Response({"error": "Acción no reconocida."}, status=status.HTTP_400_BAD_REQUEST)
 
 

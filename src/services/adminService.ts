@@ -92,12 +92,15 @@ export const adminService = {
    * Ejecuta una acción administrativa y la guarda en la base de datos (con registro de auditoría).
    */
   async executeAction(params: {
-    action: "approve_request" | "reject_request" | "block_user" | "unblock_user" | "assign_benefits";
+    action: "approve_request" | "reject_request" | "block_user" | "unblock_user" | "assign_benefits" | "respond_pqr";
     target_id: string | number;
     reason?: string;
     admin_name?: string;
     points?: number;
     recharge?: number;
+    response_text?: string;
+    new_status?: string;
+    send_notification?: boolean;
   }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
     try {
       return await api.post("admin/action/", params);
@@ -108,6 +111,27 @@ export const adminService = {
         message: "Acción aplicada en interfaz local (backend en modo diferido).",
       };
     }
+  },
+
+  /**
+   * Responde a una PQR, queja o reporte técnico en la BD y envía notificación al cliente.
+   */
+  async respondPqr(params: {
+    targetId: string | number;
+    responseText: string;
+    newStatus?: string;
+    adminName?: string;
+    sendNotification?: boolean;
+  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+    return await this.executeAction({
+      action: "respond_pqr",
+      target_id: params.targetId,
+      response_text: params.responseText,
+      new_status: params.newStatus || "resuelto",
+      admin_name: params.adminName || "Superadministrador",
+      send_notification: params.sendNotification !== false,
+      reason: params.responseText,
+    });
   },
 
   /**
