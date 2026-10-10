@@ -135,6 +135,19 @@ export interface BenefitProItem {
   redeemed_history: BenefitRedeemedItem[];
 }
 
+export interface BenefitCatalogItem {
+  id: string;
+  title: string;
+  points: number;
+  recharge_amount: number;
+  icon: string;
+  icon_bg: string;
+  icon_color: string;
+  category: string;
+  description: string;
+  level_required: "Todos" | "Bronce" | "Plata" | "Oro";
+}
+
 export interface PqrItem {
   id: string;
   raw_id?: number | string;
@@ -488,6 +501,82 @@ const INITIAL_BENEFIT_PROS: BenefitProItem[] = [
       { id: "b12", title: "Licencia de plataforma educativa 3 meses", date: "22 Abr 2024", status: "Entregado", icon: "💻", iconBg: "#e0f2fe" },
       { id: "b12b", title: "Bono para libros y material didáctico", date: "10 Mar 2024", status: "Entregado", icon: "📚", iconBg: "#fef3c7" },
     ],
+  },
+];
+
+// Catálogo oficial de beneficios e incentivos de Serviprox
+const INITIAL_BENEFIT_CATALOG: BenefitCatalogItem[] = [
+  {
+    id: "cat-1",
+    title: "Recarga móvil 10GB",
+    points: 500,
+    recharge_amount: 20000,
+    icon: "📱",
+    icon_bg: "#e0f2fe",
+    icon_color: "#0284c7",
+    category: "Comunicaciones",
+    description: "Paquete de navegación y datos móviles para operadores Claro, Movistar o Tigo.",
+    level_required: "Todos",
+  },
+  {
+    id: "cat-2",
+    title: "Seguro médico asistencial",
+    points: 1200,
+    recharge_amount: 50000,
+    icon: "🩺",
+    icon_bg: "#fee2e2",
+    icon_color: "#dc2626",
+    category: "Salud",
+    description: "Póliza de asistencia médica y orientación telefónica 24/7 durante 30 días.",
+    level_required: "Plata",
+  },
+  {
+    id: "cat-3",
+    title: "Bono combustible",
+    points: 800,
+    recharge_amount: 30000,
+    icon: "⛽",
+    icon_bg: "#fef3c7",
+    icon_color: "#d97706",
+    category: "Transporte",
+    description: "Bono redimible en estaciones Terpel y Primax para desplazamiento a servicios.",
+    level_required: "Todos",
+  },
+  {
+    id: "cat-4",
+    title: "Kit herramientas pro",
+    points: 2000,
+    recharge_amount: 100000,
+    icon: "🛠️",
+    icon_bg: "#f3e8ff",
+    icon_color: "#9333ea",
+    category: "Equipamiento",
+    description: "Bono para compra de herramientas y equipos de protección en Homecenter.",
+    level_required: "Oro",
+  },
+  {
+    id: "cat-5",
+    title: "Destacado en catálogo 7d",
+    points: 1000,
+    recharge_amount: 40000,
+    icon: "⭐",
+    icon_bg: "#fef9c3",
+    icon_color: "#ca8a04",
+    category: "Visibilidad",
+    description: "Prioridad de visualización en las primeras posiciones del catálogo Serviprox.",
+    level_required: "Plata",
+  },
+  {
+    id: "cat-6",
+    title: "Bono de supermercado",
+    points: 1500,
+    recharge_amount: 60000,
+    icon: "🛒",
+    icon_bg: "#dcfce7",
+    icon_color: "#16a34a",
+    category: "Alimentación",
+    description: "Tarjeta de regalo para compras de canasta básica en Éxito o Carulla.",
+    level_required: "Plata",
   },
 ];
 
@@ -1203,6 +1292,31 @@ export const AdminDashboard: React.FC = () => {
   const [recargaToAdd, setRecargaToAdd] = useState(50000);
   const [motivoBeneficio, setMotivoBeneficio] = useState("Premio por puntualidad y alta calificación");
 
+  // Catálogo de beneficios configurable (con persistencia en storage)
+  const [benefitsCatalog, setBenefitsCatalog] = useState<BenefitCatalogItem[]>(() => {
+    try {
+      const saved = localStorage.getItem("serviprox_benefits_catalog");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_BENEFIT_CATALOG;
+  });
+
+  // Pestaña activa del modal de beneficios: 'asignar' | 'crear'
+  const [benefitModalTab, setBenefitModalTab] = useState<"asignar" | "crear">("asignar");
+  const [selectedProIdForBenefit, setSelectedProIdForBenefit] = useState<number | string>(1);
+  const [assignToAllChecked, setAssignToAllChecked] = useState(false);
+  const [selectedCatalogBenefitId, setSelectedCatalogBenefitId] = useState<string>("");
+  const [sendBenefitNotification, setSendBenefitNotification] = useState(true);
+
+  // Formulario de Crear Nuevo Beneficio en Catálogo
+  const [newBenefitTitle, setNewBenefitTitle] = useState("");
+  const [newBenefitPoints, setNewBenefitPoints] = useState(1000);
+  const [newBenefitRecharge, setNewBenefitRecharge] = useState(50000);
+  const [newBenefitCategory, setNewBenefitCategory] = useState("Equipamiento");
+  const [newBenefitIcon, setNewBenefitIcon] = useState("🎁");
+  const [newBenefitLevel, setNewBenefitLevel] = useState<"Todos" | "Bronce" | "Plata" | "Oro">("Todos");
+  const [newBenefitDescription, setNewBenefitDescription] = useState("");
+
   const [modalDetailOpen, setModalDetailOpen] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
 
@@ -1374,20 +1488,60 @@ export const AdminDashboard: React.FC = () => {
     await adminService.toggleVerification(pro.id, `Validación de credenciales de ${pro.display_name}`);
   };
 
-  // Abrir modal de asignación de beneficios para un profesional
-  const handleOpenAssignBenefitsForPro = (pro: ProfessionalItem) => {
+  // Abrir modal de asignación de beneficios para un profesional específico
+  const handleOpenAssignBenefitsForPro = (pro: ProfessionalItem | BenefitProItem | any) => {
+    const proId = pro.raw_id || pro.id;
+    const proName = pro.display_name || pro.name;
+    const proSpecialty = pro.headline || pro.specialty_label || pro.category || "Especialista Serviprox";
+    const proPoints = pro.points || 0;
+    const proAvatar =
+      pro.avatar_url ||
+      pro.avatar ||
+      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop";
+
     setTargetProBeneficio({
-      id: `pro-${pro.id}`,
-      raw_id: pro.id,
-      name: pro.display_name,
-      specialty: pro.headline || pro.specialty_label || "Especialista Serviprox",
-      rating: Number(pro.rating_avg) || 4.8,
-      tier: (pro.points || 0) >= 1000 ? "Nivel Oro" : "Nivel Plata",
-      avatar: pro.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop",
-      points: pro.points || 0,
-      completedJobs: pro.jobs_completed || 0,
-      verified: pro.is_verified,
+      id: `pro-${proId}`,
+      raw_id: proId,
+      name: proName,
+      specialty: proSpecialty,
+      rating: Number(pro.rating_avg || pro.rating) || 4.8,
+      tier: proPoints >= 1000 ? "Nivel Oro" : "Nivel Plata",
+      avatar: proAvatar,
+      points: proPoints,
+      completedJobs: pro.jobs_completed || pro.reviews_count || 0,
+      verified: pro.is_verified ?? true,
     });
+    setSelectedProIdForBenefit(proId);
+    setAssignToAllChecked(false);
+    setBenefitModalTab("asignar");
+    setModalBeneficiosOpen(true);
+  };
+
+  // Abrir modal desde el botón general "+ Asignar puntos / beneficio"
+  const handleOpenAssignOrManageBenefits = () => {
+    if (selectedBenefitCheckboxIds.length > 0) {
+      setAssignToAllChecked(true);
+      setSelectedProIdForBenefit(selectedBenefitCheckboxIds[0]);
+    } else {
+      setAssignToAllChecked(false);
+      const fallback = benefitProsList.find((p) => p.id === selectedBenefitProId) || benefitProsList[0];
+      if (fallback) {
+        setTargetProBeneficio({
+          id: `pro-${fallback.id}`,
+          raw_id: fallback.id,
+          name: fallback.name,
+          specialty: fallback.category,
+          rating: fallback.rating,
+          tier: (fallback.points || 0) >= 1000 ? "Nivel Oro" : "Nivel Plata",
+          avatar: fallback.avatar,
+          points: fallback.points,
+          completedJobs: fallback.reviews_count,
+          verified: true,
+        });
+        setSelectedProIdForBenefit(fallback.id);
+      }
+    }
+    setBenefitModalTab("asignar");
     setModalBeneficiosOpen(true);
   };
 
@@ -1526,22 +1680,102 @@ export const AdminDashboard: React.FC = () => {
     fetchPros();
   };
 
-  // Confirmar acreditación de beneficios a profesional
+  // Confirmar acreditación de beneficios a profesional(es)
   const confirmAssignBenefits = async () => {
-    if (!targetProBeneficio) return;
-    const proId = targetProBeneficio.raw_id || targetProBeneficio.id;
-    const proName = targetProBeneficio.name;
+    if (assignToAllChecked && selectedBenefitCheckboxIds.length > 0) {
+      // Asignación múltiple a todos los seleccionados con checkbox
+      const targets = benefitProsList.filter((p) => selectedBenefitCheckboxIds.includes(p.id));
+      if (targets.length === 0) return;
+
+      for (const t of targets) {
+        await adminService.executeAction({
+          action: "assign_benefits",
+          target_id: t.id,
+          admin_name: adminDisplayName,
+          points: puntosToAdd,
+          recharge: recargaToAdd,
+          reason: motivoBeneficio || "Asignación masiva de beneficios e incentivos",
+        });
+      }
+
+      setBenefitProsList((prev) =>
+        prev.map((bp) =>
+          selectedBenefitCheckboxIds.includes(bp.id)
+            ? {
+                ...bp,
+                points: bp.points + puntosToAdd,
+                redeemed_count: bp.redeemed_count + (recargaToAdd > 0 ? 1 : 0),
+                redeemed_history: [
+                  {
+                    id: `b-${Date.now()}-${bp.id}`,
+                    title: motivoBeneficio || "Asignación de beneficio administrativo",
+                    date: "Hoy",
+                    status: "Entregado",
+                    icon: "🎁",
+                    iconBg: "#dcfce7",
+                  },
+                  ...bp.redeemed_history,
+                ],
+              }
+            : bp
+        )
+      );
+
+      setAllProsList((prev) =>
+        prev.map((p) =>
+          selectedBenefitCheckboxIds.includes(p.id)
+            ? {
+                ...p,
+                points: (p.points || 0) + puntosToAdd,
+                wallet_balance: (Number(p.wallet_balance || 0) + recargaToAdd).toFixed(2),
+              }
+            : p
+        )
+      );
+
+      setAuditLogs((prev) => [
+        {
+          id: `aud-${Date.now()}`,
+          adminName: adminDisplayName,
+          action: `Asignación masiva a ${targets.length} profesionales (+${puntosToAdd} pts / $${recargaToAdd.toLocaleString("es-CO")})`,
+          target: targets.map((t) => t.name).join(", "),
+          date: new Date().toLocaleString(),
+          reason: motivoBeneficio,
+        },
+        ...prev,
+      ]);
+
+      setModalBeneficiosOpen(false);
+      alert(`✅ Se acreditaron +${puntosToAdd} puntos y $${recargaToAdd.toLocaleString("es-CO")} COP a los ${targets.length} profesionales seleccionados en la base de datos.`);
+      fetchLiveOverview();
+      fetchPros();
+      return;
+    }
+
+    // Asignación individual
+    let proId = targetProBeneficio?.raw_id || targetProBeneficio?.id;
+    let proName = targetProBeneficio?.name || "Profesional";
+
+    if (selectedProIdForBenefit) {
+      const found = benefitProsList.find((p) => String(p.id) === String(selectedProIdForBenefit) || `pro-${p.id}` === String(selectedProIdForBenefit));
+      if (found) {
+        proId = found.id;
+        proName = found.name;
+      }
+    }
+
+    if (!proId) return;
 
     setProsList((prev) =>
       prev.map((p) =>
-        p.id === targetProBeneficio.id || p.raw_id === proId
-          ? { ...p, points: p.points + puntosToAdd }
+        p.id === proId || p.raw_id === proId
+          ? { ...p, points: (p.points || 0) + puntosToAdd }
           : p
       )
     );
     setAllProsList((prev) =>
       prev.map((p) =>
-        p.id === proId
+        p.id === proId || String(p.id) === String(proId)
           ? {
               ...p,
               points: (p.points || 0) + puntosToAdd,
@@ -1552,11 +1786,22 @@ export const AdminDashboard: React.FC = () => {
     );
     setBenefitProsList((prev) =>
       prev.map((bp) =>
-        bp.name.toLowerCase() === proName.toLowerCase() || bp.id === Number(proId)
+        bp.name.toLowerCase() === String(proName).toLowerCase() || bp.id === Number(proId)
           ? {
               ...bp,
               points: bp.points + puntosToAdd,
               redeemed_count: bp.redeemed_count + (recargaToAdd > 0 ? 1 : 0),
+              redeemed_history: [
+                {
+                  id: `b-${Date.now()}`,
+                  title: motivoBeneficio || "Asignación de beneficio administrativo",
+                  date: "Hoy",
+                  status: "Entregado",
+                  icon: "🎁",
+                  iconBg: "#dcfce7",
+                },
+                ...bp.redeemed_history,
+              ],
             }
           : bp
       )
@@ -1582,9 +1827,57 @@ export const AdminDashboard: React.FC = () => {
       recharge: recargaToAdd,
       reason: motivoBeneficio,
     });
-    alert(`Beneficios asignados a ${proName}. Total actualizado guardado en la base de datos.`);
+    alert(`✅ Beneficios asignados a ${proName}: +${puntosToAdd} puntos y $${recargaToAdd.toLocaleString("es-CO")} COP guardados en la base de datos.`);
     fetchLiveOverview();
     fetchPros();
+  };
+
+  // Crear nuevo beneficio en el catálogo oficial de Serviprox
+  const confirmCreateBenefit = () => {
+    if (!newBenefitTitle.trim()) {
+      alert("Por favor ingresa el título del beneficio.");
+      return;
+    }
+
+    const newBenefitItem: BenefitCatalogItem = {
+      id: `cat-${Date.now()}`,
+      title: newBenefitTitle.trim(),
+      points: Number(newBenefitPoints) || 500,
+      recharge_amount: Number(newBenefitRecharge) || 0,
+      icon: newBenefitIcon || "🎁",
+      icon_bg: "#f3e8ff",
+      icon_color: "#9333ea",
+      category: newBenefitCategory || "General",
+      description:
+        newBenefitDescription.trim() ||
+        `Beneficio de ${newBenefitTitle} valorado en $${Number(newBenefitRecharge || 0).toLocaleString("es-CO")} COP.`,
+      level_required: newBenefitLevel,
+    };
+
+    const updatedCatalog = [newBenefitItem, ...benefitsCatalog];
+    setBenefitsCatalog(updatedCatalog);
+    try {
+      localStorage.setItem("serviprox_benefits_catalog", JSON.stringify(updatedCatalog));
+    } catch {}
+
+    setAuditLogs((prev) => [
+      {
+        id: `aud-${Date.now()}`,
+        adminName: adminDisplayName,
+        action: `Creación de beneficio en catálogo`,
+        target: `${newBenefitItem.title} (${newBenefitItem.points} pts)`,
+        date: new Date().toLocaleString(),
+        reason: `Nuevo incentivo registrado en catálogo oficial de Serviprox por $${newBenefitItem.recharge_amount.toLocaleString("es-CO")} COP`,
+      },
+      ...prev,
+    ]);
+
+    alert(`✅ Beneficio "${newBenefitItem.title}" creado con éxito y agregado al catálogo de Serviprox.`);
+    setNewBenefitTitle("");
+    setNewBenefitPoints(1000);
+    setNewBenefitRecharge(50000);
+    setNewBenefitDescription("");
+    setBenefitModalTab("asignar");
   };
 
   const handleLogout = () => {
@@ -4290,23 +4583,23 @@ export const AdminDashboard: React.FC = () => {
                 <button
                   type="button"
                   className="ad-btn ad-btn-primary"
-                  style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 18px", fontWeight: 700 }}
-                  onClick={() => {
-                    const pro = currentBenefitPro;
-                    handleOpenAssignBenefitsForPro({
-                      id: pro.id,
-                      display_name: pro.name,
-                      headline: pro.category,
-                      specialty_label: pro.category,
-                      is_verified: true,
-                      points: pro.points,
-                      wallet_balance: "50000",
-                      jobs_completed: pro.reviews_count,
-                      avatar_url: pro.avatar,
-                    } as any);
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "10px 20px",
+                    fontWeight: 700,
+                    fontSize: "0.88rem",
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "10px",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(37, 99, 235, 0.25)",
                   }}
+                  onClick={() => handleOpenAssignOrManageBenefits()}
                 >
-                  <span style={{ fontSize: "1.1rem" }}>+</span> Asignar puntos / beneficio
+                  <span style={{ fontSize: "1.1rem", fontWeight: 700, lineHeight: 1 }}>+</span> Asignar puntos / beneficio
                 </button>
               </div>
 
@@ -4940,119 +5233,75 @@ export const AdminDashboard: React.FC = () => {
                           </button>
                         </div>
 
-                        {/* Catálogo de Beneficios (Grid 4) */}
+                        {/* Catálogo de Beneficios (Grid dinámico) */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          <h4 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#0f172a" }}>
-                            Catálogo de beneficios
-                          </h4>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h4 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#0f172a" }}>
+                              Catálogo de beneficios ({benefitsCatalog.length})
+                            </h4>
+                            <button
+                              type="button"
+                              style={{
+                                background: "#eff6ff",
+                                border: "1px solid #bfdbfe",
+                                color: "#1d4ed8",
+                                fontSize: "0.76rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                              onClick={() => {
+                                setBenefitModalTab("crear");
+                                setModalBeneficiosOpen(true);
+                              }}
+                            >
+                              + Crear beneficio
+                            </button>
+                          </div>
                           <div className="ad-ben-catalog-grid">
-                            <button
-                              type="button"
-                              className="ad-ben-catalog-btn"
-                              onClick={() => {
-                                setPuntosToAdd(500);
-                                setRecargaToAdd(20000);
-                                setMotivoBeneficio("Recarga móvil 10GB");
-                                handleOpenAssignBenefitsForPro({
-                                  id: currentBenefitPro.id,
-                                  display_name: currentBenefitPro.name,
-                                  headline: currentBenefitPro.category,
-                                  specialty_label: currentBenefitPro.category,
-                                  is_verified: true,
-                                  points: currentBenefitPro.points,
-                                  wallet_balance: "50000",
-                                  jobs_completed: currentBenefitPro.reviews_count,
-                                  avatar_url: currentBenefitPro.avatar,
-                                } as any);
-                              }}
-                            >
-                              <div className="ad-ben-catalog-icon" style={{ background: "#e0f2fe", color: "#0284c7" }}>
-                                📱
-                              </div>
-                              <span>Recarga móvil</span>
-                              <span style={{ fontSize: "0.68rem", color: "#64748b" }}>500 pts</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              className="ad-ben-catalog-btn"
-                              onClick={() => {
-                                setPuntosToAdd(1200);
-                                setRecargaToAdd(50000);
-                                setMotivoBeneficio("Seguro médico asistencial");
-                                handleOpenAssignBenefitsForPro({
-                                  id: currentBenefitPro.id,
-                                  display_name: currentBenefitPro.name,
-                                  headline: currentBenefitPro.category,
-                                  specialty_label: currentBenefitPro.category,
-                                  is_verified: true,
-                                  points: currentBenefitPro.points,
-                                  wallet_balance: "50000",
-                                  jobs_completed: currentBenefitPro.reviews_count,
-                                  avatar_url: currentBenefitPro.avatar,
-                                } as any);
-                              }}
-                            >
-                              <div className="ad-ben-catalog-icon" style={{ background: "#fee2e2", color: "#dc2626" }}>
-                                🩺
-                              </div>
-                              <span>Seguro médico</span>
-                              <span style={{ fontSize: "0.68rem", color: "#64748b" }}>1,200 pts</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              className="ad-ben-catalog-btn"
-                              onClick={() => {
-                                setPuntosToAdd(800);
-                                setRecargaToAdd(30000);
-                                setMotivoBeneficio("Bono combustible");
-                                handleOpenAssignBenefitsForPro({
-                                  id: currentBenefitPro.id,
-                                  display_name: currentBenefitPro.name,
-                                  headline: currentBenefitPro.category,
-                                  specialty_label: currentBenefitPro.category,
-                                  is_verified: true,
-                                  points: currentBenefitPro.points,
-                                  wallet_balance: "50000",
-                                  jobs_completed: currentBenefitPro.reviews_count,
-                                  avatar_url: currentBenefitPro.avatar,
-                                } as any);
-                              }}
-                            >
-                              <div className="ad-ben-catalog-icon" style={{ background: "#fef3c7", color: "#d97706" }}>
-                                ⛽
-                              </div>
-                              <span>Bono combustible</span>
-                              <span style={{ fontSize: "0.68rem", color: "#64748b" }}>800 pts</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              className="ad-ben-catalog-btn"
-                              onClick={() => {
-                                setPuntosToAdd(2000);
-                                setRecargaToAdd(100000);
-                                setMotivoBeneficio("Kit de herramientas profesionales");
-                                handleOpenAssignBenefitsForPro({
-                                  id: currentBenefitPro.id,
-                                  display_name: currentBenefitPro.name,
-                                  headline: currentBenefitPro.category,
-                                  specialty_label: currentBenefitPro.category,
-                                  is_verified: true,
-                                  points: currentBenefitPro.points,
-                                  wallet_balance: "50000",
-                                  jobs_completed: currentBenefitPro.reviews_count,
-                                  avatar_url: currentBenefitPro.avatar,
-                                } as any);
-                              }}
-                            >
-                              <div className="ad-ben-catalog-icon" style={{ background: "#f3e8ff", color: "#9333ea" }}>
-                                🛠️
-                              </div>
-                              <span>Herramientas</span>
-                              <span style={{ fontSize: "0.68rem", color: "#64748b" }}>2,000 pts</span>
-                            </button>
+                            {benefitsCatalog.map((cat) => (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                className="ad-ben-catalog-btn"
+                                onClick={() => {
+                                  setPuntosToAdd(cat.points);
+                                  setRecargaToAdd(cat.recharge_amount);
+                                  setMotivoBeneficio(cat.title);
+                                  handleOpenAssignBenefitsForPro({
+                                    id: currentBenefitPro.id,
+                                    display_name: currentBenefitPro.name,
+                                    headline: currentBenefitPro.category,
+                                    specialty_label: currentBenefitPro.category,
+                                    is_verified: true,
+                                    points: currentBenefitPro.points,
+                                    wallet_balance: "50000",
+                                    jobs_completed: currentBenefitPro.reviews_count,
+                                    avatar_url: currentBenefitPro.avatar,
+                                  } as any);
+                                }}
+                              >
+                                <div
+                                  className="ad-ben-catalog-icon"
+                                  style={{
+                                    background: cat.icon_bg || "#f1f5f9",
+                                    color: cat.icon_color || "#2563eb",
+                                  }}
+                                >
+                                  {cat.icon || "🎁"}
+                                </div>
+                                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "90px" }}>
+                                  {cat.title}
+                                </span>
+                                <span style={{ fontSize: "0.68rem", color: "#64748b" }}>
+                                  {cat.points} pts
+                                </span>
+                              </button>
+                            ))}
                           </div>
                         </div>
 
@@ -5354,13 +5603,22 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* ═════════════════════════════════════════════════════════════════════
-          MODAL: ASIGNAR BENEFICIOS Y PUNTOS
+          MODAL: BENEFICIOS E INCENTIVOS (ASIGNAR / CREAR EN CATÁLOGO)
          ═════════════════════════════════════════════════════════════════════ */}
-      {modalBeneficiosOpen && targetProBeneficio && (
+      {modalBeneficiosOpen && (
         <div className="ad-modal-backdrop" onClick={() => setModalBeneficiosOpen(false)}>
-          <div className="ad-modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="ad-modal-header">
-              <h3>🎁 Asignar Puntos y Beneficios</h3>
+          <div className="ad-modal-dialog" style={{ maxWidth: "580px", width: "95%" }} onClick={(e) => e.stopPropagation()}>
+            <div className="ad-modal-header" style={{ paddingBottom: "12px" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800 }}>
+                  {benefitModalTab === "asignar" ? "🎁 Asignar Puntos y Beneficios" : "✨ Crear Nuevo Beneficio (Catálogo)"}
+                </h3>
+                <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  {benefitModalTab === "asignar"
+                    ? "Acredita puntos acumulables, recargas o incentivos a profesionales verificados."
+                    : "Registra un nuevo beneficio en el catálogo oficial de la plataforma Serviprox."}
+                </p>
+              </div>
               <button
                 type="button"
                 className="ad-modal-close"
@@ -5369,64 +5627,366 @@ export const AdminDashboard: React.FC = () => {
                 ✕
               </button>
             </div>
-            <div className="ad-modal-body">
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "#f8fafc", padding: "12px", borderRadius: "12px" }}>
-                <img src={targetProBeneficio.avatar} alt="" style={{ width: "44px", height: "44px", borderRadius: "50%" }} />
-                <div>
-                  <strong style={{ fontSize: "0.95rem" }}>{targetProBeneficio.name}</strong>
-                  <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
-                    {targetProBeneficio.specialty} • Puntos actuales: {targetProBeneficio.points} pts
-                  </p>
+
+            {/* Pestañas de navegación dentro del modal */}
+            <div style={{ display: "flex", gap: "10px", padding: "0 24px", borderBottom: "1px solid #e2e8f0" }}>
+              <button
+                type="button"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: benefitModalTab === "asignar" ? "3px solid #2563eb" : "3px solid transparent",
+                  padding: "10px 14px",
+                  fontWeight: 700,
+                  fontSize: "0.88rem",
+                  color: benefitModalTab === "asignar" ? "#2563eb" : "#64748b",
+                  cursor: "pointer",
+                }}
+                onClick={() => setBenefitModalTab("asignar")}
+              >
+                🎁 Asignar a Profesional(es)
+              </button>
+              <button
+                type="button"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: benefitModalTab === "crear" ? "3px solid #2563eb" : "3px solid transparent",
+                  padding: "10px 14px",
+                  fontWeight: 700,
+                  fontSize: "0.88rem",
+                  color: benefitModalTab === "crear" ? "#2563eb" : "#64748b",
+                  cursor: "pointer",
+                }}
+                onClick={() => setBenefitModalTab("crear")}
+              >
+                ✨ Crear Nuevo Beneficio
+              </button>
+            </div>
+
+            {benefitModalTab === "asignar" ? (
+              <>
+                <div className="ad-modal-body" style={{ maxHeight: "68vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Opción de asignación masiva si hay checkboxes seleccionados */}
+                  {selectedBenefitCheckboxIds.length > 0 && (
+                    <div style={{ background: "#eff6ff", padding: "12px 14px", borderRadius: "10px", border: "1px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div>
+                        <strong style={{ color: "#1e40af", fontSize: "0.88rem" }}>
+                          ✓ {selectedBenefitCheckboxIds.length} profesionales seleccionados
+                        </strong>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "#3b82f6" }}>
+                          Puedes aplicar los incentivos en lote a todos ellos.
+                        </p>
+                      </div>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.84rem", fontWeight: 700, color: "#1e3a8a", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={assignToAllChecked}
+                          onChange={(e) => setAssignToAllChecked(e.target.checked)}
+                        />
+                        Asignar en lote
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Selector de profesional si no es en lote */}
+                  {!assignToAllChecked && (
+                    <div className="ad-form-group">
+                      <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>
+                        Profesional beneficiario:
+                      </label>
+                      <select
+                        className="ad-form-control"
+                        value={selectedProIdForBenefit}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedProIdForBenefit(val);
+                          const found = benefitProsList.find((p) => String(p.id) === String(val)) || allProsList.find((p) => String(p.id) === String(val));
+                          if (found) {
+                            setTargetProBeneficio({
+                              id: `pro-${found.id}`,
+                              raw_id: found.id,
+                              name: (found as any).display_name || (found as any).name,
+                              specialty: (found as any).specialty_label || (found as any).category || (found as any).headline,
+                              rating: Number((found as any).rating_avg || (found as any).rating) || 4.8,
+                              tier: ((found as any).points || 0) >= 1000 ? "Nivel Oro" : "Nivel Plata",
+                              avatar: (found as any).avatar_url || (found as any).avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop",
+                              points: (found as any).points || 0,
+                              completedJobs: (found as any).jobs_completed || (found as any).reviews_count || 0,
+                              verified: true,
+                            });
+                          }
+                        }}
+                      >
+                        {benefitProsList.map((bp) => (
+                          <option key={bp.id} value={bp.id}>
+                            {bp.name} — {bp.category} ({bp.points} pts • {bp.level})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Tarjeta resumen del profesional seleccionado */}
+                  {targetProBeneficio && !assignToAllChecked && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "#f8fafc", padding: "12px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                      <img src={targetProBeneficio.avatar} alt="" style={{ width: "46px", height: "46px", borderRadius: "50%", objectFit: "cover" }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>{targetProBeneficio.name}</strong>
+                          <span className="ad-badge-success" style={{ fontSize: "0.72rem" }}>Verificado ✓</span>
+                        </div>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                          {targetProBeneficio.specialty} • Puntos actuales: <strong style={{ color: "#7e22ce" }}>{targetProBeneficio.points} pts</strong> • {targetProBeneficio.tier}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Selección rápida desde catálogo oficial */}
+                  <div className="ad-form-group">
+                    <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>
+                      Seleccionar plantilla del Catálogo (Opcional):
+                    </label>
+                    <select
+                      className="ad-form-control"
+                      value={selectedCatalogBenefitId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedCatalogBenefitId(val);
+                        const catItem = benefitsCatalog.find((c) => c.id === val);
+                        if (catItem) {
+                          setPuntosToAdd(catItem.points);
+                          setRecargaToAdd(catItem.recharge_amount);
+                          setMotivoBeneficio(catItem.title);
+                        }
+                      }}
+                    >
+                      <option value="">-- Personalizado (ingresar valores manualmente) --</option>
+                      {benefitsCatalog.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.icon} {cat.title} ({cat.points} pts • ${cat.recharge_amount.toLocaleString("es-CO")} COP)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Campos de puntos y recarga */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div className="ad-form-group">
+                      <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>Puntos a acreditar:</label>
+                      <input
+                        type="number"
+                        className="ad-form-control"
+                        value={puntosToAdd}
+                        onChange={(e) => setPuntosToAdd(Number(e.target.value))}
+                        min={0}
+                        step={50}
+                      />
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>Bono o Recarga en COP:</label>
+                      <input
+                        type="number"
+                        className="ad-form-control"
+                        value={recargaToAdd}
+                        onChange={(e) => setRecargaToAdd(Number(e.target.value))}
+                        min={0}
+                        step={10000}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Motivo justificado */}
+                  <div className="ad-form-group">
+                    <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>
+                      Motivo o concepto del beneficio (Requerido para auditoría):
+                    </label>
+                    <input
+                      type="text"
+                      className="ad-form-control"
+                      value={motivoBeneficio}
+                      onChange={(e) => setMotivoBeneficio(e.target.value)}
+                      placeholder="Ej. Cumplimiento de metas de calidad y puntualidad"
+                    />
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
+                    <input
+                      type="checkbox"
+                      id="notifyBenefitPro"
+                      checked={sendBenefitNotification}
+                      onChange={(e) => setSendBenefitNotification(e.target.checked)}
+                    />
+                    <label htmlFor="notifyBenefitPro" style={{ fontSize: "0.82rem", color: "#475569", cursor: "pointer" }}>
+                      🔔 Notificar al profesional de inmediato en la app móvil
+                    </label>
+                  </div>
                 </div>
-              </div>
 
-              <div className="ad-form-group">
-                <label>Puntos a acreditar:</label>
-                <input
-                  type="number"
-                  className="ad-form-control"
-                  value={puntosToAdd}
-                  onChange={(e) => setPuntosToAdd(Number(e.target.value))}
-                />
-              </div>
+                <div className="ad-modal-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    style={{ background: "transparent", border: "none", color: "#2563eb", fontSize: "0.82rem", fontWeight: 700, cursor: "pointer" }}
+                    onClick={() => setBenefitModalTab("crear")}
+                  >
+                    + Crear nuevo beneficio en catálogo
+                  </button>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      type="button"
+                      className="ad-btn ad-btn-secondary"
+                      onClick={() => setModalBeneficiosOpen(false)}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="ad-btn ad-btn-primary"
+                      onClick={confirmAssignBenefits}
+                    >
+                      Acreditar Beneficios
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="ad-modal-body" style={{ maxHeight: "68vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                    <p style={{ margin: 0, fontSize: "0.82rem", color: "#475569", lineHeight: 1.4 }}>
+                      Registra un nuevo beneficio oficial para los profesionales de Serviprox. Quedará disponible en el catálogo para asignaciones y redenciones de puntos.
+                    </p>
+                  </div>
 
-              <div className="ad-form-group">
-                <label>Bono o Recarga en COP:</label>
-                <input
-                  type="number"
-                  className="ad-form-control"
-                  value={recargaToAdd}
-                  onChange={(e) => setRecargaToAdd(Number(e.target.value))}
-                />
-              </div>
+                  <div className="ad-form-group">
+                    <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>
+                      Título del beneficio *
+                    </label>
+                    <input
+                      type="text"
+                      className="ad-form-control"
+                      value={newBenefitTitle}
+                      onChange={(e) => setNewBenefitTitle(e.target.value)}
+                      placeholder="Ej. Bono combustible 5 galones, Kit de herramientas pro..."
+                    />
+                  </div>
 
-              <div className="ad-form-group">
-                <label>Motivo del reconocimiento:</label>
-                <input
-                  type="text"
-                  className="ad-form-control"
-                  value={motivoBeneficio}
-                  onChange={(e) => setMotivoBeneficio(e.target.value)}
-                  placeholder="Ej. Cumplimiento de metas de calidad mensual"
-                />
-              </div>
-            </div>
-            <div className="ad-modal-footer">
-              <button
-                type="button"
-                className="ad-btn ad-btn-secondary"
-                onClick={() => setModalBeneficiosOpen(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="ad-btn ad-btn-primary"
-                onClick={confirmAssignBenefits}
-              >
-                Acreditar Beneficios
-              </button>
-            </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div className="ad-form-group">
+                      <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>
+                        Puntos requeridos:
+                      </label>
+                      <input
+                        type="number"
+                        className="ad-form-control"
+                        value={newBenefitPoints}
+                        onChange={(e) => setNewBenefitPoints(Number(e.target.value))}
+                        min={50}
+                        step={50}
+                      />
+                    </div>
+
+                    <div className="ad-form-group">
+                      <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>
+                        Valor comercial / Recarga COP:
+                      </label>
+                      <input
+                        type="number"
+                        className="ad-form-control"
+                        value={newBenefitRecharge}
+                        onChange={(e) => setNewBenefitRecharge(Number(e.target.value))}
+                        min={0}
+                        step={10000}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+                    <div className="ad-form-group">
+                      <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>Categoría:</label>
+                      <select
+                        className="ad-form-control"
+                        value={newBenefitCategory}
+                        onChange={(e) => setNewBenefitCategory(e.target.value)}
+                      >
+                        <option value="Equipamiento">🛠️ Equipamiento</option>
+                        <option value="Comunicaciones">📱 Comunicaciones</option>
+                        <option value="Salud">🩺 Salud</option>
+                        <option value="Transporte">⛽ Transporte</option>
+                        <option value="Visibilidad">⭐ Visibilidad</option>
+                        <option value="Alimentación">🛒 Alimentación</option>
+                        <option value="Premios">🏆 Premios</option>
+                      </select>
+                    </div>
+
+                    <div className="ad-form-group">
+                      <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>Icono Emoji:</label>
+                      <select
+                        className="ad-form-control"
+                        value={newBenefitIcon}
+                        onChange={(e) => setNewBenefitIcon(e.target.value)}
+                      >
+                        <option value="🎁">🎁 Regalo</option>
+                        <option value="🛠️">🛠️ Herramientas</option>
+                        <option value="📱">📱 Celular</option>
+                        <option value="🩺">🩺 Salud</option>
+                        <option value="⛽">⛽ Combustible</option>
+                        <option value="⭐">⭐ Estrella</option>
+                        <option value="🛒">🛒 Mercado</option>
+                        <option value="🏆">🏆 Trofeo</option>
+                        <option value="💳">💳 Tarjeta</option>
+                      </select>
+                    </div>
+
+                    <div className="ad-form-group">
+                      <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>Nivel Mínimo:</label>
+                      <select
+                        className="ad-form-control"
+                        value={newBenefitLevel}
+                        onChange={(e) => setNewBenefitLevel(e.target.value as any)}
+                      >
+                        <option value="Todos">Todos</option>
+                        <option value="Bronce">Bronce</option>
+                        <option value="Plata">Plata</option>
+                        <option value="Oro">Oro</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="ad-form-group">
+                    <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155" }}>
+                      Descripción y condiciones de uso:
+                    </label>
+                    <textarea
+                      className="ad-form-control"
+                      rows={3}
+                      value={newBenefitDescription}
+                      onChange={(e) => setNewBenefitDescription(e.target.value)}
+                      placeholder="Describe los aliados comerciales, validez y términos para redimir este beneficio..."
+                    />
+                  </div>
+                </div>
+
+                <div className="ad-modal-footer">
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-secondary"
+                    onClick={() => setModalBeneficiosOpen(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-primary"
+                    disabled={!newBenefitTitle.trim()}
+                    onClick={confirmCreateBenefit}
+                  >
+                    ✨ Guardar en Catálogo
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
