@@ -1805,33 +1805,37 @@
   font-size: 14px;
 }
 
-/* Catálogo de Beneficios Grid 4 */
+/* Catálogo de Beneficios Grid 4 Oficial */
 .ad-ben-catalog-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .ad-ben-catalog-btn {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 10px 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   font-size: 0.72rem;
   font-weight: 700;
-  color: #334155;
   cursor: pointer;
   transition: all 0.15s;
   text-align: center;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
 }
 
 .ad-ben-catalog-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
 }
 
 .ad-ben-catalog-icon {

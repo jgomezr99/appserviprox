@@ -1316,6 +1316,7 @@ export const AdminDashboard: React.FC = () => {
   const [newBenefitIcon, setNewBenefitIcon] = useState("🎁");
   const [newBenefitLevel, setNewBenefitLevel] = useState<"Todos" | "Bronce" | "Plata" | "Oro">("Todos");
   const [newBenefitDescription, setNewBenefitDescription] = useState("");
+  const [modalCatalogOpen, setModalCatalogOpen] = useState(false);
 
   const [modalDetailOpen, setModalDetailOpen] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
@@ -5233,75 +5234,137 @@ export const AdminDashboard: React.FC = () => {
                           </button>
                         </div>
 
-                        {/* Catálogo de Beneficios (Grid dinámico) */}
+                        {/* Catálogo de Beneficios (Grid 4 Oficial idéntico a la imagen) */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <h4 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#0f172a" }}>
-                              Catálogo de beneficios ({benefitsCatalog.length})
+                              Catálogo de beneficios
                             </h4>
                             <button
                               type="button"
                               style={{
-                                background: "#eff6ff",
-                                border: "1px solid #bfdbfe",
-                                color: "#1d4ed8",
-                                fontSize: "0.76rem",
-                                fontWeight: 700,
+                                background: "none",
+                                border: "none",
+                                color: "#2563eb",
+                                fontSize: "0.78rem",
+                                fontWeight: 600,
                                 cursor: "pointer",
-                                padding: "3px 8px",
-                                borderRadius: "6px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "4px",
+                                padding: 0,
+                                textDecoration: "underline",
                               }}
-                              onClick={() => {
-                                setBenefitModalTab("crear");
-                                setModalBeneficiosOpen(true);
-                              }}
+                              onClick={() => setModalCatalogOpen(true)}
                             >
-                              + Crear beneficio
+                              Ver catálogo completo
                             </button>
                           </div>
                           <div className="ad-ben-catalog-grid">
-                            {benefitsCatalog.map((cat) => (
-                              <button
-                                key={cat.id}
-                                type="button"
-                                className="ad-ben-catalog-btn"
-                                onClick={() => {
-                                  setPuntosToAdd(cat.points);
-                                  setRecargaToAdd(cat.recharge_amount);
-                                  setMotivoBeneficio(cat.title);
-                                  handleOpenAssignBenefitsForPro({
-                                    id: currentBenefitPro.id,
-                                    display_name: currentBenefitPro.name,
-                                    headline: currentBenefitPro.category,
-                                    specialty_label: currentBenefitPro.category,
-                                    is_verified: true,
-                                    points: currentBenefitPro.points,
-                                    wallet_balance: "50000",
-                                    jobs_completed: currentBenefitPro.reviews_count,
-                                    avatar_url: currentBenefitPro.avatar,
-                                  } as any);
-                                }}
-                              >
-                                <div
-                                  className="ad-ben-catalog-icon"
-                                  style={{
-                                    background: cat.icon_bg || "#f1f5f9",
-                                    color: cat.icon_color || "#2563eb",
-                                  }}
-                                >
-                                  {cat.icon || "🎁"}
-                                </div>
-                                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "90px" }}>
-                                  {cat.title}
-                                </span>
-                                <span style={{ fontSize: "0.68rem", color: "#64748b" }}>
-                                  {cat.points} pts
-                                </span>
-                              </button>
-                            ))}
+                            <button
+                              type="button"
+                              className="ad-ben-catalog-btn"
+                              style={{ background: "#e0f2fe", color: "#0369a1" }}
+                              onClick={() => {
+                                setPuntosToAdd(500);
+                                setRecargaToAdd(20000);
+                                setMotivoBeneficio("Recarga de datos móviles");
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any);
+                              }}
+                            >
+                              <div className="ad-ben-catalog-icon" style={{ background: "rgba(255,255,255,0.7)", color: "#0284c7" }}>
+                                📱
+                              </div>
+                              <span style={{ fontSize: "0.72rem", lineHeight: 1.15 }}>Recarga de datos</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="ad-ben-catalog-btn"
+                              style={{ background: "#dcfce7", color: "#15803d" }}
+                              onClick={() => {
+                                setPuntosToAdd(1200);
+                                setRecargaToAdd(50000);
+                                setMotivoBeneficio("Atención médica asistencial");
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any);
+                              }}
+                            >
+                              <div className="ad-ben-catalog-icon" style={{ background: "rgba(255,255,255,0.7)", color: "#16a34a" }}>
+                                🩺
+                              </div>
+                              <span style={{ fontSize: "0.72rem", lineHeight: 1.15 }}>Atención médica</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="ad-ben-catalog-btn"
+                              style={{ background: "#ffedd5", color: "#c2410c" }}
+                              onClick={() => {
+                                setPuntosToAdd(300);
+                                setRecargaToAdd(15000);
+                                setMotivoBeneficio("Descuentos en aliados comerciales");
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any);
+                              }}
+                            >
+                              <div className="ad-ben-catalog-icon" style={{ background: "rgba(255,255,255,0.7)", color: "#ea580c" }}>
+                                🏷️
+                              </div>
+                              <span style={{ fontSize: "0.72rem", lineHeight: 1.15 }}>Descuentos</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="ad-ben-catalog-btn"
+                              style={{ background: "#f3e8ff", color: "#7e22ce" }}
+                              onClick={() => {
+                                setPuntosToAdd(2000);
+                                setRecargaToAdd(100000);
+                                setMotivoBeneficio("Kit de herramientas profesionales");
+                                handleOpenAssignBenefitsForPro({
+                                  id: currentBenefitPro.id,
+                                  display_name: currentBenefitPro.name,
+                                  headline: currentBenefitPro.category,
+                                  specialty_label: currentBenefitPro.category,
+                                  is_verified: true,
+                                  points: currentBenefitPro.points,
+                                  wallet_balance: "50000",
+                                  jobs_completed: currentBenefitPro.reviews_count,
+                                  avatar_url: currentBenefitPro.avatar,
+                                } as any);
+                              }}
+                            >
+                              <div className="ad-ben-catalog-icon" style={{ background: "rgba(255,255,255,0.7)", color: "#9333ea" }}>
+                                🔧
+                              </div>
+                              <span style={{ fontSize: "0.72rem", lineHeight: 1.15 }}>Herramientas</span>
+                            </button>
                           </div>
                         </div>
 
@@ -5987,6 +6050,142 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════════════
+          MODAL: CATÁLOGO COMPLETO DE BENEFICIOS (OFICIAL)
+         ═════════════════════════════════════════════════════════════════════ */}
+      {modalCatalogOpen && (
+        <div className="ad-modal-backdrop" onClick={() => setModalCatalogOpen(false)}>
+          <div className="ad-modal-dialog" style={{ maxWidth: "780px", width: "95%" }} onClick={(e) => e.stopPropagation()}>
+            <div className="ad-modal-header" style={{ paddingBottom: "12px" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800, color: "#0f172a" }}>
+                  🎁 Catálogo Oficial de Beneficios e Incentivos
+                </h3>
+                <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+                  Beneficios e incentivos configurados en la plataforma Serviprox para profesionales.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="ad-modal-close"
+                onClick={() => setModalCatalogOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="ad-modal-body" style={{ maxHeight: "70vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Barra superior de acciones */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc", padding: "12px 16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                <div>
+                  <strong style={{ fontSize: "0.9rem", color: "#1e293b" }}>{benefitsCatalog.length} beneficios disponibles</strong>
+                  <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                    Puedes asignar cualquiera de estos incentivos a los profesionales o crear nuevos.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="ad-btn ad-btn-primary"
+                  style={{ fontSize: "0.82rem", padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  onClick={() => {
+                    setModalCatalogOpen(false);
+                    setBenefitModalTab("crear");
+                    setModalBeneficiosOpen(true);
+                  }}
+                >
+                  <span style={{ fontSize: "1rem", fontWeight: 700 }}>+</span> Crear nuevo beneficio
+                </button>
+              </div>
+
+              {/* Lista de tarjetas del catálogo */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "12px" }}>
+                {benefitsCatalog.map((b) => (
+                  <div
+                    key={b.id}
+                    style={{
+                      background: "#ffffff",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "14px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "10px",
+                            background: b.icon_bg || "#f1f5f9",
+                            color: b.icon_color || "#2563eb",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "1.2rem",
+                          }}
+                        >
+                          {b.icon || "🎁"}
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                            {b.title}
+                          </h4>
+                          <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                            {b.category} • Requiere {b.level_required || "Todos"}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="ad-badge-success" style={{ fontWeight: 800, fontSize: "0.8rem" }}>
+                        {b.points} pts
+                      </span>
+                    </div>
+
+                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#475569", lineHeight: 1.4 }}>
+                      {b.description}
+                    </p>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto", paddingTop: "8px", borderTop: "1px solid #f1f5f9" }}>
+                      <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#16a34a" }}>
+                        ${b.recharge_amount.toLocaleString("es-CO")} COP
+                      </span>
+                      <button
+                        type="button"
+                        className="ad-btn ad-btn-primary"
+                        style={{ fontSize: "0.78rem", padding: "6px 12px" }}
+                        onClick={() => {
+                          setModalCatalogOpen(false);
+                          setPuntosToAdd(b.points);
+                          setRecargaToAdd(b.recharge_amount);
+                          setMotivoBeneficio(b.title);
+                          setBenefitModalTab("asignar");
+                          setModalBeneficiosOpen(true);
+                        }}
+                      >
+                        Asignar ➔
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="ad-modal-footer">
+              <button
+                type="button"
+                className="ad-btn ad-btn-secondary"
+                onClick={() => setModalCatalogOpen(false)}
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
