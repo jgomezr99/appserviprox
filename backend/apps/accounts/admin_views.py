@@ -489,6 +489,85 @@ class AdminActionView(APIView):
                 "notification_sent": send_notification,
             })
 
+        elif action_name == "assign_problem":
+            clean_fal_id = str(target_id).replace("fal-", "").replace("#", "")
+            fal = None
+            if clean_fal_id.isdigit():
+                fal = AppProblemReport.objects.filter(id=int(clean_fal_id)).first()
+            if not fal:
+                fal = AppProblemReport.objects.filter(ticket_number__iexact=str(target_id)).first()
+
+            assigned_to = request.data.get("assigned_to", "Carlos M.")
+            if fal:
+                if fal.status == "recibido":
+                    fal.status = "en_proceso"
+                fal.response_notes = f"Asignada a {assigned_to}. {fal.response_notes}".strip()
+                fal.save()
+
+            AdminAuditLog.objects.create(
+                admin_name=admin_name,
+                action=f"Asignación de incidencia técnica a {assigned_to}",
+                target=f"Ticket {fal.ticket_number if fal else target_id}",
+                reason=reason or f"Asignado al especialista {assigned_to}",
+            )
+            return Response({"ok": True, "message": f"Incidencia asignada a {assigned_to} en la base de datos."})
+
+        elif action_name == "update_problem_status":
+            clean_fal_id = str(target_id).replace("fal-", "").replace("#", "")
+            fal = None
+            if clean_fal_id.isdigit():
+                fal = AppProblemReport.objects.filter(id=int(clean_fal_id)).first()
+            if not fal:
+                fal = AppProblemReport.objects.filter(ticket_number__iexact=str(target_id)).first()
+
+            new_status = request.data.get("new_status", "resuelto")
+            status_db = "resuelto" if new_status in {"Resuelta", "resuelto", "Cerrada", "cerrada"} else "en_proceso" if new_status in {"En proceso", "en_proceso"} else "recibido"
+
+            if fal:
+                fal.status = status_db
+                if reason:
+                    fal.response_notes = reason
+                fal.save()
+
+            AdminAuditLog.objects.create(
+                admin_name=admin_name,
+                action=f"Cambio de estado de incidencia a {new_status}",
+                target=f"Ticket {fal.ticket_number if fal else target_id}",
+                reason=reason or f"Actualizado a {new_status}",
+            )
+            return Response({"ok": True, "message": f"Estado de incidencia actualizado a {new_status} en la base de datos."})
+
+        elif action_name == "create_problem":
+            import random
+            ticket_num = request.data.get("ticket_number") or f"#{random.randint(1046, 9999)}"
+            category_label = request.data.get("category_label") or request.data.get("module") or "General"
+            description = request.data.get("description") or "Falla técnica reportada por el administrador"
+            reported_by = request.data.get("reported_by") or admin_name
+            device_info = request.data.get("device_info") or "Aplicación móvil (Android)"
+            status_val = request.data.get("status") or "recibido"
+
+            fal = AppProblemReport.objects.create(
+                ticket_number=ticket_num,
+                category=category_label.lower().replace(" ", "_"),
+                category_label=category_label,
+                description=description,
+                reported_by=reported_by,
+                device_info=device_info,
+                status=status_val,
+            )
+            AdminAuditLog.objects.create(
+                admin_name=admin_name,
+                action="Registro manual de falla técnica",
+                target=f"Ticket {fal.ticket_number} ({fal.category_label})",
+                reason=description[:120],
+            )
+            return Response({
+                "ok": True,
+                "message": f"Incidencia {fal.ticket_number} creada y guardada en la base de datos.",
+                "id": fal.id,
+                "ticket_number": fal.ticket_number,
+            })
+
         return Response({"error": "Acción no reconocida."}, status=status.HTTP_400_BAD_REQUEST)
 
 

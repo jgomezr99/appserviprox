@@ -145,15 +145,15 @@ class AppProblemViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        email = self.request.query_params.get("email")
-        user = self.request.user
+        if self.request.query_params.get("all") == "true":
+            return qs
         if email:
             return qs.filter(Q(user__email__iexact=email) | Q(user_email__iexact=email))
         if user and user.is_authenticated:
             if user.is_staff:
                 return qs
             return qs.filter(Q(user=user) | Q(user_email__iexact=user.email))
-        return qs.none()
+        return qs
 
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None

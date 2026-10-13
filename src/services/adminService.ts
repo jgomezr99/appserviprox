@@ -92,7 +92,7 @@ export const adminService = {
    * Ejecuta una acción administrativa y la guarda en la base de datos (con registro de auditoría).
    */
   async executeAction(params: {
-    action: "approve_request" | "reject_request" | "block_user" | "unblock_user" | "assign_benefits" | "respond_pqr";
+    action: "approve_request" | "reject_request" | "block_user" | "unblock_user" | "assign_benefits" | "respond_pqr" | "assign_problem" | "update_problem_status" | "create_problem" | string;
     target_id: string | number;
     reason?: string;
     admin_name?: string;
@@ -103,6 +103,15 @@ export const adminService = {
     response_text?: string;
     new_status?: string;
     send_notification?: boolean;
+    assigned_to?: string;
+    category_label?: string;
+    description?: string;
+    reported_by?: string;
+    device_info?: string;
+    module?: string;
+    ticket_number?: string;
+    status?: string;
+    [key: string]: any;
   }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
     // Sincronizar en almacenamiento local para sesiones demo / sin conexión
     const BLOCKED_KEY = "serviprox_blocked_users";
@@ -191,14 +200,77 @@ export const adminService = {
   },
 
   /**
-   * Consulta fallas técnicas de la aplicación.
+   * Consulta fallas técnicas de la aplicación desde la base de datos.
    */
   async getProblems(): Promise<any[]> {
     try {
-      return await api.get<any[]>("app-problems/");
+      return await api.get<any[]>("app-problems/", { params: { all: "true" } });
     } catch {
       return [];
     }
+  },
+
+  /**
+   * Asigna un técnico responsable a una incidencia técnica en la base de datos.
+   */
+  async assignProblem(params: {
+    targetId: string | number;
+    assignedTo: string;
+    adminName?: string;
+    reason?: string;
+  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+    return await this.executeAction({
+      action: "assign_problem",
+      target_id: params.targetId,
+      assigned_to: params.assignedTo,
+      admin_name: params.adminName || "Superadministrador",
+      reason: params.reason || `Asignada a ${params.assignedTo}`,
+    });
+  },
+
+  /**
+   * Actualiza el estado de una incidencia técnica en la base de datos.
+   */
+  async updateProblemStatus(params: {
+    targetId: string | number;
+    newStatus: string;
+    adminName?: string;
+    reason?: string;
+  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+    return await this.executeAction({
+      action: "update_problem_status",
+      target_id: params.targetId,
+      new_status: params.newStatus,
+      admin_name: params.adminName || "Superadministrador",
+      reason: params.reason || `Estado actualizado a ${params.newStatus}`,
+    });
+  },
+
+  /**
+   * Crea una nueva incidencia técnica manual en la base de datos.
+   */
+  async createProblem(params: {
+    ticketNumber?: string;
+    module: string;
+    title: string;
+    description: string;
+    reportedBy: string;
+    priority?: string;
+    deviceInfo?: string;
+    adminName?: string;
+  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+    return await this.executeAction({
+      action: "create_problem",
+      target_id: params.ticketNumber || `fal-${Date.now()}`,
+      ticket_number: params.ticketNumber,
+      category_label: params.module,
+      module: params.module,
+      description: `${params.title}: ${params.description}`,
+      reported_by: params.reportedBy,
+      device_info: params.deviceInfo || "Aplicación móvil (Android)",
+      admin_name: params.adminName || "Superadministrador",
+      status: "recibido",
+    });
   },
 
   /**

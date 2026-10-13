@@ -2000,6 +2000,10 @@
   background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
   border-color: #f3e8ff;
 }
+.ad-pqr-kpi-card.green {
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+  border-color: #dcfce7;
+}
 
 .ad-pqr-kpi-icon {
   width: 40px;
