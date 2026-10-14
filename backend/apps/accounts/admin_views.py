@@ -7,7 +7,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import AdminAuditLog, UserRole
+from apps.accounts.models import AdminAuditLog, Notification, UserRole
 from apps.catalog.models import Service
 from apps.pqrs.models import AppProblemReport, PQRReport
 from apps.professionals.models import ProfessionalProfile
@@ -311,6 +311,14 @@ class AdminActionView(APIView):
                     target=f"{u.get_full_name() or u.email} ({u.get_role_display() if hasattr(u, 'get_role_display') else u.role})",
                     reason=reason,
                 )
+                Notification.objects.create(
+                    user=u,
+                    title=f"Aviso disciplinario: {u.get_full_name() or u.email}",
+                    text=f"{'Suspensión de cuenta por ' + str(block_duration) + ' días.' if is_blocking and block_type == 'temporal' else ('Bloqueo definitivo de cuenta.' if is_blocking else 'Cuenta reactivada con éxito.')} Motivo: {reason[:100]}",
+                    notification_type="bloqueo",
+                    target_id=str(u.id),
+                    is_read=False,
+                )
                 return Response({
                     "ok": True,
                     "message": f"Usuario {u.get_full_name() or u.email} {'bloqueado' if is_blocking else 'desbloqueado'} con éxito en la base de datos.",
@@ -396,6 +404,14 @@ class AdminActionView(APIView):
                     target=f"{pro.display_name} (+{points} pts / +${recharge:,.0f})",
                     reason=reason,
                 )
+                Notification.objects.create(
+                    user=pro.user if hasattr(pro, "user") else None,
+                    title=f"Incentivo otorgado a {pro.display_name}",
+                    text=f"Se asignaron +{points} puntos acumulables y recarga a {pro.display_name}. Motivo: {reason[:100]}",
+                    notification_type="beneficio",
+                    target_id=str(pro.id),
+                    is_read=False,
+                )
                 return Response({
                     "ok": True,
                     "message": f"Beneficios asignados a {pro.display_name}: +{points} puntos guardados en la BD.",
@@ -444,6 +460,15 @@ class AdminActionView(APIView):
                     target=f"PQR {pqr.radicado_number} ({pqr.client_name or 'Cliente'})",
                     reason=response_text[:120],
                 )
+                if send_notification:
+                    Notification.objects.create(
+                        user=pqr.client,
+                        title=f"Respuesta a caso PQR {pqr.radicado_number}",
+                        text=f"El equipo de soporte ha respondido a tu solicitud ({new_status}): '{response_text[:120]}'",
+                        notification_type="pqr",
+                        target_id=str(pqr.radicado_number),
+                        is_read=False,
+                    )
                 return Response({
                     "ok": True,
                     "message": f"Respuesta registrada en la base de datos para PQR {pqr.radicado_number}. Notificación enviada al cliente.",
@@ -561,6 +586,13 @@ class AdminActionView(APIView):
                 target=f"Ticket {fal.ticket_number} ({fal.category_label})",
                 reason=description[:120],
             )
+            Notification.objects.create(
+                title=f"Nueva falla reportada ({category_label})",
+                text=f"Ticket {fal.ticket_number}: {description[:80]}. Reportado por {reported_by}.",
+                notification_type="falla",
+                target_id=str(fal.ticket_number),
+                is_read=False,
+            )
             return Response({
                 "ok": True,
                 "message": f"Incidencia {fal.ticket_number} creada y guardada en la base de datos.",
@@ -612,3 +644,112 @@ class AdminUsersListView(APIView):
             "count": len(users_data),
             "users": users_data,
         })
+
+
+class AdminNotificationListView(APIView):
+    """Gestión y consulta en vivo de notificaciones de la plataforma Serviprox."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        # Si la tabla está vacía, sembrar las 3 notificaciones oficiales de la plataforma
+        if Notification.objects.count() == 0:
+            Notification.objects.create(
+                title="Nueva queja PQR",
+                text="Nueva queja PQR radicada por Laura G.",
+                notification_type="pqr",
+                link="/admin/pqr",
+                target_id="#1028",
+                is_read=False,
+            )
+            Notification.objects.create(
+                title="Verificación profesional",
+                text="Carlos M. solicitó verificación de tarjeta profesional RETIE.",
+                notification_type="verificacion",
+                link="/admin/profesionales",
+                target_id="pro-1",
+                is_read=False,
+            )
+            Notification.objects.create(
+                title="Falla técnica reportada",
+                text="Se reportó una falla técnica en carga de imágenes (#1043).",
+                notification_type="falla",
+                link="/admin/fallas",
+                target_id="#1043",
+                is_read=False,
+            )
+
+        notifications_qs = Notification.objects.order_by("-created_at")[:50]
+        unread_count = Notification.objects.filter(is_read=False).count()
+
+        results = []
+        for n in notifications_qs:
+            diff = timezone.now() - n.created_at
+            if diff.days > 0:
+                time_str = f"Hace {diff.days} d"
+            elif diff.seconds >= 3600:
+                hours = diff.seconds // 3600
+                time_str = f"Hace {hours} h"
+            elif diff.seconds >= 60:
+                minutes = diff.seconds // 60
+                time_str = f"Hace {minutes} min"
+            else:
+                time_str = "Hace un momento"
+
+            results.append({
+                "id": n.id,
+                "title": n.title,
+                "text": n.text,
+                "type": n.notification_type,
+                "link": n.link,
+                "target_id": n.target_id,
+                "unread": not n.is_read,
+                "time": time_str,
+                "created_at": n.created_at.isoformat(),
+            })
+
+        return Response({
+            "unread_count": unread_count,
+            "total_count": Notification.objects.count(),
+            "notifications": results,
+        })
+
+    def post(self, request):
+        action = request.data.get("action", "mark_all_read")
+        notification_id = request.data.get("id")
+
+        if action == "mark_read":
+            if notification_id:
+                Notification.objects.filter(id=notification_id).update(is_read=True)
+            return Response({"ok": True, "message": "Notificación marcada como leída."})
+
+        elif action == "mark_unread":
+            if notification_id:
+                Notification.objects.filter(id=notification_id).update(is_read=False)
+            return Response({"ok": True, "message": "Notificación marcada como no leída."})
+
+        elif action == "mark_all_read":
+            Notification.objects.filter(is_read=False).update(is_read=True)
+            return Response({"ok": True, "message": "Todas las notificaciones marcadas como leídas."})
+
+        elif action == "clear_all":
+            Notification.objects.all().delete()
+            return Response({"ok": True, "message": "Historial de notificaciones eliminado."})
+
+        elif action == "create":
+            title = request.data.get("title", "Aviso del sistema")
+            text = request.data.get("text", "")
+            ntype = request.data.get("type", "sistema")
+            link = request.data.get("link", "")
+            target_id = request.data.get("target_id", "")
+            n = Notification.objects.create(
+                title=title,
+                text=text,
+                notification_type=ntype,
+                link=link,
+                target_id=target_id,
+                is_read=False,
+            )
+            return Response({"ok": True, "id": n.id, "message": "Notificación creada con éxito."})
+
+        return Response({"error": "Acción no reconocida."}, status=status.HTTP_400_BAD_REQUEST)

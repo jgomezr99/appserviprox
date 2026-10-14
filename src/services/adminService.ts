@@ -297,6 +297,91 @@ export const adminService = {
       reason: reason || "Revisión documental desde el panel administrativo",
     });
   },
+
+  /**
+   * Consulta notificaciones de la plataforma con contador de no leídas en la base de datos.
+   */
+  async getNotifications(): Promise<{
+    unread_count: number;
+    total_count: number;
+    notifications: Array<{
+      id: number;
+      title: string;
+      text: string;
+      type: string;
+      link?: string;
+      target_id?: string;
+      unread: boolean;
+      time: string;
+      created_at: string;
+    }>;
+  }> {
+    try {
+      return await api.get<any>("admin/notifications/");
+    } catch {
+      return { unread_count: 0, total_count: 0, notifications: [] };
+    }
+  },
+
+  /**
+   * Marca una notificación como leída o no leída en la base de datos.
+   */
+  async markNotificationRead(id?: number | string, isRead = true): Promise<{ ok: boolean }> {
+    try {
+      return await api.post<any>("admin/notifications/", {
+        action: isRead ? "mark_read" : "mark_unread",
+        id,
+      });
+    } catch {
+      return { ok: false };
+    }
+  },
+
+  /**
+   * Marca todas las notificaciones como leídas en la base de datos.
+   */
+  async markAllNotificationsRead(): Promise<{ ok: boolean }> {
+    try {
+      return await api.post<any>("admin/notifications/", {
+        action: "mark_all_read",
+      });
+    } catch {
+      return { ok: false };
+    }
+  },
+
+  /**
+   * Elimina todas las notificaciones de la plataforma.
+   */
+  async clearAllNotifications(): Promise<{ ok: boolean }> {
+    try {
+      return await api.post<any>("admin/notifications/", {
+        action: "clear_all",
+      });
+    } catch {
+      return { ok: false };
+    }
+  },
+
+  /**
+   * Crea una nueva notificación en la base de datos.
+   */
+  async createNotification(params: {
+    title: string;
+    text: string;
+    type?: string;
+    link?: string;
+    target_id?: string;
+  }): Promise<{ ok: boolean; id?: number }> {
+    try {
+      return await api.post<any>("admin/notifications/", {
+        action: "create",
+        ...params,
+      });
+    } catch {
+      return { ok: false };
+    }
+  },
 };
 
 

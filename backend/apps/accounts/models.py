@@ -163,3 +163,44 @@ class AdminAuditLog(models.Model):
     def __str__(self) -> str:
         return f"[{self.created_at.strftime('%Y-%m-%d %H:%M')}] {self.admin_name}: {self.action} -> {self.target}"
 
+
+class Notification(models.Model):
+    """Notificaciones oficiales de la plataforma para clientes, profesionales y administradores."""
+
+    class NotificationType(models.TextChoices):
+        PQR = "pqr", _("PQR y Quejas")
+        FALLA = "falla", _("Falla Técnica")
+        BLOQUEO = "bloqueo", _("Aviso Disciplinario")
+        BENEFICIO = "beneficio", _("Beneficios y Puntos")
+        VERIFICACION = "verificacion", _("Verificación de Identidad")
+        SISTEMA = "sistema", _("Sistema Serviprox")
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        null=True,
+        blank=True,
+    )
+    title = models.CharField(_("título"), max_length=200)
+    text = models.TextField(_("mensaje"))
+    notification_type = models.CharField(
+        _("tipo"),
+        max_length=50,
+        choices=NotificationType.choices,
+        default=NotificationType.SISTEMA,
+    )
+    link = models.CharField(_("enlace o ruta"), max_length=255, blank=True, default="")
+    target_id = models.CharField(_("id objetivo"), max_length=100, blank=True, default="")
+    is_read = models.BooleanField(_("leída"), default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = _("notificación")
+        verbose_name_plural = _("notificaciones")
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        user_str = self.user.email if self.user else "Global/Admin"
+        return f"[{self.notification_type}] {self.title} ({user_str})"
+

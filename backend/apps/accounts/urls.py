@@ -1,6 +1,11 @@
 from django.urls import path
 
-from .admin_views import AdminActionView, AdminOverviewView, AdminUsersListView
+from .admin_views import (
+    AdminActionView,
+    AdminNotificationListView,
+    AdminOverviewView,
+    AdminUsersListView,
+)
 from .views import (
     BecomeClientView,
     BecomeProfessionalView,
@@ -36,4 +41,6 @@ urlpatterns = [
     path("admin/overview/", AdminOverviewView.as_view(), name="admin-overview"),
     path("admin/action/", AdminActionView.as_view(), name="admin-action"),
     path("admin/users/", AdminUsersListView.as_view(), name="admin-users"),
+    path("admin/notifications/", AdminNotificationListView.as_view(), name="admin-notifications"),
+    path("notifications/", AdminNotificationListView.as_view(), name="notifications-list"),
 ]

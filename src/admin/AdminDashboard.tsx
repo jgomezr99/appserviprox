@@ -219,6 +219,18 @@ export interface TechnicalFailureItem {
   timeline: Array<{ date: string; text: string; isInitial?: boolean }>;
 }
 
+export interface PlatformNotification {
+  id: number | string;
+  title: string;
+  text: string;
+  time: string;
+  unread: boolean;
+  type?: "pqr" | "falla" | "bloqueo" | "beneficio" | "verificacion" | "sistema";
+  link?: string;
+  target_id?: string;
+  created_at?: string;
+}
+
 // Datos iniciales de la base de datos para respaldo y render inmediato
 const INITIAL_DB_CLIENTS: ClientItem[] = [
   {
