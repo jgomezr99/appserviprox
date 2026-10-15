@@ -222,6 +222,16 @@ const App: React.FC = () => {
                 </RequireAuth>
               </Route>
 
+              <Route path="/profesional/beneficios" exact={true}>
+                <RequireAuth role="professional">
+                  <RolePlaceholderPage
+                    kicker="PROFESIONAL"
+                    title="Beneficios"
+                    description="Aquí verás los puntos e incentivos que te asigna Serviprox."
+                  />
+                </RequireAuth>
+              </Route>
+
               <Route path="/cuenta" exact={true}>
                 <Redirect to="/perfil" />
               </Route>

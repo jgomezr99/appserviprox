@@ -7,11 +7,13 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 from django.utils import timezone
 from rest_framework import generics, permissions, status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import PasswordResetCode, User, UserRole
+from .platform_guard import app_param, require_feature, validate_platform_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .serializers import RegisterSerializer, UserSerializer
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,16 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        require_feature("new_users", "El registro de nuevos usuarios está deshabilitado.")
+        if request.data.get("role") == UserRole.PROFESSIONAL:
+            require_feature("professionals", "El registro de profesionales está deshabilitado.")
+            if not app_param("reg_pros"):
+                raise PermissionDenied("El registro de profesionales está deshabilitado.")
+        elif not app_param("reg_clients"):
+            raise PermissionDenied("El registro de clientes está deshabilitado.")
+        return super().create(request, *args, **kwargs)
 
 
 class RequestPasswordResetView(APIView):
@@ -78,6 +90,10 @@ class ConfirmPasswordResetView(APIView):
             raise ValidationError({"detail": "El código no es válido o ya venció."})
         if len(new_password) < 6:
             raise ValidationError({"detail": "La contraseña debe tener al menos 6 caracteres."})
+        try:
+            validate_platform_password(new_password)
+        except DjangoValidationError as exc:
+            raise ValidationError({"detail": " ".join(exc.messages)})
 
         reset.user.set_password(new_password)
         reset.user.save(update_fields=["password"])
@@ -131,6 +147,7 @@ class BecomeProfessionalView(APIView):
 
     def post(self, request):
         user = request.user
+        require_feature("professionals", "El registro de profesionales está deshabilitado.")
         if user.role == UserRole.STAFF:
             raise ValidationError({"detail": "El equipo Serviprox no puede cambiar a este rol."})
 

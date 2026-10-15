@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { adminService } from "../services/adminService";
+import { usePlatformSettings } from "../services/platformSettings";
+import AdminSettings from "./AdminSettings";
 import "./AdminDashboard.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1190,6 +1192,8 @@ export const AdminDashboard: React.FC = () => {
 
   // Estados de navegación
   const [activeMenu, setActiveMenu] = useState<AdminMenuId>("inicio");
+  const platformSettings = usePlatformSettings();
+  const benefitsEnabled = platformSettings.features.benefits;
   const [menuUsuariosOpen, setMenuUsuariosOpen] = useState(true);
   const [menuPublicacionesOpen, setMenuPublicacionesOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1768,6 +1772,25 @@ export const AdminDashboard: React.FC = () => {
         onResolve: (result) => resolve(result === true),
       });
     });
+
+  const handleDeleteAccount = async (kind: "client" | "professional", id: number | string, name: string) => {
+    const ok = await showConfirm(
+      `¿Eliminar definitivamente la cuenta de ${name}? También se borrarán sus pedidos y viviendas. Esta acción no se puede deshacer.`,
+      "Eliminar cuenta"
+    );
+    if (!ok) return;
+    try {
+      await adminService.deleteAccount(kind, id);
+      if (kind === "client") {
+        setClientsList((prev) => prev.filter((c) => String(c.id) !== String(id)));
+      } else {
+        setAllProsList((prev) => prev.filter((p) => String(p.id) !== String(id)));
+      }
+      showNotification(`La cuenta de ${name} fue eliminada.`, "success");
+    } catch (err) {
+      showNotification(err instanceof Error ? err.message : "No se pudo eliminar la cuenta.", "error");
+    }
+  };
 
   const showPrompt = (message: string, defaultValue = "", title = "Ingrese información") =>
     new Promise<string | null>((resolve) => {
@@ -3239,6 +3262,7 @@ export const AdminDashboard: React.FC = () => {
             </button>
 
             {/* Beneficios y Puntos */}
+            {benefitsEnabled && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "beneficios" ? "active" : ""}`}
@@ -3249,6 +3273,7 @@ export const AdminDashboard: React.FC = () => {
               </svg>
               <span>Beneficios y puntos</span>
             </button>
+            )}
 
             {/* Fallas Técnicas */}
             <button
@@ -4086,6 +4111,7 @@ export const AdminDashboard: React.FC = () => {
                   </button>
 
                   {/* Asignar beneficios */}
+                  {benefitsEnabled && (
                   <button
                     type="button"
                     className="ad-quick-btn ad-quick-purple"
@@ -4097,6 +4123,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                     <span>›</span>
                   </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -4313,6 +4340,15 @@ export const AdminDashboard: React.FC = () => {
                                   onClick={() => handleViewClientDetail(client)}
                                 >
                                   👁
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="ad-action-pill block"
+                                  title="Eliminar cuenta de la base de datos"
+                                  onClick={() => handleDeleteAccount("client", client.id, client.full_name)}
+                                >
+                                  🗑 Eliminar
                                 </button>
 
                                 <button
@@ -4595,6 +4631,15 @@ export const AdminDashboard: React.FC = () => {
                                   onClick={() => handleViewProDetail(pro)}
                                 >
                                   👁
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="ad-action-pill block"
+                                  title="Eliminar cuenta de la base de datos"
+                                  onClick={() => handleDeleteAccount("professional", pro.id, pro.display_name)}
+                                >
+                                  🗑 Eliminar
                                 </button>
 
                                 <button
@@ -5439,7 +5484,7 @@ export const AdminDashboard: React.FC = () => {
           {/* ═════════════════════════════════════════════════════════════════
               VISTA: BENEFICIOS E INCENTIVOS (DISEÑO EXACTO OFICIAL)
              ═════════════════════════════════════════════════════════════════ */}
-          {activeMenu === "beneficios" && (
+          {activeMenu === "beneficios" && benefitsEnabled && (
             <section className="ad-benefits-view" aria-label="Beneficios e Incentivos">
               {/* Encabezado Principal */}
               <div className="ad-view-header">
@@ -6369,6 +6414,8 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </section>
           )}
+
+          {activeMenu === "configuracion" && <AdminSettings />}
 
           {/* ═════════════════════════════════════════════════════════════════
               VISTA: HISTORIAL DE AUDITORÍA

@@ -71,6 +71,39 @@ const PaymentPage: React.FC = () => {
     void loadOrders();
   }, [orderId]);
 
+  // Wompi confirma por webhook: tras volver del checkout se consulta unos segundos.
+  useEffect(() => {
+    if (!orderId || selectedOrder?.payment_status !== "pending") return;
+    let tries = 0;
+    const timer = window.setInterval(async () => {
+      tries += 1;
+      try {
+        const next = await orderService.get(orderId);
+        setSelectedOrder(next);
+        setOrders([next]);
+        if (next.payment_status === "paid" || tries >= 6) window.clearInterval(timer);
+      } catch {
+        window.clearInterval(timer);
+      }
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [orderId, selectedOrder?.payment_status]);
+
+  const payWithWompi = async () => {
+    if (!selectedOrder || processing) return;
+    setProcessing(true);
+    try {
+      const { checkout_url } = await orderService.wompiCheckout(selectedOrder.id);
+      if (!checkout_url.startsWith("https://checkout.wompi.co/")) {
+        throw new Error("URL de pago inválida");
+      }
+      window.location.href = checkout_url;
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "No pudimos iniciar el pago.");
+      setProcessing(false);
+    }
+  };
+
   const confirmPayment = async () => {
     if (!selectedOrder || processing) return;
     setProcessing(true);
@@ -112,21 +145,33 @@ const PaymentPage: React.FC = () => {
       </div>
       {order.payment_status === "pending" ? (
         <div className="sp-payment-demo">
-          <p>
-            Confirmación simulada para desarrollo/demo. No representa una pasarela
-            real ni un cobro externo.
-          </p>
           <IonButton
             className="sp-primary-button"
-            onClick={confirmPayment}
-            disabled={processing || selectedOrder?.id !== order.id}
+            onClick={payWithWompi}
+            disabled={
+              processing ||
+              selectedOrder?.id !== order.id ||
+              !(order.final_price || order.estimate_max || order.estimate_min)
+            }
           >
             {processing && selectedOrder?.id === order.id ? (
               <IonSpinner name="crescent" />
             ) : (
-              "Confirmar pago demo"
+              "Pagar con Wompi"
             )}
           </IonButton>
+          {import.meta.env.DEV && (
+            <>
+              <p>Confirmación simulada solo para desarrollo. No genera un cobro real.</p>
+              <IonButton
+                fill="outline"
+                onClick={confirmPayment}
+                disabled={processing || selectedOrder?.id !== order.id}
+              >
+                Confirmar pago demo
+              </IonButton>
+            </>
+          )}
         </div>
       ) : (
         <p className="sp-muted">
@@ -183,7 +228,7 @@ const PaymentPage: React.FC = () => {
         <IonToast
           isOpen={!!toast}
           message={toast}
-          duration={1800}
+          duration={3500}
           onDidDismiss={() => setToast("")}
         />
       </IonContent>

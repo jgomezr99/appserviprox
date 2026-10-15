@@ -6,6 +6,12 @@ from .admin_views import (
     AdminOverviewView,
     AdminUsersListView,
 )
+from .platform_views import (
+    AdminDeleteAccountView,
+    AdminPlatformSettingsView,
+    AdminSystemActionView,
+    PublicPlatformSettingsView,
+)
 from .views import (
     BecomeClientView,
     BecomeProfessionalView,
@@ -40,6 +46,10 @@ urlpatterns = [
     ),
     path("admin/overview/", AdminOverviewView.as_view(), name="admin-overview"),
     path("admin/action/", AdminActionView.as_view(), name="admin-action"),
+    path("platform/settings/", PublicPlatformSettingsView.as_view(), name="platform-settings"),
+    path("admin/settings/", AdminPlatformSettingsView.as_view(), name="admin-settings"),
+    path("admin/accounts/<str:kind>/<int:pk>/", AdminDeleteAccountView.as_view(), name="admin-delete-account"),
+    path("admin/system-action/", AdminSystemActionView.as_view(), name="admin-system-action"),
     path("admin/users/", AdminUsersListView.as_view(), name="admin-users"),
     path("admin/notifications/", AdminNotificationListView.as_view(), name="admin-notifications"),
     path("notifications/", AdminNotificationListView.as_view(), name="notifications-list"),

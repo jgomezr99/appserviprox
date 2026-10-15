@@ -1,5 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.translation import gettext_lazy as _
 
 
@@ -204,3 +206,100 @@ class Notification(models.Model):
         user_str = self.user.email if self.user else "Global/Admin"
         return f"[{self.notification_type}] {self.title} ({user_str})"
 
+
+
+DEFAULT_PLATFORM_SETTINGS = {
+    "platform_name": "Serviprox",
+    "description": "Plataforma para la gestión y contratación de servicios para el hogar.",
+    "logo": "",
+    "country": "Colombia",
+    "timezone": "(GMT-05:00) Bogotá, Lima, Quito",
+    "language": "Español",
+    "date_format": "dd/mm/aaaa",
+    "time_format": "24 horas (HH:mm)",
+    "currency": "Peso colombiano (COP)",
+    "cities": ["Bogotá", "Medellín", "Cali", "Barranquilla", "Cartagena"],
+    "features": {
+        "new_users": True,
+        "professionals": True,
+        "services": True,
+        "products": True,
+        "chat": True,
+        "hirings": True,
+        "pqr": True,
+        "benefits": True,
+        "email_notifications": True,
+        "push_notifications": True,
+        "maintenance": False,
+    },
+    "maintenance_message": "Serviprox se encuentra en mantenimiento. Intenta de nuevo en unos minutos.",
+    "email": {
+        "host": "smtp.serviprox.com",
+        "port": "587",
+        "cipher": "TLS",
+        "sender": "no-reply@serviprox.com",
+        "sender_name": "Serviprox",
+        "requires_auth": True,
+    },
+    "social": {
+        "facebook": "https://facebook.com/serviprox",
+        "instagram": "https://instagram.com/serviprox",
+        "x": "https://x.com/serviprox",
+        "youtube": "https://youtube.com/@serviprox",
+        "linkedin": "https://linkedin.com/company/serviprox",
+    },
+    "documents": {
+        "terms": "",
+        "privacy": "",
+        "refunds": "",
+        "rules": "",
+        "contract": "",
+    },
+    "last_backup": "",
+    "sections": {},
+}
+
+_NESTED_KEYS = ("features", "email", "social", "documents", "sections")
+
+
+class PlatformSettings(models.Model):
+    """Configuración global de la plataforma (una sola fila)."""
+
+    data = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("configuración de plataforma")
+        verbose_name_plural = _("configuración de plataforma")
+
+    @classmethod
+    def load(cls) -> dict:
+        row = cls.objects.first()
+        stored = row.data if row else {}
+        merged = {**DEFAULT_PLATFORM_SETTINGS, **stored}
+        for key in _NESTED_KEYS:
+            merged[key] = {**DEFAULT_PLATFORM_SETTINGS[key], **stored.get(key, {})}
+        return merged
+
+    @staticmethod
+    def maintenance_state(data: dict) -> tuple[bool, str]:
+        """Mantenimiento manual o programado, y el mensaje a mostrar."""
+        cfg = data.get("sections", {}).get("maintenance", {})
+        active = bool(data["features"]["maintenance"])
+        start = parse_datetime(str(cfg.get("window_start") or ""))
+        end = parse_datetime(str(cfg.get("window_end") or ""))
+        if start and end:
+            if timezone.is_naive(start):
+                start = timezone.make_aware(start)
+            if timezone.is_naive(end):
+                end = timezone.make_aware(end)
+            active = active or start <= timezone.now() <= end
+        message = cfg.get("description") or data["maintenance_message"]
+        return active, message
+
+    @classmethod
+    def save_data(cls, data: dict) -> dict:
+        row = cls.objects.first() or cls()
+        row.data = data
+        row.save()
+        return cls.load()

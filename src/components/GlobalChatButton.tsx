@@ -11,6 +11,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePlatformSettings } from '../services/platformSettings';
 import { LiveSupportChatModal } from './pqr/LiveSupportChatModal';
 import type { AppProblemReport, PqrReport } from '../types/serviprox';
 import {
@@ -27,6 +28,7 @@ export const GlobalChatButton: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   const location = useLocation();
   const [chatOpen, setChatOpen] = useState(false);
+  const platform = usePlatformSettings();
 
   useEffect(() => {
     const handleOpen = () => {
@@ -40,6 +42,7 @@ export const GlobalChatButton: React.FC = () => {
 
   const isAdministrativeLogin = location.pathname === '/login/administrativo';
   const isHidden =
+    !platform.features.chat ||
     HIDDEN_PATHS.some((p) => location.pathname.startsWith(p)) ||
     isAdministrativeLogin ||
     location.pathname.startsWith('/onboarding') ||

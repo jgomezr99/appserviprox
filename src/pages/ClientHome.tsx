@@ -34,11 +34,13 @@ import {
 } from "ionicons/icons";
 import { useAuth } from "../context/AuthContext";
 import { householdService } from "../services/serviprox";
+import { useHomeFlags } from "../services/platformSettings";
 import type { Household } from "../types/serviprox";
 import "./RolePages.css";
 
 const ClientHome: React.FC = () => {
   const { user, updateMe } = useAuth();
+  const flags = useHomeFlags("client");
   const [household, setHousehold] = useState<Household | null>(null);
   const [loadingHousehold, setLoadingHousehold] = useState(true);
 
@@ -267,6 +269,7 @@ const ClientHome: React.FC = () => {
           </section>
 
           {/* Tarjeta de Vivienda Principal en Base de Datos */}
+          {flags.homes && (
           <section className="sp-card">
             <div className="sp-card-header">
               <div className="sp-icon-tile">
@@ -307,9 +310,11 @@ const ClientHome: React.FC = () => {
               </div>
             )}
           </section>
+          )}
 
           {/* Enlaces de Acción Rápida */}
           <section className="sp-grid sp-grid--two sp-home-actions">
+            {flags.map && (
             <a className="sp-card sp-home-link" href="/cliente/mapa">
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                 <IonIcon icon={mapOutline} style={{ fontSize: "1.3rem" }} />
@@ -317,6 +322,8 @@ const ClientHome: React.FC = () => {
               </div>
               <p>Ubica profesionales activos y disponibles cerca a tu ubicación.</p>
             </a>
+            )}
+            {flags.services && (
             <a className="sp-card sp-home-link" href="/cliente/servicios">
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                 <IonIcon icon={homeOutline} style={{ fontSize: "1.3rem" }} />
@@ -324,6 +331,8 @@ const ClientHome: React.FC = () => {
               </div>
               <p>Solicita plomería, electricidad, cerrajería y más para tu hogar.</p>
             </a>
+            )}
+            {flags.requests && (
             <a className="sp-card sp-home-link" href="/cliente/solicitudes">
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                 <IonIcon icon={calendarClearOutline} style={{ fontSize: "1.3rem" }} />
@@ -331,6 +340,8 @@ const ClientHome: React.FC = () => {
               </div>
               <p>Revisa el historial y estado de servicios agendados en la base de datos.</p>
             </a>
+            )}
+            {flags.homes && (
             <a className="sp-card sp-home-link" href="/cliente/viviendas">
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                 <IonIcon icon={businessOutline} style={{ fontSize: "1.3rem" }} />
@@ -338,6 +349,7 @@ const ClientHome: React.FC = () => {
               </div>
               <p>Administra los inmuebles registrados para tus solicitudes.</p>
             </a>
+            )}
           </section>
         </main>
       </IonContent>

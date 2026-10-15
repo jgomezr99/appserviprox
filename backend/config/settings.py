@@ -95,6 +95,18 @@ ASGI_APPLICATION = "config.asgi.application"
 
 DATABASE_ENGINE = os.getenv("SERVIPROX_DATABASE", "sqlite").strip().lower()
 
+# MongoDB opcional (chat, auditoría, notificaciones, PQR y fallas); vacío = desactivado.
+MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
+MONGODB_DB = os.getenv("MONGODB_DB", "serviprox").strip()
+
+# Credenciales de Wompi: siempre desde variables de entorno, nunca en el código.
+WOMPI_PUBLIC_KEY = os.getenv("WOMPI_PUBLIC_KEY", "").strip()
+WOMPI_PRIVATE_KEY = os.getenv("WOMPI_PRIVATE_KEY", "").strip()
+WOMPI_EVENTS_SECRET = os.getenv("WOMPI_EVENTS_SECRET", "").strip()
+WOMPI_INTEGRITY_SECRET = os.getenv("WOMPI_INTEGRITY_SECRET", "").strip()
+# URL pública de la app a la que Wompi devuelve al cliente tras pagar.
+FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
+
 if DATABASE_ENGINE == "postgres":
     postgres_options = {}
     postgres_sslmode = os.getenv("POSTGRES_SSLMODE")

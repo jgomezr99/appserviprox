@@ -21,11 +21,13 @@ import {
 import { ApiError } from "../services/api";
 import { professionalProfileService } from "../services/serviprox";
 import { useAuth } from "../context/AuthContext";
+import { useHomeFlags } from "../services/platformSettings";
 import type { ProfessionalProfile } from "../types/serviprox";
 import "./RolePages.css";
 
 const ProfessionalDashboard: React.FC = () => {
   const { user } = useAuth();
+  const flags = useHomeFlags("professional");
   const [profile, setProfile] = useState<ProfessionalProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -76,6 +78,7 @@ const ProfessionalDashboard: React.FC = () => {
             </div>
           ) : (
             <section className="sp-grid sp-grid--two">
+              {flags.profile_status && (
               <article className="sp-card">
                 <div className="sp-card-header">
                   <div className="sp-card-title">
@@ -87,7 +90,9 @@ const ProfessionalDashboard: React.FC = () => {
                   </span>
                 </div>
               </article>
+              )}
 
+              {flags.services_offered && (
               <article className="sp-card">
                 <div className="sp-card-header">
                   <div className="sp-card-title">
@@ -103,7 +108,9 @@ const ProfessionalDashboard: React.FC = () => {
                   </span>
                 </div>
               </article>
+              )}
 
+              {flags.availability && (
               <article className="sp-card">
                 <div className="sp-card-header">
                   <div className="sp-card-title">
@@ -119,7 +126,9 @@ const ProfessionalDashboard: React.FC = () => {
                   </span>
                 </div>
               </article>
+              )}
 
+              {flags.requests && (
               <article className="sp-card">
                 <div className="sp-card-header">
                   <div className="sp-card-title">
@@ -134,7 +143,9 @@ const ProfessionalDashboard: React.FC = () => {
                   Ver mis solicitudes
                 </IonButton>
               </article>
+              )}
 
+              {flags.jobs && (
               <article className="sp-card">
                 <div className="sp-card-header">
                   <div className="sp-card-title">
@@ -146,6 +157,7 @@ const ProfessionalDashboard: React.FC = () => {
                   </span>
                 </div>
               </article>
+              )}
             </section>
           )}
         </main>

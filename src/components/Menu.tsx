@@ -29,12 +29,14 @@ import {
   timeOutline, timeSharp,
   mapOutline, mapSharp,
   shieldCheckmarkOutline, shieldCheckmarkSharp,
+  giftOutline, giftSharp,
 } from 'ionicons/icons';
 
 
 import './Menu.css';
 import logo from '../Assets/logo.png';
 import { useAuth } from '../context/AuthContext';
+import { usePlatformSettings, homeFlags } from '../services/platformSettings';
 
 interface AppPage {
   url: string;
@@ -63,6 +65,13 @@ const professionalPages: AppPage[] = [
   { title: 'Mi perfil profesional', url: '/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
   { title: 'Disponibilidad', url: '/profesional/disponibilidad', iosIcon: timeOutline, mdIcon: timeSharp },
 ];
+
+const benefitsPage: AppPage = {
+  title: 'Beneficios',
+  url: '/profesional/beneficios',
+  iosIcon: giftOutline,
+  mdIcon: giftSharp,
+};
 
 
 const Menu: React.FC = () => {
@@ -120,10 +129,28 @@ const Menu: React.FC = () => {
     location.pathname.startsWith('/ingresar') ||
     location.pathname.startsWith('/register');
   const isOnboardingPage = location.pathname.startsWith('/onboarding/');
+  const platform = usePlatformSettings();
+  const clientFlags = homeFlags(platform, 'client');
+  const proFlags = homeFlags(platform, 'professional');
+  const clientUrlFlag: Record<string, string> = {
+    '/cliente/mapa': 'map',
+    '/cliente/servicios': 'services',
+    '/cliente/solicitudes': 'requests',
+    '/cliente/favoritos': 'favorites',
+    '/cliente/viviendas': 'homes',
+    '/cliente/pqrs': 'pqr',
+  };
+  const proUrlFlag: Record<string, string> = {
+    '/profesional/solicitudes': 'requests',
+    '/profesional/trabajos': 'jobs',
+    '/profesional/disponibilidad': 'availability',
+  };
   const menuPages =
     user?.role === 'professional'
-      ? professionalPages
-      : clientPages;
+      ? [...professionalPages, ...(proFlags.benefits ? [benefitsPage] : [])].filter(
+          (page) => proFlags[proUrlFlag[page.url]] !== false
+        )
+      : clientPages.filter((page) => clientFlags[clientUrlFlag[page.url]] !== false);
   const menuDisabled = isPublicPage || isOnboardingPage;
 
   return (

@@ -119,6 +119,10 @@ export const orderService = {
   get: (id: number | string) => api.get<Order>(`orders/${id}/`),
   confirmDemoPayment: (id: number | string) =>
     api.post<Order>(`orders/${id}/confirm-demo-payment/`),
+  wompiCheckout: (id: number | string) =>
+    api.post<{ checkout_url: string; reference: string; amount_in_cents: number }>(
+      `orders/${id}/wompi-checkout/`
+    ),
   transition: (id: number | string, status: string, note = "") =>
     api.post<Order>(`orders/${id}/transition/`, { status, note }),
   updateLocation: (id: number | string, latitude: number, longitude: number) =>

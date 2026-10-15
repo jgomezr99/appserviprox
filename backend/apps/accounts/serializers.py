@@ -2,6 +2,14 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from .models import ClientProfile, User, UserRole
+from .platform_guard import (
+    fail_key,
+    lock_key,
+    lockout_policy,
+    register_failed_login,
+    validate_platform_password,
+)
+from django.core.cache import cache
 
 
 class ClientProfileSerializer(serializers.ModelSerializer):
@@ -101,7 +109,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password = serializers.CharField(write_only=True, validators=[validate_password, validate_platform_password])
     role = serializers.ChoiceField(
         choices=(UserRole.CLIENT, UserRole.PROFESSIONAL),
         default=UserRole.CLIENT,
@@ -214,7 +222,32 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                     "role": user.role,
                 })
 
-        data = super().validate(attrs)
+        if cache.get(lock_key(email_or_username)):
+            _, minutes = lockout_policy()
+            raise exceptions.AuthenticationFailed({
+                "detail": f"Cuenta bloqueada temporalmente por intentos fallidos. Intenta de nuevo en {minutes} minutos.",
+            })
+
+        try:
+            data = super().validate(attrs)
+        except exceptions.AuthenticationFailed:
+            register_failed_login(email_or_username)
+            raise
+        cache.delete(fail_key(email_or_username))
+        is_staff_user = self.user.is_staff or self.user.role == UserRole.STAFF
+        if not is_staff_user:
+            from .models import PlatformSettings
+
+            settings_data = PlatformSettings.load()
+            active, message = PlatformSettings.maintenance_state(settings_data)
+            request = self.context.get("request")
+            client_ip = request.META.get("REMOTE_ADDR") if request else None
+            allowed_ips = settings_data["sections"].get("maintenance", {}).get("ips", [])
+            if active and client_ip not in allowed_ips:
+                raise exceptions.AuthenticationFailed({
+                    "detail": message,
+                    "maintenance": True,
+                })
         data["user"] = UserSerializer(self.user).data
         return data
 

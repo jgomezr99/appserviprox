@@ -77,6 +77,36 @@ class Order(models.Model):
         super().save(*args, **kwargs)
 
 
+class Payment(models.Model):
+    """Intento de cobro por Wompi asociado a una orden."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pendiente")
+        APPROVED = "approved", _("Aprobado")
+        DECLINED = "declined", _("Rechazado")
+        VOIDED = "voided", _("Anulado")
+        ERROR = "error", _("Error")
+
+    order = models.ForeignKey(Order, related_name="payments", on_delete=models.CASCADE)
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL, related_name="payments", null=True, on_delete=models.SET_NULL
+    )
+    reference = models.CharField(max_length=80, unique=True)
+    amount_in_cents = models.BigIntegerField()
+    currency = models.CharField(max_length=3, default="COP")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    wompi_transaction_id = models.CharField(max_length=80, blank=True)
+    payment_method = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.reference} · {self.status}"
+
+
 class WorkEvidence(models.Model):
     order = models.ForeignKey(Order, related_name="work_evidence", on_delete=models.CASCADE)
     image = models.ImageField(upload_to="work-evidence/%Y/%m/")

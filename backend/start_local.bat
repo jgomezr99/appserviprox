@@ -17,7 +17,6 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 call ".venv\Scripts\activate.bat"
-set "SERVIPROX_DATABASE=sqlite"
 
 :: Solo instalar dependencias si Django no esta presente o si se solicita explicitamente
 python -c "import django" >nul 2>&1

@@ -10,6 +10,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.accounts.models import UserRole
+from apps.accounts.platform_guard import require_feature
 from apps.orders.models import Order
 
 from .models import ServiceRequest, ServiceRequestImage
@@ -55,6 +56,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
         return ServiceRequestSerializer
 
     def create(self, request, *args, **kwargs):
+        require_feature("hirings", "Las contrataciones están deshabilitadas temporalmente.")
         images = request.FILES.getlist("images")
         for image in images:
             guessed_type = mimetypes.guess_type(image.name)[0] or ""

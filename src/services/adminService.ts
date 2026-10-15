@@ -311,6 +311,13 @@ export const adminService = {
   },
 
   /**
+   * Elimina una cuenta de cliente o profesional (requiere sesión de staff).
+   */
+  async deleteAccount(kind: "client" | "professional", id: number | string): Promise<void> {
+    await api.delete(`admin/accounts/${kind}/${id}/`);
+  },
+
+  /**
    * Cambia el estado de verificación de un profesional o cliente en la base de datos.
    */
   async toggleVerification(targetId: string | number, reason?: string): Promise<any> {

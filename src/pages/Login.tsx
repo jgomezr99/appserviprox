@@ -24,6 +24,7 @@ import {
 import { useHistory } from "react-router-dom";
 import { ApiError, checkBackendHealth } from "../services/api";
 import { authService } from "../services/auth";
+import { usePlatformSettings } from "../services/platformSettings";
 import { useAuth } from "../context/AuthContext";
 import { getEntryRoute } from "../utils/routes";
 import { ServerConnectionModal } from "../components/ServerConnectionModal";
@@ -104,6 +105,8 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   const [serverModalOpen, setServerModalOpen] = useState(false);
   const [serverConnected, setServerConnected] = useState<boolean | null>(null);
   const [blockedAccountInfo, setBlockedAccountInfo] = useState<BlockedAccountInfo | null>(null);
+  const platform = usePlatformSettings();
+  const showMaintenance = platform.features.maintenance && !administrative;
 
   useEffect(() => {
     checkBackendHealth().then((res) => {
@@ -215,6 +218,14 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
       const payload = err?.payload;
       if (payload && payload.is_blocked) {
         setBlockedAccountInfo(payload);
+        return;
+      }
+      if (payload && payload.maintenance) {
+        setError(String(payload.detail));
+        return;
+      }
+      if (typeof payload?.detail === "string" && payload.detail.startsWith("Cuenta bloqueada")) {
+        setError(payload.detail);
         return;
       }
       setError(getLoginErrorMessage(err));
@@ -375,7 +386,24 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
               <p>Ingresa tus credenciales para acceder</p>
             </div>
 
-            
+            {showMaintenance && (
+              <div
+                role="alert"
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "16px",
+                  background: "#fff7e6",
+                  border: "1px solid #ffd591",
+                  color: "#ad6800",
+                  fontSize: "0.88rem",
+                  fontWeight: 700,
+                  marginBottom: "12px",
+                }}
+              >
+                🛠️ {platform.maintenance_message}
+              </div>
+            )}
+
             <form className={styles.form} onSubmit={handleLogin} noValidate>
               <label className={styles.field}>
                 <span>Correo electrónico</span>

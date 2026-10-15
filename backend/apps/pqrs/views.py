@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from .models import PQRReport, PQRMessage, AppProblemReport
+from apps.accounts.platform_guard import require_feature
 from .serializers import (
     PQRReportSerializer,
     PQRMessageSerializer,
@@ -38,6 +39,7 @@ class PQRViewSet(viewsets.ModelViewSet):
         return super().get_object()
 
     def perform_create(self, serializer):
+        require_feature("pqr", "Los PQR están deshabilitados temporalmente.")
         user = self.request.user if self.request.user.is_authenticated else None
         extra_kwargs = {}
         client_email = serializer.validated_data.get("client_email")
