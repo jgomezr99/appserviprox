@@ -26,6 +26,7 @@ import {
 } from "ionicons/icons";
 import { useAuth } from "../context/AuthContext";
 import { authService } from "../services/auth";
+import { MaintenanceNotice, useMaintenance } from "../components/MaintenanceNotice";
 import "./RolePages.css";
 
 const DELETE_REASONS = [
@@ -38,6 +39,7 @@ const DELETE_REASONS = [
 
 const ClientProfilePage: React.FC = () => {
 	const { user, updateMe, logout } = useAuth();
+	const { active: maintenance } = useMaintenance();
 	const [isEditing, setIsEditing] = useState(false);
 	const [darkMode, setDarkMode] = useState(() => {
 		return localStorage.getItem("serviprox:dark-mode") === "true";
@@ -77,7 +79,7 @@ const ClientProfilePage: React.FC = () => {
 
 	const handleSave = async (event: React.FormEvent) => {
 		event.preventDefault();
-		if (saving) return;
+		if (saving || maintenance) return;
 		setSaving(true);
 		try {
 			await updateMe({
@@ -100,7 +102,7 @@ const ClientProfilePage: React.FC = () => {
 
 	const handleDeleteAccount = async (event: React.FormEvent) => {
 		event.preventDefault();
-		if (!deleteReason.trim() || deleting) return;
+		if (!deleteReason.trim() || deleting || maintenance) return;
 		setDeleting(true);
 		try {
 			const comment = deleteComment.trim();
@@ -126,6 +128,8 @@ const ClientProfilePage: React.FC = () => {
 			</IonHeader>
 			<IonContent fullscreen className="sp-role-content">
 				<main className="sp-role-page client-profile-page">
+					<MaintenanceNotice />
+
 					<header className="sp-role-header">
 						<span className="sp-role-kicker">CUENTA DE CLIENTE</span>
 						<h1>Datos personales</h1>
@@ -139,7 +143,7 @@ const ClientProfilePage: React.FC = () => {
 								<h2>Información personal</h2>
 								<p>{user?.email || "Cuenta cliente"}</p>
 							</div>
-							{!isEditing && <IonButton fill="outline" size="small" onClick={() => setIsEditing(true)}>
+							{!isEditing && <IonButton fill="outline" size="small" disabled={maintenance} onClick={() => setIsEditing(true)}>
 								<IonIcon slot="start" icon={createOutline} /> Editar
 							</IonButton>}
 						</div>
@@ -156,7 +160,7 @@ const ClientProfilePage: React.FC = () => {
 									<label className="sp-field">Dirección<IonInput value={address} onIonInput={(e) => setAddress(String(e.detail.value ?? ""))} /></label>
 								</div>
 								<div className="client-profile-actions">
-									<IonButton type="submit" disabled={saving}><IonIcon slot="start" icon={saveOutline} />{saving ? "Guardando..." : "Guardar cambios"}</IonButton>
+									<IonButton type="submit" disabled={saving || maintenance}><IonIcon slot="start" icon={saveOutline} />{saving ? "Guardando..." : "Guardar cambios"}</IonButton>
 									<IonButton type="button" fill="clear" onClick={() => setIsEditing(false)}>Cancelar</IonButton>
 								</div>
 							</form>
@@ -183,7 +187,7 @@ const ClientProfilePage: React.FC = () => {
 							<h2>Eliminar cuenta</h2>
 							<p>Esta acción elimina tu cuenta y tus datos de acceso.</p>
 						</div>
-						<IonButton color="danger" fill="outline" onClick={() => setDeleteOpen(true)}>
+						<IonButton color="danger" fill="outline" disabled={maintenance} onClick={() => setDeleteOpen(true)}>
 							Eliminar cuenta
 						</IonButton>
 					</section>
@@ -218,7 +222,7 @@ const ClientProfilePage: React.FC = () => {
 							onIonInput={(event) => setDeleteComment(String(event.detail.value ?? ""))}
 						/>
 						<div className="client-profile-actions">
-							<IonButton type="submit" color="danger" disabled={!deleteReason.trim() || deleting}>
+							<IonButton type="submit" color="danger" disabled={!deleteReason.trim() || deleting || maintenance}>
 								{deleting ? "Eliminando..." : "Confirmar eliminación"}
 							</IonButton>
 							<IonButton type="button" fill="clear" onClick={() => setDeleteOpen(false)}>Cancelar</IonButton>

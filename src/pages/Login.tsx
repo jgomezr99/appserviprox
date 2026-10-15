@@ -24,8 +24,8 @@ import {
 import { useHistory } from "react-router-dom";
 import { ApiError, checkBackendHealth } from "../services/api";
 import { authService } from "../services/auth";
-import { usePlatformSettings } from "../services/platformSettings";
 import { useAuth } from "../context/AuthContext";
+import { usePlatformSettings } from "../services/platformSettings";
 import { getEntryRoute } from "../utils/routes";
 import { ServerConnectionModal } from "../components/ServerConnectionModal";
 import logo from "../Assets/logo.png";

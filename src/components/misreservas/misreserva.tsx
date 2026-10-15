@@ -36,6 +36,7 @@ import { menuController } from "@ionic/core";
 import { useAuth } from "../../context/AuthContext";
 import { orderService, serviceRequestService } from "../../services/serviprox";
 import type { Order, ServiceRequest } from "../../types/serviprox";
+import { MaintenanceNotice, useMaintenance } from "../MaintenanceNotice";
 import "./misreserva.css";
 
 const statusColor = (status?: string | null): string => {
@@ -81,6 +82,7 @@ const formatDate = (iso?: string | null): string => {
 
 export const MisReserva: React.FC = () => {
   const { isAuthenticated } = useAuth();
+  const { active: maintenance } = useMaintenance();
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -231,6 +233,7 @@ export const MisReserva: React.FC = () => {
         </IonRefresher>
 
         <div className="sp-reservas-container">
+          <MaintenanceNotice />
           <div className="sp-reservas-header">
             <h1>Mis Solicitudes y Reservas</h1>
             <p>Consulta el estado de tus servicios para el hogar y haz seguimiento en vivo.</p>
@@ -295,7 +298,7 @@ export const MisReserva: React.FC = () => {
                 Explora nuestros servicios verificados o encuentra contratistas cercanos en el mapa.
               </p>
               <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
-                <IonButton routerLink="/cliente/servicios" fill="solid">
+                <IonButton routerLink="/cliente/servicios" fill="solid" disabled={maintenance}>
                   Solicitar servicio
                 </IonButton>
                 <IonButton routerLink="/cliente/mapa" fill="outline">
@@ -368,6 +371,7 @@ export const MisReserva: React.FC = () => {
                           fill="outline"
                           color="success"
                           size="small"
+                          disabled={maintenance}
                           style={{
                             "--border-radius": "12px",
                             textTransform: "none",
@@ -383,6 +387,7 @@ export const MisReserva: React.FC = () => {
                         routerLink="/cliente/servicios"
                         fill="clear"
                         size="small"
+                        disabled={maintenance}
                         style={{ textTransform: "none" }}
                       >
                         Ver más servicios

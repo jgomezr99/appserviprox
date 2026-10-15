@@ -48,6 +48,7 @@ import {
   REGISTERED_CONTRACTORS_REF,
 } from '../data/pqrInitialData';
 import { useAuth } from '../context/AuthContext';
+import { MaintenanceNotice, useMaintenance } from '../components/MaintenanceNotice';
 
 function buildRadicado() {
   return `PQR-BOG-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -55,6 +56,9 @@ function buildRadicado() {
 
 const PqrPage: React.FC = () => {
   const { user } = useAuth();
+  const { active: maintenance } = useMaintenance();
+  const blockedMsg = 'La plataforma está en mantenimiento. No puedes registrar ni editar cambios por ahora.';
+
   // ── Datos con precarga desde la base de datos (filtrados por cuenta) ──────
   const [pqrReports, setPqrReports] = useState<PqrReport[]>(() => getStoredPqrReports(user?.email));
   const [appProblemReports, setAppProblemReports] = useState<AppProblemReport[]>(() => getStoredAppProblems(user?.email));
@@ -147,6 +151,10 @@ const PqrPage: React.FC = () => {
   // ── Manejadores de acciones ───────────────────────────────────────────────
 
   const handleOpenNewPqr = (contractor?: PqrContractorRef) => {
+    if (maintenance) {
+      setToastMsg(blockedMsg);
+      return;
+    }
     setTargetContractor(contractor);
     setShowReportModal(true);
   };
@@ -219,6 +227,10 @@ const PqrPage: React.FC = () => {
   };
 
   const handleSendMessage = async (pqrId: string, text: string) => {
+    if (maintenance) {
+      setToastMsg(blockedMsg);
+      return;
+    }
     try {
       // Guardar mensaje directamente en la base de datos oficial
       const newMsg = await pqrService.sendMessage(pqrId, text);
@@ -260,6 +272,10 @@ const PqrPage: React.FC = () => {
   };
 
   const handleAppProblem = async (problem: AppProblemReport) => {
+    if (maintenance) {
+      setToastMsg(blockedMsg);
+      return;
+    }
     try {
       const userFullName = user
         ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username
@@ -312,11 +328,12 @@ const PqrPage: React.FC = () => {
           </div>
         ) : (
           <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+            <MaintenanceNotice />
             <PqrListView
               pqrReports={pqrReports}
               appProblemReports={appProblemReports}
               onOpenNewPqrModal={handleOpenNewPqr}
-              onOpenLiveSupportChat={() => setShowChatModal(true)}
+              onOpenLiveSupportChat={() => (maintenance ? setToastMsg(blockedMsg) : setShowChatModal(true))}
               onInspectReport={handleInspect}
             />
           </div>

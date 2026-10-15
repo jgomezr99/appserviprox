@@ -52,6 +52,7 @@ import { PqrDetailModal } from "../components/pqr/PqrDetailModal";
 import { PqrReportModal } from "../components/pqr/PqrReportModal";
 import { PqrListView } from "../components/pqr/PqrListView";
 import { LiveSupportChatModal } from "../components/pqr/LiveSupportChatModal";
+import { MaintenanceNotice, useMaintenance } from "../components/MaintenanceNotice";
 import "./ContractorMapPage.css";
 
 
@@ -215,6 +216,7 @@ const buildContractorPopupHtml = (contractor: MapContractor): string => {
 };
 
 const ContractorMapPage: React.FC = () => {
+  const { active: maintenance } = useMaintenance();
   const history = useHistory();
   const location = useLocation();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -664,6 +666,7 @@ const ContractorMapPage: React.FC = () => {
   const allContractorRefs: PqrContractorRef[] = contractors.map(toContractorRef);
 
   const handleOpenPqrModal = (contractor?: PqrContractorRef) => {
+    if (maintenance) return;
     setPqrTargetContractor(contractor);
     setShowPqrReportModal(true);
   };
@@ -702,6 +705,7 @@ const ContractorMapPage: React.FC = () => {
   };
 
   const handleSendPqrMessage = async (pqrId: string, text: string) => {
+    if (maintenance) return;
     try {
       const newMsg = await pqrService.sendMessage(pqrId, text);
       setPqrReports((prev) => {
@@ -800,6 +804,11 @@ const ContractorMapPage: React.FC = () => {
       </IonHeader>
 
       <IonContent fullscreen className="sp-map-page-content">
+        {maintenance && (
+          <div style={{ position: "absolute", left: 12, right: 12, bottom: 12, zIndex: 800 }}>
+            <MaintenanceNotice />
+          </div>
+        )}
         <div className="sp-map-layout">
           {/* Map Surface */}
           <div className="sp-map-container" ref={mapContainerRef} />
@@ -1266,7 +1275,7 @@ const ContractorMapPage: React.FC = () => {
                 pqrReports={pqrReports}
                 appProblemReports={appProblemReports}
                 onOpenNewPqrModal={handleOpenPqrModal}
-                onOpenLiveSupportChat={() => setShowLiveChatModal(true)}
+                onOpenLiveSupportChat={() => { if (!maintenance) setShowLiveChatModal(true); }}
                 onInspectReport={handleInspectPqr}
               />
             </div>

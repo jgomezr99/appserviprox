@@ -35,12 +35,14 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { householdService } from "../services/serviprox";
 import { useHomeFlags } from "../services/platformSettings";
+import { MaintenanceNotice, useMaintenance } from "../components/MaintenanceNotice";
 import type { Household } from "../types/serviprox";
 import "./RolePages.css";
 
 const ClientHome: React.FC = () => {
   const { user, updateMe } = useAuth();
   const flags = useHomeFlags("client");
+  const { active: maintenance } = useMaintenance();
   const [household, setHousehold] = useState<Household | null>(null);
   const [loadingHousehold, setLoadingHousehold] = useState(true);
 
@@ -98,7 +100,7 @@ const ClientHome: React.FC = () => {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || maintenance) return;
 
     setSaving(true);
     setSaveSuccess(false);
@@ -135,6 +137,8 @@ const ClientHome: React.FC = () => {
 
       <IonContent fullscreen className="sp-role-content">
         <main className="sp-role-page">
+          <MaintenanceNotice />
+
           <header className="sp-role-header">
             <span className="sp-role-kicker">CUENTA DE CLIENTE</span>
             <h1>Bienvenido, {fullName || "Cliente"}</h1>

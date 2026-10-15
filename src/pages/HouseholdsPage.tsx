@@ -16,6 +16,7 @@ import {
   IonToolbar,
 } from "@ionic/react";
 import { householdService } from "../services/serviprox";
+import { MaintenanceNotice, useMaintenance } from "../components/MaintenanceNotice";
 import type { Household, HouseholdPayload } from "../types/serviprox";
 import "./RolePages.css";
 
@@ -33,6 +34,7 @@ const emptyForm: HouseholdPayload = {
 };
 
 const HouseholdsPage: React.FC = () => {
+  const { active: maintenance } = useMaintenance();
   const [households, setHouseholds] = useState<Household[]>([]);
   const [form, setForm] = useState<HouseholdPayload>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -84,7 +86,7 @@ const HouseholdsPage: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form.label.trim() || !form.city.trim() || saving) return;
+    if (!form.label.trim() || !form.city.trim() || saving || maintenance) return;
 
     setSaving(true);
     setError("");
@@ -106,6 +108,7 @@ const HouseholdsPage: React.FC = () => {
   };
 
   const removeHousehold = async (id: number) => {
+    if (maintenance) return;
     setSaving(true);
     setError("");
     try {
@@ -131,6 +134,8 @@ const HouseholdsPage: React.FC = () => {
       </IonHeader>
       <IonContent fullscreen className="sp-role-content">
         <main className="sp-role-page">
+          <MaintenanceNotice />
+
           <header className="sp-role-header">
             <span className="sp-role-kicker">CLIENTE</span>
             <h1>Ubicaciones de servicio</h1>
@@ -214,7 +219,7 @@ const HouseholdsPage: React.FC = () => {
                   <IonButton
                     type="submit"
                     className="sp-primary-button"
-                    disabled={saving || !form.label.trim() || !form.city.trim()}
+                    disabled={saving || maintenance || !form.label.trim() || !form.city.trim()}
                   >
                     {saving ? <IonSpinner name="crescent" /> : editingId ? "Actualizar" : "Guardar"}
                   </IonButton>
@@ -248,13 +253,13 @@ const HouseholdsPage: React.FC = () => {
                       </span>
                       <span className="sp-muted">{household.short_location}</span>
                       <div className="sp-actions">
-                        <IonButton fill="outline" onClick={() => editHousehold(household)}>
+                        <IonButton fill="outline" disabled={maintenance} onClick={() => editHousehold(household)}>
                           Editar
                         </IonButton>
                         <IonButton
                           fill="clear"
                           color="danger"
-                          disabled={saving}
+                          disabled={saving || maintenance}
                           onClick={() => removeHousehold(household.id)}
                         >
                           Eliminar
