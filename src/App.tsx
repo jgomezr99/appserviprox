@@ -229,7 +229,7 @@ const App: React.FC = () => {
               <Route path="/staff" exact={true}>
                 <Redirect to="/admin" />
               </Route>
-
+{/*ruta  de a administradores*/}
               <Route path="/admin" exact={false}>
                 <RequireAuth role="staff" onboarding="any">
                   <StaffHome />

@@ -258,8 +258,9 @@ export const adminService = {
     priority?: string;
     deviceInfo?: string;
     adminName?: string;
+    attachments?: File[];
   }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
-    return await this.executeAction({
+    const action = {
       action: "create_problem",
       target_id: params.ticketNumber || `fal-${Date.now()}`,
       ticket_number: params.ticketNumber,
@@ -270,7 +271,29 @@ export const adminService = {
       device_info: params.deviceInfo || "Aplicación móvil (Android)",
       admin_name: params.adminName || "Superadministrador",
       status: "recibido",
-    });
+    };
+
+    if (!params.attachments?.length) return await this.executeAction(action);
+
+    const formData = new FormData();
+    Object.entries(action).forEach(([key, value]) => formData.append(key, String(value ?? "")));
+    params.attachments?.forEach((file) => formData.append("attachments", file, file.name));
+
+    return await api.post("admin/action/", formData);
+  },
+
+  async uploadProblemAttachments(params: {
+    targetId: string | number;
+    attachments: File[];
+    adminName?: string;
+  }): Promise<{ ok: boolean; message: string; attachments: any[] }> {
+    const formData = new FormData();
+    formData.append("action", "upload_problem_files");
+    formData.append("target_id", String(params.targetId));
+    formData.append("admin_name", params.adminName || "Superadministrador");
+    params.attachments.forEach((file) => formData.append("attachments", file, file.name));
+
+    return await api.post("admin/action/", formData);
   },
 
   /**

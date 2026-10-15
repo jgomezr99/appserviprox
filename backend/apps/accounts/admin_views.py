@@ -9,11 +9,69 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import AdminAuditLog, Notification, UserRole
 from apps.catalog.models import Service
-from apps.pqrs.models import AppProblemReport, PQRReport
+from apps.pqrs.models import AppProblemAttachment, AppProblemReport, PQRReport
 from apps.professionals.models import ProfessionalProfile
 from apps.service_requests.models import ServiceRequest
 
 User = get_user_model()
+
+ALLOWED_PROBLEM_ATTACHMENT_EXTENSIONS = {
+    "gif",
+    "jpeg",
+    "jpg",
+    "json",
+    "log",
+    "pdf",
+    "png",
+    "txt",
+    "webp",
+}
+MAX_PROBLEM_ATTACHMENT_BYTES = 10 * 1024 * 1024
+MAX_PROBLEM_ATTACHMENTS = 5
+
+
+def _validate_problem_attachments(files, existing_count=0):
+    if existing_count + len(files) > MAX_PROBLEM_ATTACHMENTS:
+        return f"Se permiten hasta {MAX_PROBLEM_ATTACHMENTS} archivos por incidencia."
+
+    for uploaded_file in files:
+        extension = uploaded_file.name.rsplit(".", 1)[-1].lower() if "." in uploaded_file.name else ""
+        if extension not in ALLOWED_PROBLEM_ATTACHMENT_EXTENSIONS:
+            return f"El formato de {uploaded_file.name} no está permitido."
+        if uploaded_file.size > MAX_PROBLEM_ATTACHMENT_BYTES:
+            return f"{uploaded_file.name} supera el límite de 10 MB."
+
+    return None
+
+
+def _save_problem_attachments(problem, files):
+    attachments = []
+    for uploaded_file in files:
+        original_name = uploaded_file.name.replace("\\", "/").rsplit("/", 1)[-1][:255]
+        attachments.append(
+            AppProblemAttachment.objects.create(
+                problem=problem,
+                file=uploaded_file,
+                original_name=original_name,
+                content_type=uploaded_file.content_type or "",
+                size_bytes=uploaded_file.size,
+            )
+        )
+    return attachments
+
+
+def _problem_attachments_data(problem, request):
+    return [
+        {
+            "id": attachment.id,
+            "name": attachment.original_name,
+            "url": request.build_absolute_uri(attachment.file.url),
+            "type": "image" if attachment.file.name.rsplit(".", 1)[-1].lower() in {"gif", "jpeg", "jpg", "png", "webp"} else "file",
+            "content_type": attachment.content_type,
+            "size": attachment.size_bytes,
+        }
+        for attachment in problem.attachments.all()
+    ]
 
 
 class AdminOverviewView(APIView):
@@ -564,6 +622,11 @@ class AdminActionView(APIView):
 
         elif action_name == "create_problem":
             import random
+            uploaded_files = request.FILES.getlist("attachments")
+            upload_error = _validate_problem_attachments(uploaded_files)
+            if upload_error:
+                return Response({"ok": False, "message": upload_error}, status=status.HTTP_400_BAD_REQUEST)
+
             ticket_num = request.data.get("ticket_number") or f"#{random.randint(1046, 9999)}"
             category_label = request.data.get("category_label") or request.data.get("module") or "General"
             description = request.data.get("description") or "Falla técnica reportada por el administrador"
@@ -580,6 +643,7 @@ class AdminActionView(APIView):
                 device_info=device_info,
                 status=status_val,
             )
+            _save_problem_attachments(fal, uploaded_files)
             AdminAuditLog.objects.create(
                 admin_name=admin_name,
                 action="Registro manual de falla técnica",
@@ -598,6 +662,37 @@ class AdminActionView(APIView):
                 "message": f"Incidencia {fal.ticket_number} creada y guardada en la base de datos.",
                 "id": fal.id,
                 "ticket_number": fal.ticket_number,
+                "attachments": _problem_attachments_data(fal, request),
+            })
+
+        elif action_name == "upload_problem_files":
+            uploaded_files = request.FILES.getlist("attachments")
+            ticket_number = str(target_id or "")
+            problem = AppProblemReport.objects.filter(ticket_number=ticket_number).first()
+            if not problem:
+                clean_id = ticket_number.replace("prob-", "").replace("#", "")
+                if clean_id.isdigit():
+                    problem = AppProblemReport.objects.filter(id=int(clean_id)).first()
+            if not problem:
+                return Response({"ok": False, "message": "No se encontró la incidencia técnica."}, status=status.HTTP_404_NOT_FOUND)
+
+            upload_error = _validate_problem_attachments(uploaded_files, problem.attachments.count())
+            if upload_error:
+                return Response({"ok": False, "message": upload_error}, status=status.HTTP_400_BAD_REQUEST)
+            if not uploaded_files:
+                return Response({"ok": False, "message": "Selecciona al menos un archivo."}, status=status.HTTP_400_BAD_REQUEST)
+
+            _save_problem_attachments(problem, uploaded_files)
+            AdminAuditLog.objects.create(
+                admin_name=admin_name,
+                action="Adjunto de evidencia a falla técnica",
+                target=f"Ticket {problem.ticket_number}",
+                reason=f"Se adjuntaron {len(uploaded_files)} archivo(s).",
+            )
+            return Response({
+                "ok": True,
+                "message": "Archivos adjuntados a la incidencia.",
+                "attachments": _problem_attachments_data(problem, request),
             })
 
         return Response({"error": "Acción no reconocida."}, status=status.HTTP_400_BAD_REQUEST)

@@ -168,6 +168,23 @@ class AppProblemReportSerializer(serializers.ModelSerializer):
             "status": instance.status,
             "responseNotes": instance.response_notes,
             "createdAt": instance.created_at.isoformat(),
+            "attachments": [
+                {
+                    "id": attachment.id,
+                    "name": attachment.original_name,
+                    "url": (
+                        self.context["request"].build_absolute_uri(attachment.file.url)
+                        if self.context.get("request")
+                        else attachment.file.url
+                    ),
+                    "type": "image"
+                    if attachment.file.name.rsplit(".", 1)[-1].lower()
+                    in {"gif", "jpeg", "jpg", "png", "webp"}
+                    else "file",
+                    "size": attachment.size_bytes,
+                }
+                for attachment in instance.attachments.all()
+            ],
         }
 
     def to_internal_value(self, data):

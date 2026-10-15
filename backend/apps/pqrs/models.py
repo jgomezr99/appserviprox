@@ -129,3 +129,22 @@ class AppProblemReport(models.Model):
 
     def __str__(self):
         return f"{self.ticket_number} - {self.category_label} ({self.status})"
+
+
+class AppProblemAttachment(models.Model):
+    problem = models.ForeignKey(
+        AppProblemReport,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    file = models.FileField(upload_to="app-problem-evidence/%Y/%m/")
+    original_name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=150, blank=True, default="")
+    size_bytes = models.PositiveBigIntegerField(default=0)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at", "id"]
+
+    def __str__(self):
+        return f"{self.problem.ticket_number} - {self.original_name}"

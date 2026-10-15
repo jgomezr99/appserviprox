@@ -1179,6 +1179,14 @@ const INITIAL_FAILURES_DATA: TechnicalFailureItem[] = [
 export const AdminDashboard: React.FC = () => {
   const history = useHistory();
   const { logout, user } = useAuth();
+  const [activeAlert, setActiveAlert] = useState<{
+    kind: "alert" | "confirm" | "prompt";
+    title: string;
+    message: string;
+    variant: "success" | "error" | "info";
+    value: string;
+    onResolve?: (value: boolean | string | null) => void;
+  } | null>(null);
 
   // Estados de navegación
   const [activeMenu, setActiveMenu] = useState<AdminMenuId>("inicio");
@@ -1554,7 +1562,7 @@ export const AdminDashboard: React.FC = () => {
             priority: "Media",
             status: fal.status === "resuelto" ? "Resuelta" : fal.status === "en_proceso" ? "En proceso" : "Abierta",
             city: "Bogotá, Colombia",
-            attachments: [],
+            attachments: Array.isArray(fal.attachments) ? fal.attachments : [],
             timeline: [
               { date: "Registro", text: "Falla técnica reportada por el usuario desde la app" },
               ...(fal.response_notes ? [{ date: "Solución", text: fal.response_notes }] : []),
@@ -1731,6 +1739,8 @@ export const AdminDashboard: React.FC = () => {
   const [newFailurePlatform, setNewFailurePlatform] = useState("Aplicación móvil (Android)");
   const [newFailureVersion, setNewFailureVersion] = useState("v1.2.0");
   const [newFailureDescription, setNewFailureDescription] = useState("");
+  const [newFailureFiles, setNewFailureFiles] = useState<File[]>([]);
+  const [uploadingFailureFiles, setUploadingFailureFiles] = useState(false);
 
   const [modalAssignFailureOpen, setModalAssignFailureOpen] = useState(false);
   const [assignFailureStaff, setAssignFailureStaff] = useState("Carlos M.");
@@ -1742,10 +1752,61 @@ export const AdminDashboard: React.FC = () => {
   const [modalAddFailureCommentOpen, setModalAddFailureCommentOpen] = useState(false);
   const [newFailureCommentText, setNewFailureCommentText] = useState("");
 
-  // Crear nueva falla manual conectada a BD
+  const showNotification = (message: string, type: "success" | "error" | "info" = "success") => {
+    const title = type === "success" ? "Éxito" : type === "error" ? "Error" : "Información";
+    setActiveAlert({ kind: "alert", title, message, variant: type, value: "" });
+  };
+
+  const showConfirm = (message: string, title = "Confirmar acción") =>
+    new Promise<boolean>((resolve) => {
+      setActiveAlert({
+        kind: "confirm",
+        title,
+        message,
+        variant: "info",
+        value: "",
+        onResolve: (result) => resolve(result === true),
+      });
+    });
+
+  const showPrompt = (message: string, defaultValue = "", title = "Ingrese información") =>
+    new Promise<string | null>((resolve) => {
+      setActiveAlert({
+        kind: "prompt",
+        title,
+        message,
+        variant: "info",
+        value: defaultValue,
+        onResolve: (result) => resolve(typeof result === "string" ? result : null),
+      });
+    });
+
+  const resolveActiveAlert = (result: boolean | string | null) => {
+    const onResolve = activeAlert?.onResolve;
+    setActiveAlert(null);
+    onResolve?.(result);
+  };
+
+  const updateActiveAlertValue = (value: string) => {
+    setActiveAlert((current) => current ? { ...current, value } : current);
+  };
+
+  const validateFailureFiles = (files: File[], existingCount = 0) => {
+    const allowedExtensions = new Set(["gif", "jpeg", "jpg", "json", "log", "pdf", "png", "txt", "webp"]);
+    if (files.length + existingCount > 5) return "Puedes adjuntar hasta 5 archivos por incidencia.";
+
+    for (const file of files) {
+      const extension = file.name.split(".").pop()?.toLowerCase() || "";
+      if (!allowedExtensions.has(extension)) return `El formato de ${file.name} no está permitido.`;
+      if (file.size > 10 * 1024 * 1024) return `${file.name} supera el límite de 10 MB.`;
+    }
+
+    return "";
+  };
+
   const confirmCreateFailure = async () => {
     if (!newFailureTitle.trim() || !newFailureDescription.trim()) {
-      alert("Por favor completa el título y la descripción de la falla técnica.");
+      showNotification("Por favor completa el título y la descripción de la falla técnica.", "error");
       return;
     }
 
@@ -1777,27 +1838,37 @@ export const AdminDashboard: React.FC = () => {
       },
       platform: newFailurePlatform,
       version: newFailureVersion,
-      attachments: [],
+      attachments: newFailureFiles.map((file) => ({
+        name: file.name,
+        type: file.type.startsWith("image/") ? "image" as const : "file" as const,
+      })),
       timeline: [
         { date: nowStr, text: `Incidencia creada por ${newFailureReporter.trim() || adminDisplayName}`, isInitial: true },
       ],
     };
 
+    try {
+      const savedProblem = await adminService.createProblem({
+        ticketNumber: newTicketNum,
+        module: newFailureModule,
+        title: newFailureTitle.trim(),
+        description: newFailureDescription.trim(),
+        reportedBy: newFailureReporter.trim() || adminDisplayName,
+        priority: newFailurePriority,
+        deviceInfo: newFailurePlatform,
+        adminName: adminDisplayName,
+        attachments: newFailureFiles,
+      });
+      if (savedProblem.ok === false) throw new Error(savedProblem.message || "No se pudo guardar la incidencia.");
+      if (Array.isArray(savedProblem.attachments)) newFailure.attachments = savedProblem.attachments;
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo guardar la incidencia.", "error");
+      return;
+    }
+
     setFailuresList((prev) => [newFailure, ...prev]);
     setSelectedFailureId(newFailure.id);
     setModalNewFailureOpen(false);
-
-    // Guardar en backend
-    await adminService.createProblem({
-      ticketNumber: newTicketNum,
-      module: newFailureModule,
-      title: newFailureTitle.trim(),
-      description: newFailureDescription.trim(),
-      reportedBy: newFailureReporter.trim() || adminDisplayName,
-      priority: newFailurePriority,
-      deviceInfo: newFailurePlatform,
-      adminName: adminDisplayName,
-    });
 
     setAuditLogs((prev) => [
       {
@@ -1814,7 +1885,8 @@ export const AdminDashboard: React.FC = () => {
     setNewFailureTitle("");
     setNewFailureDescription("");
     setNewFailureReporter("");
-    alert(`✅ Incidencia ${newTicketNum} registrada y guardada con éxito en la base de datos.`);
+    setNewFailureFiles([]);
+    await showNotification(`✓ Incidencia ${newTicketNum} registrada exitosamente en la base de datos.`, "success");
   };
 
   // Asignar técnico responsable
@@ -1865,7 +1937,7 @@ export const AdminDashboard: React.FC = () => {
       ...prev,
     ]);
 
-    alert(`✅ Incidencia ${cur.id} asignada a ${assignFailureStaff} en la base de datos.`);
+    await showNotification(`✓ Incidencia ${cur.id} asignada a ${assignFailureStaff} exitosamente.`, "success");
   };
 
   // Cambiar estado de incidencia
@@ -1910,7 +1982,7 @@ export const AdminDashboard: React.FC = () => {
       ...prev,
     ]);
 
-    alert(`✅ Incidencia ${cur.id} actualizada a "${newFailureStatusChoice}" en la base de datos.`);
+    await showNotification(`✓ Incidencia ${cur.id} actualizada a "${newFailureStatusChoice}" exitosamente.`, "success");
   };
 
   // Añadir comentario al seguimiento
@@ -1954,7 +2026,7 @@ export const AdminDashboard: React.FC = () => {
       ...prev,
     ]);
 
-    alert(`✅ Comentario añadido a la incidencia ${cur.id}.`);
+    await showNotification(`✓ Comentario añadido a la incidencia ${cur.id}.`, "success");
   };
 
   // Cerrar incidencia directamente
@@ -1962,7 +2034,13 @@ export const AdminDashboard: React.FC = () => {
     const cur = failuresList.find((f) => f.id === selectedFailureId);
     if (!cur) return;
 
-    if (!window.confirm(`¿Confirmas cerrar formalmente la incidencia ${cur.id} (${cur.title})?`)) {
+    // Evitar cerrar si ya está cerrada
+    if (isTramiClosed(cur.status)) {
+      showNotification("Esta incidencia ya está cerrada. No se pueden realizar acciones adicionales.", "error");
+      return;
+    }
+
+    if (!(await showConfirm(`¿Confirmas cerrar formalmente la incidencia ${cur.id} (${cur.title})?`, "Cerrar incidencia"))) {
       return;
     }
 
@@ -1998,7 +2076,7 @@ export const AdminDashboard: React.FC = () => {
       ...prev,
     ]);
 
-    alert(`✅ Incidencia ${cur.id} cerrada con éxito en la base de datos.`);
+    await showNotification(`✓ Incidencia ${cur.id} cerrada exitosamente.`, "success");
   };
 
   const adminDisplayName = (user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username) || "Superadministrador";
@@ -2234,7 +2312,7 @@ export const AdminDashboard: React.FC = () => {
       },
       ...prev,
     ]);
-    alert(`Cuenta de ${targetName} reactivada con éxito en la base de datos.`);
+    showNotification(`Cuenta de ${targetName} reactivada con éxito en la base de datos.`, "success");
     fetchLiveOverview();
   };
 
@@ -2310,10 +2388,9 @@ export const AdminDashboard: React.FC = () => {
           : bp
       )
     );
-    alert(
-      `Cuenta de ${target} bloqueada con éxito en la base de datos (${
-        blockType === "permanente" ? "Permanente" : `${durationDays} días`
-      }).`
+    showNotification(
+      `Cuenta de ${target} bloqueada con éxito en la base de datos (${blockType === "permanente" ? "Permanente" : `${durationDays} días`}).`,
+      "success"
     );
     fetchLiveOverview();
     fetchClients();
@@ -2386,7 +2463,7 @@ export const AdminDashboard: React.FC = () => {
       ]);
 
       setModalBeneficiosOpen(false);
-      alert(`✅ Se acreditaron +${puntosToAdd} puntos y $${recargaToAdd.toLocaleString("es-CO")} COP a los ${targets.length} profesionales seleccionados en la base de datos.`);
+      showNotification(`Se acreditaron +${puntosToAdd} puntos y $${recargaToAdd.toLocaleString("es-CO")} COP a los ${targets.length} profesionales seleccionados en la base de datos.`, "success");
       fetchLiveOverview();
       fetchPros();
       return;
@@ -2467,7 +2544,7 @@ export const AdminDashboard: React.FC = () => {
       recharge: recargaToAdd,
       reason: motivoBeneficio,
     });
-    alert(`✅ Beneficios asignados a ${proName}: +${puntosToAdd} puntos y $${recargaToAdd.toLocaleString("es-CO")} COP guardados en la base de datos.`);
+    showNotification(`Beneficios asignados a ${proName}: +${puntosToAdd} puntos y $${recargaToAdd.toLocaleString("es-CO")} COP guardados en la base de datos.`, "success");
     fetchLiveOverview();
     fetchPros();
   };
@@ -2475,7 +2552,7 @@ export const AdminDashboard: React.FC = () => {
   // Crear nuevo beneficio en el catálogo oficial de Serviprox
   const confirmCreateBenefit = () => {
     if (!newBenefitTitle.trim()) {
-      alert("Por favor ingresa el título del beneficio.");
+      showNotification("Por favor ingresa el título del beneficio.", "error");
       return;
     }
 
@@ -2512,7 +2589,7 @@ export const AdminDashboard: React.FC = () => {
       ...prev,
     ]);
 
-    alert(`✅ Beneficio "${newBenefitItem.title}" creado con éxito y agregado al catálogo de Serviprox.`);
+    showNotification(`Beneficio "${newBenefitItem.title}" creado con éxito y agregado al catálogo de Serviprox.`, "success");
     setNewBenefitTitle("");
     setNewBenefitPoints(1000);
     setNewBenefitRecharge(50000);
@@ -2643,6 +2720,12 @@ export const AdminDashboard: React.FC = () => {
 
   // Acciones y filtrado para PQR y Reportes (Sincronizado con BD y notificaciones)
   const handleOpenReplyPqrModal = (pqr: PqrItem) => {
+    // Evitar responder si está cerrada
+    if (isTramiClosed(pqr.status)) {
+      showNotification("Este trámite ya está cerrado. No se pueden realizar acciones adicionales.", "error");
+      return;
+    }
+
     setTargetPqrToReply(pqr);
     setReplyPqrText(
       `Estimado(a) ${pqr.client.name}, hemos revisado detalladamente su reporte (${pqr.id}: ${pqr.title}). Se han tomado las medidas pertinentes conforme a los estándares de Serviprox y se procedió con la solución formal del caso.`
@@ -2704,13 +2787,19 @@ export const AdminDashboard: React.FC = () => {
       sendNotification: replySendNotification,
     });
 
-    alert(
+    showNotification(
       `✅ Respuesta guardada en la base de datos para el caso ${targetPqrToReply.id}.\n${replySendNotification ? `Se envió notificación inmediata a ${targetPqrToReply.client.name} (${targetPqrToReply.client.email || "App móvil"}).` : "Sin notificación adicional."}`
     );
   };
 
   const handleCloseCase = async (pqr: PqrItem) => {
-    const confirmClose = window.confirm(`¿Confirmas el cierre definitivo del caso ${pqr.id}?`);
+    // Evitar cerrar si ya está cerrada
+    if (isTramiClosed(pqr.status)) {
+      showNotification("Este trámite ya está cerrado. No se pueden realizar acciones adicionales.", "error");
+      return;
+    }
+
+    const confirmClose = await showConfirm(`¿Confirmas el cierre definitivo del caso ${pqr.id}?`, "Cerrar caso");
     if (!confirmClose) return;
 
     const dateNowStr = new Date().toLocaleDateString("es-CO", {
@@ -2746,11 +2835,17 @@ export const AdminDashboard: React.FC = () => {
       send_notification: true,
     });
 
-    alert(`✅ Caso ${pqr.id} cerrado formalmente en la base de datos.`);
+    await showNotification(`✓ Caso ${pqr.id} cerrado formalmente exitosamente.`, "success");
   };
 
-  const handleAssignCase = (pqr: PqrItem) => {
-    const agent = prompt("Ingresa el nombre del agente o responsable a asignar:", "Soporte Técnico - Nivel 2");
+  const handleAssignCase = async (pqr: PqrItem) => {
+    // Evitar asignar si está cerrada
+    if (isTramiClosed(pqr.status)) {
+      showNotification("Este trámite ya está cerrado. No se pueden realizar acciones adicionales.", "error");
+      return;
+    }
+
+    const agent = await showPrompt("Ingresa el nombre del agente o responsable a asignar:", "Soporte Técnico - Nivel 2", "Asignar responsable");
     if (!agent) return;
 
     const dateNowStr = new Date().toLocaleDateString("es-CO", {
@@ -2774,10 +2869,16 @@ export const AdminDashboard: React.FC = () => {
           : item
       )
     );
-    alert(`Caso ${pqr.id} asignado a ${agent}.`);
+    await showNotification(`✓ Caso ${pqr.id} asignado a ${agent} exitosamente.`, "success");
   };
 
-  const handleEscalateCase = (pqr: PqrItem) => {
+  const handleEscalateCase = async (pqr: PqrItem) => {
+    // Evitar escalar si está cerrada
+    if (isTramiClosed(pqr.status)) {
+      showNotification("Este trámite ya está cerrado. No se pueden realizar acciones adicionales.", "error");
+      return;
+    }
+
     const dateNowStr = new Date().toLocaleDateString("es-CO", {
       day: "2-digit",
       month: "2-digit",
@@ -2800,12 +2901,12 @@ export const AdminDashboard: React.FC = () => {
           : item
       )
     );
-    alert(`Caso ${pqr.id} escalado con prioridad Alta a Gerencia de Operaciones.`);
+    await showNotification(`✓ Caso ${pqr.id} escalado a Gerencia de Operaciones exitosamente.`, "success");
   };
 
   const handleCreateManualPqr = async () => {
     if (!newPqrTitle.trim() || !newPqrClientName.trim()) {
-      alert("Por favor completa el título y el nombre del cliente.");
+      showNotification("Por favor completa el título y el nombre del cliente.", "error");
       return;
     }
 
@@ -2859,7 +2960,7 @@ export const AdminDashboard: React.FC = () => {
     setNewPqrRelatedTo("");
     setNewPqrDescription("");
 
-    alert(`✅ Solicitud ${newId} registrada exitosamente en la base de datos.`);
+    await showNotification(`Solicitud ${newId} registrada exitosamente en la base de datos.`, "success");
   };
 
   // Filtrado de PQR y Reportes
@@ -2961,6 +3062,11 @@ export const AdminDashboard: React.FC = () => {
 
   const currentFailure =
     failuresList.find((f) => f.id === selectedFailureId) || failuresList[0] || INITIAL_FAILURES_DATA[0];
+
+  // Función helper: Validar si un trámite está cerrado
+  const isTramiClosed = (status: string): boolean => {
+    return status === "Cerrada";
+  };
 
   const handleToggleFailureCheckbox = (id: string) => {
     setSelectedFailureCheckboxIds((prev) =>
@@ -4022,7 +4128,7 @@ export const AdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     className="ad-btn ad-btn-primary"
-                    onClick={() => alert(`Se han exportado ${clientsList.length} registros de clientes con éxito.`)}
+                    onClick={() => showNotification(`Se han exportado ${clientsList.length} registros de clientes con éxito.`, "success")}
                   >
                     📥 Exportar CSV
                   </button>
@@ -4277,7 +4383,7 @@ export const AdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     className="ad-btn ad-btn-primary"
-                    onClick={() => alert(`Se han exportado ${allProsList.length} profesionales registrados.`)}
+                    onClick={() => showNotification(`Se han exportado ${allProsList.length} profesionales registrados.`, "success")}
                   >
                     📥 Exportar CSV
                   </button>
@@ -5107,7 +5213,7 @@ export const AdminDashboard: React.FC = () => {
                           type="button"
                           className="ad-btn ad-btn-secondary"
                           style={{ padding: "4px 8px", fontSize: "0.74rem" }}
-                          onClick={() => alert(`Perfil del cliente ${selectedPqr.client.name}`)}
+                          onClick={() => showNotification(`Perfil del cliente ${selectedPqr.client.name}`, "info")}
                         >
                           Ver perfil
                         </button>
@@ -5146,7 +5252,7 @@ export const AdminDashboard: React.FC = () => {
                           type="button"
                           className="ad-btn ad-btn-secondary"
                           style={{ padding: "4px 8px", fontSize: "0.74rem" }}
-                          onClick={() => alert(`Perfil del profesional ${selectedPqr.contractor?.name || "Andrés López"}`)}
+                          onClick={() => showNotification(`Perfil del profesional ${selectedPqr.contractor?.name || "Andrés López"}`, "info")}
                         >
                           Ver perfil
                         </button>
@@ -5199,7 +5305,7 @@ export const AdminDashboard: React.FC = () => {
                         />
                         <div
                           className="ad-pqr-thumb-more"
-                          onClick={() => alert(`Visualizando todos los archivos adjuntos de la solicitud ${selectedPqr.id}`)}
+                          onClick={() => showNotification(`Visualizando todos los archivos adjuntos de la solicitud ${selectedPqr.id}`, "info")}
                         >
                           +2
                         </div>
@@ -5222,12 +5328,46 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Mensaje cuando el trámite está cerrado */}
+                    {isTramiClosed(selectedPqr.status) && (
+                      <div
+                        style={{
+                          background: "#fef2f2",
+                          border: "1px solid #fee2e2",
+                          borderRadius: "10px",
+                          padding: "12px 14px",
+                          marginBottom: "12px",
+                          fontSize: "0.82rem",
+                          color: "#991b1b",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <span style={{ fontSize: "1.2rem" }}>🔒</span>
+                        <span>
+                          <strong>Trámite cerrado.</strong> No se pueden realizar acciones adicionales en este caso.
+                        </span>
+                      </div>
+                    )}
+
                     {/* Botones de Acción */}
                     <div className="ad-pqr-actions-row">
                       <button
                         type="button"
                         className="ad-btn ad-btn-primary"
-                        style={{ flex: "1 1 120px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "0.82rem" }}
+                        style={{ 
+                          flex: "1 1 120px", 
+                          display: "inline-flex", 
+                          alignItems: "center", 
+                          justifyContent: "center", 
+                          gap: "6px", 
+                          fontSize: "0.82rem",
+                          opacity: isTramiClosed(selectedPqr.status) ? 0.5 : 1,
+                          cursor: isTramiClosed(selectedPqr.status) ? "not-allowed" : "pointer",
+                        }}
+                        disabled={isTramiClosed(selectedPqr.status)}
+                        title={isTramiClosed(selectedPqr.status) ? "No se puede responder a un trámite cerrado" : ""}
                         onClick={() => handleOpenReplyPqrModal(selectedPqr)}
                       >
                         💬 Responder
@@ -5235,7 +5375,18 @@ export const AdminDashboard: React.FC = () => {
                       <button
                         type="button"
                         className="ad-btn ad-btn-secondary"
-                        style={{ flex: "1 1 80px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "0.82rem" }}
+                        style={{ 
+                          flex: "1 1 80px", 
+                          display: "inline-flex", 
+                          alignItems: "center", 
+                          justifyContent: "center", 
+                          gap: "6px", 
+                          fontSize: "0.82rem",
+                          opacity: isTramiClosed(selectedPqr.status) ? 0.5 : 1,
+                          cursor: isTramiClosed(selectedPqr.status) ? "not-allowed" : "pointer",
+                        }}
+                        disabled={isTramiClosed(selectedPqr.status)}
+                        title={isTramiClosed(selectedPqr.status) ? "No se puede asignar un trámite cerrado" : ""}
                         onClick={() => handleAssignCase(selectedPqr)}
                       >
                         👤 Asignar
@@ -5243,7 +5394,18 @@ export const AdminDashboard: React.FC = () => {
                       <button
                         type="button"
                         className="ad-btn ad-btn-secondary"
-                        style={{ flex: "1 1 80px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "0.82rem" }}
+                        style={{ 
+                          flex: "1 1 80px", 
+                          display: "inline-flex", 
+                          alignItems: "center", 
+                          justifyContent: "center", 
+                          gap: "6px", 
+                          fontSize: "0.82rem",
+                          opacity: isTramiClosed(selectedPqr.status) ? 0.5 : 1,
+                          cursor: isTramiClosed(selectedPqr.status) ? "not-allowed" : "pointer",
+                        }}
+                        disabled={isTramiClosed(selectedPqr.status)}
+                        title={isTramiClosed(selectedPqr.status) ? "No se puede escalar un trámite cerrado" : ""}
                         onClick={() => handleEscalateCase(selectedPqr)}
                       >
                         ⚠️ Escalar
@@ -5251,7 +5413,18 @@ export const AdminDashboard: React.FC = () => {
                       <button
                         type="button"
                         className="ad-btn ad-btn-danger"
-                        style={{ flex: "1 1 100px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "0.82rem" }}
+                        style={{ 
+                          flex: "1 1 100px", 
+                          display: "inline-flex", 
+                          alignItems: "center", 
+                          justifyContent: "center", 
+                          gap: "6px", 
+                          fontSize: "0.82rem",
+                          opacity: isTramiClosed(selectedPqr.status) ? 0.5 : 1,
+                          cursor: isTramiClosed(selectedPqr.status) ? "not-allowed" : "pointer",
+                        }}
+                        disabled={isTramiClosed(selectedPqr.status)}
+                        title={isTramiClosed(selectedPqr.status) ? "El trámite ya está cerrado" : ""}
                         onClick={() => handleCloseCase(selectedPqr)}
                       >
                         ✕ Cerrar caso
@@ -5920,8 +6093,9 @@ export const AdminDashboard: React.FC = () => {
                               padding: "4px 0",
                             }}
                             onClick={() =>
-                              alert(
-                                `Historial de los ${currentBenefitPro.redeemed_count} beneficios de ${currentBenefitPro.name}`
+                              showNotification(
+                                `Historial de los ${currentBenefitPro.redeemed_count} beneficios de ${currentBenefitPro.name}`,
+                                "info"
                               )
                             }
                           >
@@ -6675,6 +6849,10 @@ export const AdminDashboard: React.FC = () => {
                                       title="Cambiar estado"
                                       style={{ background: "#f1f5f9", border: "none", borderRadius: "6px", width: "28px", height: "28px", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                                       onClick={() => {
+                                        if (isTramiClosed(item.status)) {
+                                          showNotification("Esta incidencia está cerrada. No se pueden realizar acciones.", "error");
+                                          return;
+                                        }
                                         setSelectedFailureId(item.id);
                                         setNewFailureStatusChoice(item.status === "Abierta" ? "En proceso" : item.status === "En proceso" ? "Resuelta" : item.status);
                                         setModalChangeFailureStatusOpen(true);
@@ -6687,6 +6865,10 @@ export const AdminDashboard: React.FC = () => {
                                       title="Asignar especialista"
                                       style={{ background: "#f1f5f9", border: "none", borderRadius: "6px", width: "28px", height: "28px", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                                       onClick={() => {
+                                        if (isTramiClosed(item.status)) {
+                                          showNotification("Esta incidencia está cerrada. No se pueden realizar acciones.", "error");
+                                          return;
+                                        }
                                         setSelectedFailureId(item.id);
                                         setModalAssignFailureOpen(true);
                                       }}
@@ -6839,76 +7021,75 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Archivos adjuntos (2) */}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                        <strong style={{ fontSize: "0.85rem", color: "#0f172a" }}>Archivos adjuntos (2)</strong>
-                      </div>
-                      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                        <div
-                          style={{
-                            width: "90px",
-                            height: "64px",
-                            borderRadius: "8px",
-                            border: "1px solid #e2e8f0",
-                            background: "#f8fafc",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            padding: "4px",
-                            cursor: "pointer",
-                            textAlign: "center",
-                          }}
-                          onClick={() => alert("Abriendo archivo adjunto: error_login.png")}
-                        >
-                          <span style={{ fontSize: "1.2rem" }}>🖼️</span>
-                          <span style={{ fontSize: "0.68rem", color: "#475569", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", width: "100%", whiteSpace: "nowrap" }}>
-                            error_login.png
-                          </span>
+                    <div className="ad-failure-attachments">
+                      <strong>Archivos adjuntos ({currentFailure.attachments.length})</strong>
+                      {currentFailure.attachments.length > 0 ? (
+                        <div className="ad-failure-attachment-list">
+                          {currentFailure.attachments.map((attachment, index) => (
+                            attachment.url ? (
+                              <a
+                                key={`${attachment.name}-${index}`}
+                                className="ad-failure-attachment"
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <span aria-hidden="true">{attachment.type === "image" ? "🖼️" : "📄"}</span>
+                                <span>{attachment.name}</span>
+                              </a>
+                            ) : (
+                              <div key={`${attachment.name}-${index}`} className="ad-failure-attachment">
+                                <span aria-hidden="true">{attachment.type === "image" ? "🖼️" : "📄"}</span>
+                                <span>{attachment.name}</span>
+                              </div>
+                            )
+                          ))}
                         </div>
+                      ) : (
+                        <p className="ad-no-failure-attachments">Esta incidencia no tiene archivos adjuntos.</p>
+                      )}
+                      <input
+                        className="ad-file-input"
+                        type="file"
+                        multiple
+                        accept=".gif,.jpeg,.jpg,.json,.log,.pdf,.png,.txt,.webp"
+                        aria-label="Adjuntar archivos de evidencia"
+                        disabled={isTramiClosed(currentFailure.status) || uploadingFailureFiles}
+                        onChange={async (event) => {
+                          const input = event.currentTarget;
+                          const files = Array.from(input.files || []);
+                          const validationError = validateFailureFiles(files, currentFailure.attachments.length);
+                          if (validationError) {
+                            showNotification(validationError, "error");
+                            input.value = "";
+                            return;
+                          }
+                          if (!files.length) return;
 
-                        <div
-                          style={{
-                            width: "90px",
-                            height: "64px",
-                            borderRadius: "8px",
-                            border: "1px solid #e2e8f0",
-                            background: "#f8fafc",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            padding: "4px",
-                            cursor: "pointer",
-                            textAlign: "center",
-                          }}
-                          onClick={() => alert("Abriendo archivo de registros: log_error.txt")}
-                        >
-                          <span style={{ fontSize: "1.2rem" }}>📄</span>
-                          <span style={{ fontSize: "0.68rem", color: "#475569", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", width: "100%", whiteSpace: "nowrap" }}>
-                            log_error.txt
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          style={{
-                            width: "36px",
-                            height: "64px",
-                            borderRadius: "8px",
-                            border: "1px dashed #cbd5e1",
-                            background: "#ffffff",
-                            color: "#64748b",
-                            fontSize: "1.2rem",
-                            cursor: "pointer",
-                          }}
-                          title="Adjuntar nuevo archivo"
-                          onClick={() => alert("Función para subir captura o registro adicional.")}
-                        >
-                          +
-                        </button>
-                      </div>
+                          setUploadingFailureFiles(true);
+                          try {
+                            const result = await adminService.uploadProblemAttachments({
+                              targetId: currentFailure.id,
+                              attachments: files,
+                              adminName: adminDisplayName,
+                            });
+                            if (!result.ok) throw new Error(result.message || "No se pudieron adjuntar los archivos.");
+                            const attachments = result.attachments || [];
+                            setFailuresList((previous) => previous.map((failure) =>
+                              failure.id === currentFailure.id ? { ...failure, attachments } : failure
+                            ));
+                            showNotification(result.message, "success");
+                          } catch (error) {
+                            showNotification(error instanceof Error ? error.message : "No se pudieron adjuntar los archivos.", "error");
+                          } finally {
+                            setUploadingFailureFiles(false);
+                            input.value = "";
+                          }
+                        }}
+                      />
+                      <span className="ad-file-hint">
+                        {uploadingFailureFiles ? "Subiendo archivos..." : "Adjunta hasta 5 archivos de 10 MB cada uno."}
+                      </span>
                     </div>
 
                     {/* Historial de actividad (Timeline) */}
@@ -6937,13 +7118,44 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Mensaje cuando la incidencia está cerrada */}
+                    {isTramiClosed(currentFailure.status) && (
+                      <div
+                        style={{
+                          background: "#fef2f2",
+                          border: "1px solid #fee2e2",
+                          borderRadius: "10px",
+                          padding: "12px 14px",
+                          marginBottom: "12px",
+                          fontSize: "0.82rem",
+                          color: "#991b1b",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <span style={{ fontSize: "1.2rem" }}>🔒</span>
+                        <span>
+                          <strong>Incidencia cerrada.</strong> No se pueden realizar acciones adicionales.
+                        </span>
+                      </div>
+                    )}
+
                     {/* Acciones para la incidencia */}
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "6px" }}>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                         <button
                           type="button"
                           className="ad-btn ad-btn-secondary"
-                          style={{ justifyContent: "center", fontSize: "0.8rem", padding: "8px 10px" }}
+                          style={{
+                            justifyContent: "center",
+                            fontSize: "0.8rem",
+                            padding: "8px 10px",
+                            opacity: isTramiClosed(currentFailure.status) ? 0.5 : 1,
+                            cursor: isTramiClosed(currentFailure.status) ? "not-allowed" : "pointer",
+                          }}
+                          disabled={isTramiClosed(currentFailure.status)}
+                          title={isTramiClosed(currentFailure.status) ? "No se puede asignar una incidencia cerrada" : ""}
                           onClick={() => setModalAssignFailureOpen(true)}
                         >
                           <span>👤</span> Asignar
@@ -6951,7 +7163,15 @@ export const AdminDashboard: React.FC = () => {
                         <button
                           type="button"
                           className="ad-btn ad-btn-primary"
-                          style={{ justifyContent: "center", fontSize: "0.8rem", padding: "8px 10px" }}
+                          style={{
+                            justifyContent: "center",
+                            fontSize: "0.8rem",
+                            padding: "8px 10px",
+                            opacity: isTramiClosed(currentFailure.status) ? 0.5 : 1,
+                            cursor: isTramiClosed(currentFailure.status) ? "not-allowed" : "pointer",
+                          }}
+                          disabled={isTramiClosed(currentFailure.status)}
+                          title={isTramiClosed(currentFailure.status) ? "No se puede cambiar el estado de una incidencia cerrada" : ""}
                           onClick={() => {
                             setNewFailureStatusChoice(
                               currentFailure.status === "Abierta"
@@ -6971,7 +7191,15 @@ export const AdminDashboard: React.FC = () => {
                         <button
                           type="button"
                           className="ad-btn ad-btn-secondary"
-                          style={{ justifyContent: "center", fontSize: "0.8rem", padding: "8px 10px" }}
+                          style={{
+                            justifyContent: "center",
+                            fontSize: "0.8rem",
+                            padding: "8px 10px",
+                            opacity: isTramiClosed(currentFailure.status) ? 0.5 : 1,
+                            cursor: isTramiClosed(currentFailure.status) ? "not-allowed" : "pointer",
+                          }}
+                          disabled={isTramiClosed(currentFailure.status)}
+                          title={isTramiClosed(currentFailure.status) ? "No se pueden agregar comentarios a una incidencia cerrada" : ""}
                           onClick={() => setModalAddFailureCommentOpen(true)}
                         >
                           <span>💬</span> Añadir comentario
@@ -6979,11 +7207,19 @@ export const AdminDashboard: React.FC = () => {
                         <button
                           type="button"
                           className="ad-btn ad-btn-secondary"
-                          style={{ justifyContent: "center", fontSize: "0.8rem", padding: "8px 10px" }}
-                          onClick={() => {
-                            const info = prompt(`Solicitar más información a ${currentFailure.reporter.name}:`, "¿Podrías detallar qué mensaje de error exacto aparece?");
+                          style={{
+                            justifyContent: "center",
+                            fontSize: "0.8rem",
+                            padding: "8px 10px",
+                            opacity: isTramiClosed(currentFailure.status) ? 0.5 : 1,
+                            cursor: isTramiClosed(currentFailure.status) ? "not-allowed" : "pointer",
+                          }}
+                          disabled={isTramiClosed(currentFailure.status)}
+                          title={isTramiClosed(currentFailure.status) ? "No se puede solicitar información en una incidencia cerrada" : ""}
+                          onClick={async () => {
+                            const info = await showPrompt(`Solicitar más información a ${currentFailure.reporter.name}:`, "¿Podrías detallar qué mensaje de error exacto aparece?", "Solicitar información");
                             if (info) {
-                              alert(`Solicitud enviada a ${currentFailure.reporter.name}: "${info}"`);
+                              showNotification(`Solicitud enviada a ${currentFailure.reporter.name}: "${info}"`, "success");
                             }
                           }}
                         >
@@ -6994,7 +7230,15 @@ export const AdminDashboard: React.FC = () => {
                       <button
                         type="button"
                         className="ad-btn ad-btn-danger"
-                        style={{ justifyContent: "center", fontSize: "0.82rem", padding: "8px 10px" }}
+                        style={{
+                          justifyContent: "center",
+                          fontSize: "0.82rem",
+                          padding: "8px 10px",
+                          opacity: isTramiClosed(currentFailure.status) ? 0.5 : 1,
+                          cursor: isTramiClosed(currentFailure.status) ? "not-allowed" : "pointer",
+                        }}
+                        disabled={isTramiClosed(currentFailure.status)}
+                        title={isTramiClosed(currentFailure.status) ? "La incidencia ya está cerrada" : ""}
                         onClick={handleCloseFailureDirect}
                       >
                         <span>✕</span> Cerrar incidencia
@@ -8174,14 +8418,14 @@ export const AdminDashboard: React.FC = () => {
           MODAL: NUEVA FALLA TÉCNICA (REGISTRO MANUAL CONECTADO A BD)
          ═════════════════════════════════════════════════════════════════════ */}
       {modalNewFailureOpen && (
-        <div className="ad-modal-backdrop" onClick={() => setModalNewFailureOpen(false)}>
+        <div className="ad-modal-backdrop" onClick={() => { setModalNewFailureOpen(false); setNewFailureFiles([]); }}>
           <div className="ad-modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "560px", width: "95%" }}>
             <div className="ad-modal-header">
               <h3>+ Reportar Nueva Falla Técnica (Manual)</h3>
               <button
                 type="button"
                 className="ad-modal-close"
-                onClick={() => setModalNewFailureOpen(false)}
+                onClick={() => { setModalNewFailureOpen(false); setNewFailureFiles([]); }}
               >
                 ✕
               </button>
@@ -8267,12 +8511,50 @@ export const AdminDashboard: React.FC = () => {
                   onChange={(e) => setNewFailureDescription(e.target.value)}
                 />
               </div>
+
+              <div className="ad-form-group">
+                <label htmlFor="new-failure-attachments">Archivos de evidencia</label>
+                <input
+                  id="new-failure-attachments"
+                  className="ad-file-input"
+                  type="file"
+                  multiple
+                  accept=".gif,.jpeg,.jpg,.json,.log,.pdf,.png,.txt,.webp"
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files || []);
+                    const validationError = validateFailureFiles(files);
+                    if (validationError) {
+                      showNotification(validationError, "error");
+                    } else {
+                      setNewFailureFiles(files);
+                    }
+                    event.currentTarget.value = "";
+                  }}
+                />
+                <span className="ad-file-hint">Hasta 5 archivos de 10 MB cada uno: imágenes, PDF, texto, logs o JSON.</span>
+                {newFailureFiles.length > 0 && (
+                  <ul className="ad-selected-files">
+                    {newFailureFiles.map((file, index) => (
+                      <li key={`${file.name}-${index}`}>
+                        <span>{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                        <button
+                          type="button"
+                          aria-label={`Quitar ${file.name}`}
+                          onClick={() => setNewFailureFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}
+                        >
+                          Quitar
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="ad-modal-footer">
               <button
                 type="button"
                 className="ad-btn ad-btn-secondary"
-                onClick={() => setModalNewFailureOpen(false)}
+                onClick={() => { setModalNewFailureOpen(false); setNewFailureFiles([]); }}
               >
                 Cancelar
               </button>
@@ -8455,6 +8737,62 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {activeAlert && (
+        <div
+          className="ad-alert-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              resolveActiveAlert(activeAlert.kind === "confirm" ? false : null);
+            }
+          }}
+        >
+          <section
+            className={`ad-alert-dialog ad-alert-${activeAlert.variant}`}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="ad-alert-title"
+            aria-describedby="ad-alert-message"
+          >
+            <div className="ad-alert-mark" aria-hidden="true">
+              {activeAlert.variant === "success" ? "✓" : activeAlert.variant === "error" ? "!" : "i"}
+            </div>
+            <h2 id="ad-alert-title">{activeAlert.title}</h2>
+            <p id="ad-alert-message">{activeAlert.message}</p>
+            {activeAlert.kind === "prompt" && (
+              <input
+                autoFocus
+                className="ad-alert-input"
+                value={activeAlert.value}
+                onChange={(event) => updateActiveAlertValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") resolveActiveAlert(activeAlert.value);
+                }}
+              />
+            )}
+            <div className="ad-alert-actions">
+              {activeAlert.kind !== "alert" && (
+                <button
+                  type="button"
+                  className="ad-alert-button ad-alert-button-secondary"
+                  onClick={() => resolveActiveAlert(activeAlert.kind === "confirm" ? false : null)}
+                >
+                  Cancelar
+                </button>
+              )}
+              <button
+                type="button"
+                className="ad-alert-button ad-alert-button-primary"
+                autoFocus={activeAlert.kind !== "prompt"}
+                onClick={() => resolveActiveAlert(
+                  activeAlert.kind === "confirm" ? true : activeAlert.kind === "prompt" ? activeAlert.value : null
+                )}
+              >
+                {activeAlert.kind === "confirm" ? "Confirmar" : activeAlert.kind === "prompt" ? "Enviar" : "Entendido"}
+              </button>
+            </div>
+          </section>
         </div>
       )}
     </div>
