@@ -30,6 +30,8 @@ import {
   mapOutline, mapSharp,
   shieldCheckmarkOutline, shieldCheckmarkSharp,
   giftOutline, giftSharp,
+  logOutOutline,
+  swapHorizontalOutline,
 } from 'ionicons/icons';
 
 
@@ -213,8 +215,8 @@ const Menu: React.FC = () => {
             <IonItem lines="none" className="profile-item" detail={false}>
               <IonIcon slot="start" icon={personCircleOutline} />
               <IonLabel>{user?.first_name || user?.email || 'Mi cuenta'}</IonLabel>
-              <IonButton slot="end" fill="clear" onClick={onLogout}>
-                Cerrar sesión
+              <IonButton slot="end" fill="clear" onClick={onLogout} aria-label="Cerrar sesión" title="Cerrar sesión">
+                <IonIcon slot="icon-only" icon={logOutOutline} />
               </IonButton>
             </IonItem>
           ) : null}
@@ -226,12 +228,14 @@ const Menu: React.FC = () => {
                 slot="end"
                 fill="clear"
                 disabled={roleChanging}
+                aria-label="Ser profesional"
+                title="Ser profesional"
                 onClick={(event) => {
                   event.stopPropagation();
                   void onBecomeProfessional();
                 }}
               >
-                {roleChanging ? 'Cambiando...' : 'Ser profesional'}
+                <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
               </IonButton>
             </IonItem>
           ) : null}
@@ -243,12 +247,14 @@ const Menu: React.FC = () => {
                 slot="end"
                 fill="clear"
                 disabled={roleChanging}
+                aria-label="Usar como cliente"
+                title="Usar como cliente"
                 onClick={(event) => {
                   event.stopPropagation();
                   void onBecomeClient();
                 }}
               >
-                {roleChanging ? 'Cambiando...' : 'Cambiar'}
+                <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
               </IonButton>
             </IonItem>
           ) : null}
