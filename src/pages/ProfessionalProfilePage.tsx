@@ -24,6 +24,7 @@ import {
 } from "ionicons/icons";
 import { ApiError } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { usePlatformSettings } from "../services/platformSettings";
 import {
   catalogService,
   professionalProfileService,
@@ -47,6 +48,7 @@ type OfferingDraft = {
 const ProfessionalProfilePage: React.FC = () => {
   const { user, updateMe } = useAuth();
   const isProfessional = user?.role === "professional";
+  const servicesEnabled = usePlatformSettings().features.services;
   const [profile, setProfile] = useState<ProfessionalProfile | null>(null);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -154,6 +156,7 @@ const ProfessionalProfilePage: React.FC = () => {
   }, [isProfessional]);
 
   const toggleService = (serviceId: number) => {
+    if (!servicesEnabled && !selectedServices.includes(serviceId)) return;
     setSelectedServices((current) => {
       if (current.includes(serviceId)) {
         return current.filter((id) => id !== serviceId);
@@ -240,7 +243,7 @@ const ProfessionalProfilePage: React.FC = () => {
           years_experience: offerings[serviceId]?.years_experience || 0,
         })),
         custom_services:
-          customCategory && customName.trim()
+          servicesEnabled && customCategory && customName.trim()
             ? [
                 {
                   category: customCategory,
@@ -570,6 +573,7 @@ const ProfessionalProfilePage: React.FC = () => {
                           className={`sp-choice-card ${selected ? "is-selected" : ""}`}
                           type="button"
                           key={service.id}
+                          disabled={!servicesEnabled && !selected}
                           onClick={() => toggleService(service.id)}
                         >
                           <span>
@@ -655,6 +659,12 @@ const ProfessionalProfilePage: React.FC = () => {
                     <h2>Otro servicio</h2>
                     <p>Publica un servicio nuevo bajo una categoría existente.</p>
                   </div>
+                  {!servicesEnabled ? (
+                    <p className="sp-error" role="alert">
+                      La publicación de servicios está desactivada por el administrador.
+                    </p>
+                  ) : (
+                  <>
                   <div className="sp-grid sp-grid--two">
                     <label className="sp-field">
                       Categoría
@@ -717,6 +727,8 @@ const ProfessionalProfilePage: React.FC = () => {
                       }
                     />
                   </label>
+                  </>
+                  )}
                 </div>
 
                 {profileSuccess ? (

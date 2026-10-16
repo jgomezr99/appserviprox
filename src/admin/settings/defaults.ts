@@ -2,14 +2,29 @@ import type { Section } from "../../services/platformSettings";
 
 export const SECTION_DEFAULTS: Record<string, Section> = {
   role_params: {
-    client: { map: true, services: true, requests: true, homes: true, favorites: true, pqr: true },
+    client: {
+      map: true,
+      services: true,
+      requests: true,
+      homes: true,
+      favorites: true,
+      pqr: true,
+      store: true,
+      publish_store: true,
+      benefits: true,
+    },
     professional: {
       profile_status: true,
+      profile: true,
       services_offered: true,
       availability: true,
       requests: true,
       jobs: true,
+      chat: true,
+      ads: true,
       benefits: true,
+      store: true,
+      publish_store: true,
     },
   },
   appearance: {

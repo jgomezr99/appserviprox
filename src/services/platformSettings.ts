@@ -164,7 +164,12 @@ const readCache = (): PlatformSettings => {
     if (raw) {
       const parsed = JSON.parse(raw);
       applyAppearance(parsed.appearance);
-      return { ...DEFAULT_SETTINGS, ...parsed, features: { ...DEFAULT_SETTINGS.features, ...parsed.features } };
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        features: { ...DEFAULT_SETTINGS.features, ...parsed.features },
+        role_params: parsed.role_params || parsed.sections?.role_params || DEFAULT_SETTINGS.role_params,
+      };
     }
   } catch {
     /* caché inválida */
@@ -187,9 +192,35 @@ export const platformSettingsService = {
   },
   getAdmin: () => api.get<PlatformSettings>("admin/settings/"),
   saveAdmin: async (patch: Partial<PlatformSettings>) => {
-    const saved = await api.patch<PlatformSettings>("admin/settings/", patch);
-    await platformSettingsService.fetchPublic().catch(() => undefined);
-    return saved;
+    // 1. Guardar de inmediato en caché local y emitir evento para que toda la app reaccione al instante
+    const currentCache = readCache();
+    const immediateMerged: PlatformSettings = {
+      ...currentCache,
+      ...patch,
+      features: { ...currentCache.features, ...(patch.features || {}) },
+      sections: { ...(currentCache.sections || {}), ...(patch.sections || {}) },
+      role_params:
+        patch.role_params ||
+        patch.sections?.role_params ||
+        currentCache.role_params ||
+        currentCache.sections?.role_params,
+    };
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(immediateMerged));
+    } catch {
+      /* quota */
+    }
+    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: immediateMerged }));
+
+    // 2. Persistir en backend Django
+    try {
+      const saved = await api.patch<PlatformSettings>("admin/settings/", patch);
+      await platformSettingsService.fetchPublic().catch(() => undefined);
+      return saved;
+    } catch (err) {
+      console.warn("No se pudo sincronizar configuración con API, se mantiene local:", err);
+      return immediateMerged;
+    }
   },
   systemAction: (body: Record<string, unknown> & { action: string }) =>
     api.post<{ detail: string; settings?: PlatformSettings; last_backup?: string }>("admin/system-action/", body),
@@ -218,21 +249,59 @@ type HomeRole = "client" | "professional";
 
 // Cada opción del home exige además que la función global correspondiente esté activa.
 const GLOBAL_FEATURE: Record<HomeRole, Record<string, keyof PlatformFeatures>> = {
-  client: { services: "services", requests: "hirings", pqr: "pqr" },
-  professional: { requests: "hirings", jobs: "hirings", benefits: "benefits" },
+  client: {
+    map: "professionals",
+    services: "services",
+    requests: "hirings",
+    pqr: "pqr",
+    store: "products",
+    publish_store: "products",
+    benefits: "benefits",
+  },
+  professional: {
+    requests: "hirings",
+    jobs: "hirings",
+    benefits: "benefits",
+    services_offered: "services",
+    store: "products",
+    publish_store: "products",
+    pqr: "pqr",
+    chat: "chat",
+    profile: "professionals",
+    ads: "professionals",
+  },
 };
 
 const ROLE_KEYS: Record<HomeRole, string[]> = {
-  client: ["map", "services", "requests", "homes", "favorites", "pqr"],
-  professional: ["profile_status", "services_offered", "availability", "requests", "jobs", "benefits"],
+  client: ["map", "services", "requests", "homes", "favorites", "pqr", "store", "publish_store", "benefits"],
+  professional: [
+    "profile_status",
+    "profile",
+    "services_offered",
+    "availability",
+    "requests",
+    "jobs",
+    "chat",
+    "ads",
+    "benefits",
+    "store",
+    "publish_store",
+    "pqr",
+  ],
 };
 
 export const homeFlags = (settings: PlatformSettings, role: HomeRole): Record<string, boolean> => {
-  const params = (settings.role_params?.[role] ?? {}) as Record<string, boolean>;
+  const params = (
+    settings.role_params?.[role] ??
+    settings.sections?.role_params?.[role] ??
+    {}
+  ) as Record<string, boolean>;
   return Object.fromEntries(
     ROLE_KEYS[role].map((key) => {
-      const global = GLOBAL_FEATURE[role][key];
-      return [key, params[key] !== false && (!global || settings.features[global])];
+      const global = GLOBAL_FEATURE[role]?.[key];
+      const isGlobalEnabled = global ? Boolean(settings.features[global]) : true;
+      const isRoleParamEnabled = params[key] !== false;
+      return [key, isGlobalEnabled && isRoleParamEnabled];
     })
   );
 };

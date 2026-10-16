@@ -103,7 +103,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   const [activeSlide, setActiveSlide] = useState(0);
   const [isAdminLogin, setIsAdminLogin] = useState(administrative);
   const [serverModalOpen, setServerModalOpen] = useState(false);
-  const [serverConnected, setServerConnected] = useState<boolean | null>(null);
+  const [, setServerConnected] = useState<boolean | null>(null);
   const [blockedAccountInfo, setBlockedAccountInfo] = useState<BlockedAccountInfo | null>(null);
   const platform = usePlatformSettings();
   const showMaintenance = platform.features.maintenance && !administrative;
@@ -184,7 +184,9 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
         setIsSubmitting(false);
         return;
       }
-    } catch {}
+    } catch {
+      /* almacenamiento local ilegible: se ignora */
+    }
 
     try {
       const currentUser = await login({ email: normalizedEmail, password });
@@ -213,11 +215,11 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
       } else {
         history.replace(getEntryRoute(currentUser));
       }
-    } catch (err: any) {
+    } catch (err) {
       // 2. Revisar si la API devolvió rechazo por cuenta suspendida
-      const payload = err?.payload;
+      const payload = (err as { payload?: Partial<BlockedAccountInfo> & { maintenance?: boolean; detail?: unknown } })?.payload;
       if (payload && payload.is_blocked) {
-        setBlockedAccountInfo(payload);
+        setBlockedAccountInfo(payload as BlockedAccountInfo);
         return;
       }
       if (payload && payload.maintenance) {

@@ -383,11 +383,12 @@ const ContractorMapPage: React.FC = () => {
   }, [projectLocation]);
 
   useEffect(() => {
-    (window as any).__serviproxGoToContractor = (contractorId: string) => {
+    const w = window as Window & { __serviproxGoToContractor?: (contractorId: string) => void };
+    w.__serviproxGoToContractor = (contractorId: string) => {
       history.push(`/cliente/profesionales/${contractorId}`);
     };
     return () => {
-      delete (window as any).__serviproxGoToContractor;
+      delete w.__serviproxGoToContractor;
     };
   }, [history]);
 

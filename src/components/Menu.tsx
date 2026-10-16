@@ -30,6 +30,7 @@ import {
   mapOutline, mapSharp,
   shieldCheckmarkOutline, shieldCheckmarkSharp,
   giftOutline, giftSharp,
+  cartOutline, cartSharp,
   logOutOutline,
   swapHorizontalOutline,
 } from 'ionicons/icons';
@@ -47,34 +48,33 @@ interface AppPage {
   title: string;
 }
 
+const storePage: AppPage = {
+  title: 'Tienda de productos',
+  url: '/tienda',
+  iosIcon: cartOutline,
+  mdIcon: cartSharp,
+};
 
-const clientPages: AppPage[] = [
-  { title: 'Inicio', url: '/cliente/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
-  { title: 'Mapa de contratistas', url: '/cliente/mapa', iosIcon: mapOutline, mdIcon: mapSharp },
-  { title: 'Servicios', url: '/cliente/servicios', iosIcon: constructOutline, mdIcon: constructSharp },
-  { title: 'Mis solicitudes', url: '/cliente/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
-  { title: 'Favoritos', url: '/cliente/favoritos', iosIcon: heartOutline, mdIcon: heartSharp },
-  { title: 'Mis viviendas', url: '/cliente/viviendas', iosIcon: businessOutline, mdIcon: businessSharp },
-  { title: 'PQRS & Quejas', url: '/cliente/pqrs', iosIcon: shieldCheckmarkOutline, mdIcon: shieldCheckmarkSharp },
-  { title: 'Mi perfil de cliente', url: '/cliente/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
-];
+const clientBenefitsPage: AppPage = {
+  title: 'Beneficios y puntos',
+  url: '/cliente/beneficios',
+  iosIcon: giftOutline,
+  mdIcon: giftSharp,
+};
 
-
-const professionalPages: AppPage[] = [
-  { title: 'Inicio', url: '/profesional/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
-  { title: 'Mis solicitudes', url: '/profesional/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp },
-  { title: 'Mis trabajos', url: '/profesional/trabajos', iosIcon: briefcaseOutline, mdIcon: briefcaseSharp },
-  { title: 'Mi perfil profesional', url: '/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
-  { title: 'Disponibilidad', url: '/profesional/disponibilidad', iosIcon: timeOutline, mdIcon: timeSharp },
-];
-
-const benefitsPage: AppPage = {
+const proBenefitsPage: AppPage = {
   title: 'Beneficios',
   url: '/profesional/beneficios',
   iosIcon: giftOutline,
   mdIcon: giftSharp,
 };
 
+const proPqrPage: AppPage = {
+  title: 'PQRS & Soporte',
+  url: '/profesional/pqrs',
+  iosIcon: shieldCheckmarkOutline,
+  mdIcon: shieldCheckmarkSharp,
+};
 
 const Menu: React.FC = () => {
   const location = useLocation();
@@ -134,6 +134,7 @@ const Menu: React.FC = () => {
   const platform = usePlatformSettings();
   const clientFlags = homeFlags(platform, 'client');
   const proFlags = homeFlags(platform, 'professional');
+
   const clientUrlFlag: Record<string, string> = {
     '/cliente/mapa': 'map',
     '/cliente/servicios': 'services',
@@ -141,18 +142,78 @@ const Menu: React.FC = () => {
     '/cliente/favoritos': 'favorites',
     '/cliente/viviendas': 'homes',
     '/cliente/pqrs': 'pqr',
+    '/tienda': 'store',
+    '/cliente/beneficios': 'benefits',
   };
+
   const proUrlFlag: Record<string, string> = {
     '/profesional/solicitudes': 'requests',
     '/profesional/trabajos': 'jobs',
     '/profesional/disponibilidad': 'availability',
+    '/tienda': 'store',
+    '/profesional/beneficios': 'benefits',
+    '/profesional/pqrs': 'pqr',
   };
+
+  // Páginas del cliente según funciones activas en la plataforma
+  const clientPagesList: AppPage[] = [
+    { title: 'Inicio', url: '/cliente/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
+    ...(platform.features.professionals !== false && platform.features.services !== false
+      ? [{ title: 'Mapa de contratistas', url: '/cliente/mapa', iosIcon: mapOutline, mdIcon: mapSharp }]
+      : []),
+    ...(platform.features.services !== false
+      ? [{ title: 'Servicios', url: '/cliente/servicios', iosIcon: constructOutline, mdIcon: constructSharp }]
+      : []),
+    ...(platform.features.products !== false
+      ? [storePage]
+      : []),
+    ...(platform.features.hirings !== false
+      ? [{ title: 'Mis solicitudes', url: '/cliente/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp }]
+      : []),
+    { title: 'Favoritos', url: '/cliente/favoritos', iosIcon: heartOutline, mdIcon: heartSharp },
+    { title: 'Mis viviendas', url: '/cliente/viviendas', iosIcon: businessOutline, mdIcon: businessSharp },
+    ...(platform.features.benefits !== false
+      ? [clientBenefitsPage]
+      : []),
+    ...(platform.features.pqr !== false
+      ? [{ title: 'PQRS & Quejas', url: '/cliente/pqrs', iosIcon: shieldCheckmarkOutline, mdIcon: shieldCheckmarkSharp }]
+      : []),
+    { title: 'Mi perfil de cliente', url: '/cliente/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
+  ];
+
+  // Páginas del profesional según funciones activas en la plataforma
+  const proPagesList: AppPage[] = [
+    { title: 'Inicio', url: '/profesional/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
+    ...(platform.features.products !== false
+      ? [storePage]
+      : []),
+    ...(platform.features.hirings !== false
+      ? [{ title: 'Mis solicitudes', url: '/profesional/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp }]
+      : []),
+    ...(platform.features.hirings !== false
+      ? [{ title: 'Mis trabajos', url: '/profesional/trabajos', iosIcon: briefcaseOutline, mdIcon: briefcaseSharp }]
+      : []),
+    ...(platform.features.benefits !== false
+      ? [proBenefitsPage]
+      : []),
+    ...(platform.features.pqr !== false
+      ? [proPqrPage]
+      : []),
+    { title: 'Mi perfil profesional', url: '/perfil', iosIcon: personCircleOutline, mdIcon: personCircleOutline },
+    { title: 'Disponibilidad', url: '/profesional/disponibilidad', iosIcon: timeOutline, mdIcon: timeSharp },
+  ];
+
   const menuPages =
     user?.role === 'professional'
-      ? [...professionalPages, ...(proFlags.benefits ? [benefitsPage] : [])].filter(
-          (page) => proFlags[proUrlFlag[page.url]] !== false
-        )
-      : clientPages.filter((page) => clientFlags[clientUrlFlag[page.url]] !== false);
+      ? proPagesList.filter((page) => {
+          const flagKey = proUrlFlag[page.url];
+          return flagKey ? proFlags[flagKey] !== false : true;
+        })
+      : clientPagesList.filter((page) => {
+          const flagKey = clientUrlFlag[page.url];
+          return flagKey ? clientFlags[flagKey] !== false : true;
+        });
+
   const menuDisabled = isPublicPage || isOnboardingPage;
 
   return (
@@ -220,7 +281,7 @@ const Menu: React.FC = () => {
               </IonButton>
             </IonItem>
           ) : null}
-          {user?.role === 'client' ? (
+          {user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (
             <IonItem lines="none" detail={false} className="role-switch-item">
               <IonIcon slot="start" icon={briefcaseOutline} />
               <IonLabel>Ofrecer servicios</IonLabel>

@@ -18,7 +18,6 @@ import {
 	IonToolbar,
 } from "@ionic/react";
 import {
-	checkmarkCircleOutline,
 	createOutline,
 	moonOutline,
 	personCircleOutline,

@@ -14,7 +14,6 @@ import {
   IonSpinner,
   IonTitle,
   IonToast,
-  IonToggle,
   IonToolbar,
 } from "@ionic/react";
 import {
@@ -22,15 +21,15 @@ import {
   calendarClearOutline,
   callOutline,
   checkmarkCircleOutline,
-  closeOutline,
-  createOutline,
   homeOutline,
   locationOutline,
   mailOutline,
   mapOutline,
-  moonOutline,
   personCircleOutline,
   saveOutline,
+  cartOutline,
+  giftOutline,
+  addCircleOutline,
 } from "ionicons/icons";
 import { useAuth } from "../context/AuthContext";
 import { householdService } from "../services/serviprox";
@@ -57,15 +56,8 @@ const ClientHome: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-  const [darkMode, setDarkMode] = useState(() => document.body.classList.contains("dark"));
 
   const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ");
-
-  const toggleDarkMode = () => {
-    const nextValue = !darkMode;
-    setDarkMode(nextValue);
-    document.body.classList.toggle("dark", nextValue);
-  };
 
   useEffect(() => {
     if (user) {
@@ -352,6 +344,33 @@ const ClientHome: React.FC = () => {
                 <h2>Mis viviendas</h2>
               </div>
               <p>Administra los inmuebles registrados para tus solicitudes.</p>
+            </a>
+            )}
+            {flags.store && (
+            <a className="sp-card sp-home-link" href="/tienda">
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                <IonIcon icon={cartOutline} style={{ fontSize: "1.3rem" }} />
+                <h2>Tienda de productos</h2>
+              </div>
+              <p>Compra y consulta herramientas, materiales y equipamiento de obra.</p>
+            </a>
+            )}
+            {flags.publish_store && (
+            <a className="sp-card sp-home-link" href="/tienda?action=publish">
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                <IonIcon icon={addCircleOutline} style={{ fontSize: "1.3rem", color: "var(--ion-color-primary)" }} />
+                <h2>Publicar en tienda</h2>
+              </div>
+              <p>Publica tus herramientas, equipos o materiales para venta o alquiler.</p>
+            </a>
+            )}
+            {flags.benefits && (
+            <a className="sp-card sp-home-link" href="/cliente/beneficios">
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                <IonIcon icon={giftOutline} style={{ fontSize: "1.3rem" }} />
+                <h2>Beneficios y puntos</h2>
+              </div>
+              <p>Consulta tus puntos acumulados y canjea recompensas exclusivas.</p>
             </a>
             )}
           </section>

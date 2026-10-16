@@ -29,6 +29,9 @@ const ROLE_CARDS: Array<[string, string, FieldDef[]]> = [
       { key: "homes", label: "Mis viviendas", kind: T },
       { key: "favorites", label: "Favoritos", kind: T },
       { key: "pqr", label: "PQRS y quejas", kind: T },
+      { key: "store", label: "Tienda de productos", kind: T },
+      { key: "publish_store", label: "Publicar en tienda", kind: T },
+      { key: "benefits", label: "Beneficios y puntos", kind: T },
     ],
   ],
   [
@@ -36,11 +39,16 @@ const ROLE_CARDS: Array<[string, string, FieldDef[]]> = [
     "🧰 Home del profesional",
     [
       { key: "profile_status", label: "Estado del perfil", kind: T },
+      { key: "profile", label: "Perfil profesional", kind: T },
       { key: "services_offered", label: "Servicios ofrecidos", kind: T },
       { key: "availability", label: "Disponibilidad", kind: T },
       { key: "requests", label: "Mis solicitudes", kind: T },
       { key: "jobs", label: "Trabajos activos", kind: T },
+      { key: "chat", label: "Chat con clientes", kind: T },
+      { key: "ads", label: "Publicidad de profesionales", kind: T },
       { key: "benefits", label: "Beneficios", kind: T },
+      { key: "store", label: "Tienda de herramientas", kind: T },
+      { key: "publish_store", label: "Publicar en tienda", kind: T },
     ],
   ],
 ];
@@ -155,7 +163,8 @@ export const AdminSettings: React.FC<{ onChanged?: () => void }> = ({ onChanged 
   const save = () =>
     run(async () => {
       const cities = citiesText.split("\n").map((c) => c.trim()).filter(Boolean);
-      const saved = await platformSettingsService.saveAdmin({ ...form, cities });
+      const role_params = form.sections?.role_params;
+      const saved = await platformSettingsService.saveAdmin({ ...form, cities, role_params });
       setForm((prev) => withSections({ ...prev, ...saved, system: prev.system }));
       onChanged?.();
       return "Cambios guardados.";
@@ -382,8 +391,16 @@ export const AdminSettings: React.FC<{ onChanged?: () => void }> = ({ onChanged 
                 <p className="as-muted">Secciones visibles en el home. También deben estar activas en Parámetros generales.</p>
                 <FieldList
                   fields={fields}
-                  values={form.sections?.role_params?.[role] ?? SECTION_DEFAULTS.role_params[role]}
-                  onChange={(k, v) => setSection("role_params")({ [role]: { ...form.sections?.role_params?.[role], [k]: v } })}
+                  values={{ ...SECTION_DEFAULTS.role_params[role], ...(form.sections?.role_params?.[role] || form.role_params?.[role] || {}) }}
+                  onChange={(k, v) =>
+                    setSection("role_params")({
+                      [role]: {
+                        ...SECTION_DEFAULTS.role_params[role],
+                        ...(form.sections?.role_params?.[role] || form.role_params?.[role] || {}),
+                        [k]: v,
+                      },
+                    })
+                  }
                   disabled={busy}
                 />
                 {saveButton}

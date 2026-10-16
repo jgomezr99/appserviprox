@@ -220,6 +220,26 @@ class ProfessionalProfileMeSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
+    def validate(self, attrs):
+        from apps.accounts.models import PlatformSettings
+
+        if PlatformSettings.load()["features"].get("services", True):
+            return attrs
+
+        # Con la publicación desactivada solo se permite quitar servicios.
+        requested = set(attrs.get("service_ids") or [])
+        requested |= {item["service"] for item in attrs.get("service_offerings") or []}
+        current = (
+            set(self.instance.services.values_list("service_id", flat=True))
+            if self.instance
+            else set()
+        )
+        if attrs.get("custom_services") or requested - current:
+            raise serializers.ValidationError(
+                "La publicacion de servicios esta desactivada por el administrador."
+            )
+        return attrs
+
     def validate_service_ids(self, value):
         unique_ids = list(dict.fromkeys(value))
         services_count = Service.objects.filter(

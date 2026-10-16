@@ -49,6 +49,10 @@ import {
 } from '../data/pqrInitialData';
 import { useAuth } from '../context/AuthContext';
 import { MaintenanceNotice, useMaintenance } from '../components/MaintenanceNotice';
+import { usePlatformSettings } from '../services/platformSettings';
+import { IonIcon, IonButton } from '@ionic/react';
+import { alertCircleOutline, arrowBackOutline } from 'ionicons/icons';
+import { useHistory } from 'react-router-dom';
 
 function buildRadicado() {
   return `PQR-BOG-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -56,8 +60,71 @@ function buildRadicado() {
 
 const PqrPage: React.FC = () => {
   const { user } = useAuth();
+  const history = useHistory();
+  const platform = usePlatformSettings();
+  const pqrEnabled = platform.features.pqr;
   const { active: maintenance } = useMaintenance();
   const blockedMsg = 'La plataforma está en mantenimiento. No puedes registrar ni editar cambios por ahora.';
+
+  if (!pqrEnabled) {
+    return (
+      <IonPage>
+        <IonHeader>
+          <IonToolbar>
+            <IonButtons slot="start">
+              <IonMenuButton autoHide={false} menu="main-menu" />
+            </IonButtons>
+            <IonTitle>PQRS & Reportes</IonTitle>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent className="ion-padding sp-role-content">
+          <div
+            style={{
+              maxWidth: "520px",
+              margin: "60px auto",
+              padding: "36px 24px",
+              background: "#ffffff",
+              borderRadius: "20px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 10px 25px -5px rgba(0,0,0,0.06)",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "50%",
+                background: "#fee2e2",
+                color: "#ef4444",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 20px",
+                fontSize: "2rem",
+              }}
+            >
+              <IonIcon icon={alertCircleOutline} />
+            </div>
+            <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", marginBottom: "10px" }}>
+              Módulo de PQR y Reportes Desactivado
+            </h2>
+            <p style={{ color: "#64748b", fontSize: "0.95rem", lineHeight: 1.6, marginBottom: "24px" }}>
+              La radicación y consulta de quejas, reclamos y reportes técnicos ha sido temporalmente desactivada por la administración de Serviprox.
+            </p>
+            <IonButton
+              fill="solid"
+              color="primary"
+              onClick={() => history.push(user?.role === "professional" ? "/profesional/inicio" : "/cliente/inicio")}
+              style={{ fontWeight: 700, borderRadius: "12px" }}
+            >
+              <IonIcon slot="start" icon={arrowBackOutline} /> Volver al Inicio
+            </IonButton>
+          </div>
+        </IonContent>
+      </IonPage>
+    );
+  }
 
   // ── Datos con precarga desde la base de datos (filtrados por cuenta) ──────
   const [pqrReports, setPqrReports] = useState<PqrReport[]>(() => getStoredPqrReports(user?.email));
@@ -165,11 +232,12 @@ const PqrPage: React.FC = () => {
     const userFullName = user
       ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username
       : '';
-    const clientEmail = (data as any).clientEmail || user?.email || '';
-    const clientName = (data as any).clientName || userFullName || 'Cliente';
-    const clientPhone = (data as any).clientPhone || user?.phone || '';
-    const clientDocumentId = (data as any).clientDocumentId || user?.document_id || '';
-    const clientAddress = (data as any).clientAddress || user?.address || '';
+    const extra = data as Partial<PqrReport>;
+    const clientEmail = extra.clientEmail || user?.email || '';
+    const clientName = extra.clientName || userFullName || 'Cliente';
+    const clientPhone = extra.clientPhone || user?.phone || '';
+    const clientDocumentId = extra.clientDocumentId || user?.document_id || '';
+    const clientAddress = extra.clientAddress || user?.address || '';
 
     // Si ya viene creado desde PqrReportModal con su id y radicado de la base de datos
     if ('id' in data && 'radicadoNumber' in data && data.id && data.radicadoNumber) {

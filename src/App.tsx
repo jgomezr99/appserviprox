@@ -29,8 +29,43 @@ import PqrPage from './pages/PqrPage';
 import Reservas from './pages/Reservas';
 import { GlobalChatButton } from './components/GlobalChatButton';
 import { ConnectionBanner } from './components/ConnectionBanner';
-import { RequireAuth, RootRedirect } from './components/routing/RouteGuards';
+import { RequireAuth } from './components/routing/RouteGuards';
 import { useAuth } from './context/AuthContext';
+import { useHomeFlags } from './services/platformSettings';
+import BenefitsPage from './pages/BenefitsPage';
+import StorePage from './pages/StorePage';
+
+const BenefitsRoute: React.FC = () => {
+  const flags = useHomeFlags('professional');
+  if (!flags.benefits) {
+    return <Redirect to="/profesional/inicio" />;
+  }
+  return <BenefitsPage />;
+};
+
+const ClientBenefitsRoute: React.FC = () => {
+  const flags = useHomeFlags('client');
+  if (!flags.benefits) {
+    return <Redirect to="/cliente/inicio" />;
+  }
+  return <BenefitsPage />;
+};
+
+const ClientServicesRoute: React.FC = () => {
+  const flags = useHomeFlags('client');
+  if (!flags.services) {
+    return <Redirect to="/cliente/inicio" />;
+  }
+  return <Page />;
+};
+
+const ContractorMapRoute: React.FC = () => {
+  const flags = useHomeFlags('client');
+  if (!flags.map) {
+    return <Redirect to="/cliente/inicio" />;
+  }
+  return <ContractorMapPage />;
+};
 
 const SolicitudesRedirect: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
@@ -152,7 +187,7 @@ const App: React.FC = () => {
               </Route>
               <Route path="/cliente/mapa" exact={true}>
                 <RequireAuth role="client">
-                  <ContractorMapPage />
+                  <ContractorMapRoute />
                 </RequireAuth>
               </Route>
               <Route path="/cliente/historialpago" exact={true}>
@@ -165,11 +200,22 @@ const App: React.FC = () => {
                   <PqrPage />
                 </RequireAuth>
               </Route>
+              <Route path="/cliente/beneficios" exact={true}>
+                <RequireAuth role="client">
+                  <ClientBenefitsRoute />
+                </RequireAuth>
+              </Route>
+              <Route path="/tienda" exact={true}>
+                <StorePage />
+              </Route>
+              <Route path="/productos" exact={true}>
+                <Redirect to="/tienda" />
+              </Route>
               <Route path="/cliente/solicitudes" exact={true}>
                 <ClientSolicitudesRoute />
               </Route>
               <Route path="/cliente/servicios" exact={true}>
-                <Page />
+                <ClientServicesRoute />
               </Route>
               <Route path="/mapa" exact={true}>
                 <Redirect to="/cliente/mapa" />
@@ -224,11 +270,12 @@ const App: React.FC = () => {
 
               <Route path="/profesional/beneficios" exact={true}>
                 <RequireAuth role="professional">
-                  <RolePlaceholderPage
-                    kicker="PROFESIONAL"
-                    title="Beneficios"
-                    description="Aquí verás los puntos e incentivos que te asigna Serviprox."
-                  />
+                  <BenefitsRoute />
+                </RequireAuth>
+              </Route>
+              <Route path="/profesional/pqrs" exact={true}>
+                <RequireAuth role="professional">
+                  <PqrPage />
                 </RequireAuth>
               </Route>
 
