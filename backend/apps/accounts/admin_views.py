@@ -3,11 +3,12 @@ from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
-from rest_framework import permissions, status
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import AdminAuditLog, UserRole
+from apps.accounts.permissions import IsServiproxAdministrator
 from apps.catalog.models import Service
 from apps.pqrs.models import AppProblemReport, PQRReport
 from apps.professionals.models import ProfessionalProfile
@@ -19,7 +20,7 @@ User = get_user_model()
 class AdminOverviewView(APIView):
     """Devuelve las métricas, listas y estadísticas en vivo consultadas directamente de la base de datos."""
 
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsServiproxAdministrator]
 
     def get(self, request):
         # 1. Indicadores principales (KPIs) desde la base de datos SQLite
@@ -154,7 +155,7 @@ class AdminOverviewView(APIView):
             "database": {
                 "connected": True,
                 "engine": connection.vendor,
-                "database_name": connection.settings_dict.get("NAME"),
+                "database_name": str(connection.settings_dict.get("NAME") or ""),
                 "timestamp": timezone.now().isoformat(),
             },
             "kpis": {
@@ -194,7 +195,7 @@ class AdminOverviewView(APIView):
 class AdminActionView(APIView):
     """Ejecuta y persiste acciones administrativas directamente en la base de datos con registro de auditoría."""
 
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsServiproxAdministrator]
 
     @transaction.atomic
     def post(self, request):
@@ -495,7 +496,7 @@ class AdminActionView(APIView):
 class AdminUsersListView(APIView):
     """Devuelve el listado completo de usuarios registrados en la base de datos clasificados por rol."""
 
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsServiproxAdministrator]
 
     def get(self, request):
         role_filter = request.query_params.get("role")

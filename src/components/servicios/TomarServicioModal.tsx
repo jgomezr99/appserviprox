@@ -46,6 +46,8 @@ interface TomarServicioModalProps {
   initialProfessional?: Professional | null;
   initialDescription?: string;
   initialUrgency?: ServiceRequestUrgency;
+  initialServiceId?: number | null;
+  diagnosticSessionId?: number | null;
   onSuccess?: (orderId: string | number) => void;
 }
 
@@ -56,6 +58,8 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
   initialProfessional,
   initialDescription,
   initialUrgency,
+  initialServiceId,
+  diagnosticSessionId,
   onSuccess,
 }) => {
   const history = useHistory();
@@ -90,6 +94,10 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
     setError("");
     setDescription(initialDescription || "");
     setUrgency(initialUrgency || "this_week");
+    setProfessional(initialProfessional || null);
+    setServices([]);
+    setSelectedServiceId(null);
+    setProfessionals([]);
 
     // 1. Cargar dirección de viviendas del cliente
     if (isAuthenticated) {
@@ -99,25 +107,25 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
           setHouseholds(list);
           if (list.length > 0) {
             const def = list.find((h) => h.is_default) || list[0];
-            setAddressLine(def.address_line || user?.address || "Cra. 11 # 85-32");
-            setNeighborhood(def.neighborhood || "Chicó, Bogotá");
+            setAddressLine(def.address_line || user?.address || "");
+            setNeighborhood(def.neighborhood || user?.city || "");
             setNotes(def.notes || "");
           } else if (user?.address) {
             setAddressLine(user.address);
-            setNeighborhood(user.city || "Bogotá");
+            setNeighborhood(user.city || "");
           } else {
-            setAddressLine("Cra. 11 # 85-32");
-            setNeighborhood("Chicó, Bogotá");
+            setAddressLine("");
+            setNeighborhood(user?.city || "");
           }
         })
         .catch(() => {
-          setAddressLine(user?.address || "Cra. 11 # 85-32");
-          setNeighborhood(user?.city || "Chicó, Bogotá");
+          setAddressLine(user?.address || "");
+          setNeighborhood(user?.city || "");
         });
     } else {
-      setAddressLine("Cra. 11 # 85-32, Apto 501");
-      setNeighborhood("Chicó, Bogotá");
-      setNotes("Conjunto Residencial Chicó");
+      setAddressLine(user?.address || "");
+      setNeighborhood(user?.city || "");
+      setNotes("");
     }
 
     // 2. Cargar servicios específicos para la categoría
@@ -126,36 +134,59 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
       .listServices({ category: category.id })
       .then((servList) => {
         setServices(servList);
-        if (servList.length > 0) {
-          setSelectedServiceId(servList[0].id);
-        } else {
-          setSelectedServiceId(null);
+        const suggestedServiceExists = servList.some(
+          (service) => service.id === initialServiceId
+        );
+        setSelectedServiceId(
+          initialServiceId
+            ? suggestedServiceExists
+              ? initialServiceId
+              : null
+            : servList[0]?.id ?? null
+        );
+        if (initialServiceId && !suggestedServiceExists) {
+          setError("El servicio sugerido ya no está disponible. Selecciona otro del catálogo.");
         }
       })
-      .catch((err) => {
-        console.warn("Error cargando servicios de categoría:", err);
+      .catch(() => {
+        setError("No pudimos cargar los servicios de esta categoría. Inténtalo de nuevo.");
       })
       .finally(() => {
         setLoadingServices(false);
       });
 
-    // 3. Cargar profesionales de la categoría
+  }, [isOpen, category, initialProfessional, initialServiceId, isAuthenticated, user]);
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      !category ||
+      !selectedServiceId ||
+      !services.some((service) => service.id === selectedServiceId)
+    ) {
+      setProfessionals([]);
+      setProfessional(null);
+      return;
+    }
+
     professionalSearchService
-      .list({ category: category.slug })
+      .list({ category: category.slug, service: selectedServiceId })
       .then((proList) => {
         setProfessionals(proList);
-        if (initialProfessional) {
-          setProfessional(initialProfessional);
-        } else if (proList.length > 0) {
-          setProfessional(proList[0]);
-        } else {
-          setProfessional(null);
-        }
+        setProfessional((current) => {
+          if (current && proList.some((pro) => pro.id === current.id)) return current;
+          if (initialProfessional && proList.some((pro) => pro.id === initialProfessional.id)) {
+            return initialProfessional;
+          }
+          return null;
+        });
       })
       .catch((err) => {
-        console.warn("Error buscando profesional:", err);
+        setProfessionals([]);
+        setProfessional(null);
+        console.warn("Error buscando profesional para el servicio:", err);
       });
-  }, [isOpen, category, initialProfessional, isAuthenticated, user]);
+  }, [isOpen, category, selectedServiceId, services, initialProfessional]);
 
   // Login rápido de demostración
   const handleQuickDemoLogin = async () => {
@@ -185,6 +216,11 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
       return;
     }
 
+    if (!selectedServiceId || !services.some((service) => service.id === selectedServiceId)) {
+      setError("Selecciona un servicio activo del catálogo antes de continuar.");
+      return;
+    }
+
     if (!isAuthenticated) {
       setError("Debes iniciar sesión para confirmar la dirección y crear tu orden de servicio.");
       return;
@@ -203,15 +239,11 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
           addressLine.trim() !== targetHousehold.address_line ||
           neighborhood.trim() !== targetHousehold.neighborhood
         ) {
-          try {
-            targetHousehold = await householdService.update(targetHousehold.id, {
-              address_line: addressLine.trim(),
-              neighborhood: neighborhood.trim() || "Bogotá",
-              notes: notes.trim(),
-            });
-          } catch {
-            // Continuar con el hogar existente
-          }
+          targetHousehold = await householdService.update(targetHousehold.id, {
+            address_line: addressLine.trim(),
+            neighborhood: neighborhood.trim() || "Bogotá",
+            notes: notes.trim(),
+          });
         }
       } else {
         // Crear nuevo hogar para el cliente
@@ -229,24 +261,13 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
         });
       }
 
-      // 2. Determinar servicio
-      let serviceId = selectedServiceId;
-      if (!serviceId && services.length > 0) {
-        serviceId = services[0].id;
-      }
-      if (!serviceId) {
-        // Si la categoría no tiene servicios precargados, usar id 1 por defecto
-        serviceId = 1;
-      }
-
-      // 3. Determinar profesional
-      const proId = professional?.id || 1; // 1 = Andre Ruiz o primer profesional
-
-      // 4. Crear la solicitud en la base de datos
+      // 2. Sin profesional dirigido el backend busca candidatos para el servicio.
       const req = await serviceRequestService.create({
         household: targetHousehold.id,
-        selected_service: serviceId,
-        professional: proId,
+        selected_service: selectedServiceId,
+        selected_category: category.id,
+        diagnostic_session: diagnosticSessionId ?? null,
+        professional: professional?.id ?? null,
         description: description.trim(),
         urgency,
       });
@@ -469,10 +490,10 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
               <div className="sp-modal-section">
                 <h4 className="sp-modal-section-title">
                   <IonIcon icon={shieldCheckmarkOutline} />
-                  <span>4. Carrusel de profesionales disponibles ({professionals.length})</span>
+                  <span>4. Profesionales disponibles ({professionals.length})</span>
                 </h4>
                 <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "-6px 0 12px" }}>
-                  Desliza en el carrusel y selecciona el profesional con el que deseas tomar el servicio:
+                  Puedes elegir un profesional o dejar que el sistema busque candidatos compatibles:
                 </p>
 
                 {professionals.length > 0 ? (
@@ -522,7 +543,7 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
                     <div className="sp-modal-pro-avatar">PRO</div>
                     <div className="sp-modal-pro-info">
                       <h4>Profesional asignado por Serviprox</h4>
-                      <p>Asignaremos el contratista más cercano y mejor calificado en {category.name}</p>
+                      <p>Buscaremos profesionales compatibles con {category.name} cuando publiques la solicitud.</p>
                     </div>
                   </div>
                 )}

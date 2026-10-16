@@ -42,9 +42,10 @@ class WorkEvidenceSerializer(serializers.ModelSerializer):
         model = WorkEvidence
         fields = ["id", "image_url", "caption", "created_at"]
 
-    def get_image_url(self, instance):
+    def get_image_url(self, instance) -> str:
         request = self.context.get("request")
-        return request.build_absolute_uri(instance.image.url) if request else instance.image.url
+        path = f"/api/v1/orders/{instance.order_id}/evidence/{instance.id}/"
+        return request.build_absolute_uri(path) if request else path
 
 
 class OrderSerializer(serializers.ModelSerializer):

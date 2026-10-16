@@ -140,6 +140,14 @@ class ServiceRequestCreateSerializer(serializers.ModelSerializer):
             )
         return household
 
+    def validate_diagnostic_session(self, session):
+        user = self.context["request"].user
+        if session and session.user_id not in (None, user.id):
+            raise serializers.ValidationError(
+                "Esta sesión de diagnóstico no pertenece a tu cuenta."
+            )
+        return session
+
     def validate(self, attrs):
         user = self.context["request"].user
         if user.role != UserRole.CLIENT:
@@ -169,16 +177,8 @@ class ServiceRequestCreateSerializer(serializers.ModelSerializer):
                     {"professional": "Selecciona un profesional activo."}
                 )
             if not professional_offers_service(professional, selected_service.id):
-                from apps.professionals.models import ProfessionalService
-                ProfessionalService.objects.get_or_create(
-                    profile=professional,
-                    service=selected_service,
-                    defaults={
-                        "price_min": selected_service.price_min or 50000,
-                        "price_max": selected_service.price_max or 150000,
-                        "observations": "Servicio ofrecido",
-                        "years_experience": 3,
-                    },
+                raise serializers.ValidationError(
+                    {"professional": "El profesional no ofrece este servicio."}
                 )
             if attrs.get("urgency") == ServiceRequest.Urgency.URGENT and not professional.accepts_urgent:
                 attrs["urgency"] = ServiceRequest.Urgency.THIS_WEEK
@@ -194,6 +194,9 @@ class ServiceRequestCreateSerializer(serializers.ModelSerializer):
         session = validated_data.get("diagnostic_session")
         if session and not validated_data.get("suggested_category"):
             validated_data["suggested_category"] = session.suggested_category
+        if session and session.user_id is None:
+            session.user = self.context["request"].user
+            session.save(update_fields=["user"])
 
         request = ServiceRequest.objects.create(
             client=self.context["request"].user, **validated_data

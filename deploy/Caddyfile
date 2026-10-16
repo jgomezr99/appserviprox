@@ -1,0 +1,17 @@
+{
+    email {$ACME_EMAIL}
+    admin off
+}
+{$API_DOMAIN} {
+    encode zstd gzip
+    request_body {
+        max_size 25MB
+    }
+    # Solo endpoints autenticados; no publicar fotos privadas por file_server.
+    @privateMedia path /media /media/*
+    respond @privateMedia 404
+    reverse_proxy backend:8000 {
+        header_up Host {host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

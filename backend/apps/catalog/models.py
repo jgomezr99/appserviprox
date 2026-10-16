@@ -43,6 +43,12 @@ class Service(models.Model):
     name = models.CharField(_("nombre"), max_length=120)
     slug = models.SlugField(max_length=140, blank=True)
     description = models.TextField(_("descripcion"), blank=True)
+    keywords = models.JSONField(
+        _("palabras clave"),
+        default=list,
+        blank=True,
+        help_text="Terminos y sinonimos para encontrar este servicio en la busqueda orientada.",
+    )
     price_min = models.DecimalField(
         _("tarifa minima"), max_digits=12, decimal_places=2, null=True, blank=True
     )

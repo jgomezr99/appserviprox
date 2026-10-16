@@ -89,6 +89,26 @@ export interface Service {
   estimated_hours: string | null;
 }
 
+export interface ServiceSuggestion {
+  id: number;
+  name: string;
+  category: ServiceCategory;
+  score: number;
+  matched_terms: string[];
+}
+
+export interface DiagnosticSession {
+  id: number;
+  description: string;
+  status: "draft" | "suggested" | "confirmed" | "discarded";
+  suggested_category: ServiceCategory | null;
+  suggested_service: Service | null;
+  confidence: number;
+  rationale: string;
+  ranking: Array<{ slug: string; name: string; score: number }>;
+  service_ranking: ServiceSuggestion[];
+}
+
 export interface ServiceCategory {
   id: number;
   name: string;
@@ -340,7 +360,10 @@ export interface ServiceRequest {
 export interface ServiceRequestPayload {
   household: number;
   selected_service: number;
-  professional: number;
+  selected_category?: number;
+  diagnostic_session?: number | null;
+  suggested_category?: number | null;
+  professional?: number | null;
   description: string;
   urgency?: ServiceRequestUrgency;
   search_radius_km?: number;
@@ -470,4 +493,3 @@ export interface PqrContractorRef {
   neighborhood?: string;
   phone?: string;
 }
-

@@ -97,6 +97,7 @@ const demoUsers: Record<string, User> = {
 };
 
 const getDemoUser = (payload: LoginPayload) => {
+  if (!import.meta.env.DEV) return null;
   const user = demoUsers[payload.email.trim().toLowerCase()];
   return user && payload.password === DEMO_PASSWORD ? user : null;
 };
@@ -129,7 +130,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const refreshSession = useCallback(async () => {
     const demoSession = localStorage.getItem(DEMO_SESSION_KEY);
-    if (demoSession && demoUsers[demoSession]) {
+    if (import.meta.env.DEV && demoSession && demoUsers[demoSession]) {
       const currentUser = demoUsers[demoSession];
       setUser(currentUser);
       setIsLoading(false);

@@ -23,11 +23,12 @@ export class ApiError extends Error {
 }
 
 export const normalizeApiUrl = (url: string): string => {
-  const clean = url.trim().replace(/\/$/, "");
+  const clean = url.trim().replace(/\/+$/, "");
   return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
 };
 
 export const getSavedCustomHost = (): string => {
+  if (import.meta.env.PROD) return "";
   if (typeof window !== "undefined") {
     return localStorage.getItem("serviprox_api_host") || "";
   }
@@ -35,6 +36,9 @@ export const getSavedCustomHost = (): string => {
 };
 
 const resolveApiBaseUrl = (): string => {
+  if (import.meta.env.PROD) {
+    return import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "";
+  }
   // 1. Configuración explícita en variable de entorno
   if (import.meta.env.VITE_API_URL) {
     return normalizeApiUrl(import.meta.env.VITE_API_URL);
@@ -71,6 +75,11 @@ export let API_BASE_URL = activeBaseUrl;
 export const getApiBaseUrl = (): string => activeBaseUrl;
 
 export const getCandidateBaseUrls = (): string[] => {
+  // Un solo destino productivo; nunca enviar JWT a hosts guardados o locales.
+  if (import.meta.env.PROD) {
+    const configured = resolveApiBaseUrl();
+    return configured ? [configured] : [];
+  }
   const candidates: string[] = [];
 
   const saved = getSavedCustomHost();
@@ -115,7 +124,9 @@ export const getCandidateBaseUrls = (): string[] => {
 };
 
 export const setWorkingBaseUrl = (url: string) => {
-  activeBaseUrl = normalizeApiUrl(url);
+  const normalized = normalizeApiUrl(url);
+  if (import.meta.env.PROD && normalized !== resolveApiBaseUrl()) return;
+  activeBaseUrl = normalized;
   API_BASE_URL = activeBaseUrl;
   if (typeof window !== "undefined") {
     try {
@@ -154,6 +165,13 @@ const buildUrlForBase = (
   path: string,
   params?: Record<string, string | number | boolean | undefined | null>
 ) => {
+  if (import.meta.env.PROD && /^https?:\/\//i.test(path)) {
+    const target = new URL(path);
+    const configured = new URL(baseUrl);
+    if (target.origin !== configured.origin || !target.pathname.startsWith(configured.pathname + "/")) {
+      throw new ApiError(400, "La URL solicitada no pertenece a la API configurada.", null);
+    }
+  }
   let fullUrl = /^https?:\/\//i.test(path)
     ? path
     : `${baseUrl}/${path.replace(/^\//, "")}`;
@@ -222,6 +240,8 @@ async function fetchWithResilience(
   maxRounds = 2
 ): Promise<Response> {
   const candidates = getCandidateBaseUrls();
+  // Una respuesta perdida puede haber sido persistida: no repetir escrituras.
+  if (init.method && !["GET", "HEAD"].includes(init.method)) maxRounds = 1;
   let lastError: unknown = null;
   let lastResponse: Response | null = null;
 
@@ -230,12 +250,13 @@ async function fetchWithResilience(
       const url = buildUrlForBase(base, path, params);
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const response = await fetch(url, {
-          ...init,
-          signal: init.signal || controller.signal,
-        });
-        clearTimeout(timeoutId);
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        let response: Response;
+        try {
+          response = await fetch(url, { ...init, signal: init.signal || controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         // Si el estado no es error de puerta de enlace (502/503/504)
         if (!isGatewayOrNetworkError(response.status)) {
@@ -289,13 +310,21 @@ async function fetchWithResilience(
     lastError ||
     new ApiError(
       503,
-      "No pudimos conectar con el backend de Serviprox. Verifica que esté iniciado en el puerto 8000 (iniciar_serviprox.bat o backend\\start_local.bat).",
+      "No pudimos conectar con la API de Serviprox. Verifica tu conexion e intenta nuevamente.",
       null
     )
   );
 }
 
-const refreshAccessToken = async () => {
+let refreshInFlight: Promise<string | null> | null = null;
+const refreshAccessToken = (): Promise<string | null> => {
+  if (!refreshInFlight) {
+    refreshInFlight = performTokenRefresh().finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+};
+
+const performTokenRefresh = async () => {
   const refresh = tokenStorage.getRefreshToken();
   if (!refresh) return null;
 
@@ -474,7 +503,7 @@ export const checkBackendHealth = async (
         return {
           ok: true,
           database: data.database || "connected",
-          engine: data.engine || "sqlite",
+          engine: data.engine,
           url: base,
         };
       }
@@ -502,6 +531,9 @@ export const saveCustomApiHost = async (
   }
 
   const normalized = normalizeApiUrl(host);
+  if (import.meta.env.PROD && normalized !== resolveApiBaseUrl()) {
+    return { ok: false, message: "La API productiva se configura en VITE_API_URL durante la compilacion." };
+  }
   const health = await checkBackendHealth(normalized);
   if (health.ok) {
     if (typeof window !== "undefined") {
@@ -514,7 +546,7 @@ export const saveCustomApiHost = async (
     setWorkingBaseUrl(normalized);
     return {
       ok: true,
-      message: `¡Conexión exitosa! Base de datos: ${health.database} (${health.engine || "sqlite"}).`,
+      message: `¡Conexión exitosa! Base de datos: ${health.database} (${health.engine || "API"}).`,
       database: health.database,
       engine: health.engine,
       url: normalized,

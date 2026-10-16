@@ -29,10 +29,8 @@ import {
 } from "ionicons/icons";
 import { useHistory } from "react-router-dom";
 
-import { api } from "../services/api";
-import { professionalSearchService } from "../services/serviprox";
+import { catalogService, professionalSearchService } from "../services/serviprox";
 import type {
-  PaginatedResponse,
   Professional,
   ServiceCategory,
   ServiceRequestUrgency,
@@ -75,6 +73,8 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
   const [selectedProForModal, setSelectedProForModal] = useState<Professional | null>(null);
   const [initialDescriptionForModal, setInitialDescriptionForModal] = useState("");
   const [initialUrgencyForModal, setInitialUrgencyForModal] = useState<ServiceRequestUrgency>("this_week");
+  const [initialServiceIdForModal, setInitialServiceIdForModal] = useState<number | null>(null);
+  const [diagnosticSessionIdForModal, setDiagnosticSessionIdForModal] = useState<number | null>(null);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
 
   // Estado del modal de diagnóstico y orientación
@@ -104,6 +104,8 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
     setSelectedProForModal(null);
     setInitialDescriptionForModal("");
     setInitialUrgencyForModal("this_week");
+    setInitialServiceIdForModal(null);
+    setDiagnosticSessionIdForModal(null);
     setIsServiceModalOpen(true);
   };
 
@@ -111,6 +113,8 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
     setSelectedProForModal(pro);
     setInitialDescriptionForModal("");
     setInitialUrgencyForModal("this_week");
+    setInitialServiceIdForModal(null);
+    setDiagnosticSessionIdForModal(null);
     let matchedCat: ServiceCategory | null = null;
     if (pro.categories && pro.categories.length > 0) {
       matchedCat =
@@ -131,14 +135,17 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
 
   const handleTakeDiagnosedService = (params: {
     category: ServiceCategory;
+    serviceId: number;
+    diagnosticSessionId: number;
     description: string;
     urgency: ServiceRequestUrgency;
-    professional: Professional | null;
   }) => {
     setSelectedCategoryForModal(params.category);
-    setSelectedProForModal(params.professional);
+    setSelectedProForModal(null);
     setInitialDescriptionForModal(params.description);
     setInitialUrgencyForModal(params.urgency);
+    setInitialServiceIdForModal(params.serviceId);
+    setDiagnosticSessionIdForModal(params.diagnosticSessionId);
     setIsDiagnosisModalOpen(false);
 
     // Permite a Ionic completar la animación de cierre del modal previo
@@ -183,11 +190,10 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
     let active = true;
 
     // Cargar categorías
-    api
-      .get<PaginatedResponse<ServiceCategory> | ServiceCategory[]>("categories/")
-      .then((payload) => {
+    catalogService
+      .listCategories()
+      .then((nextCategories) => {
         if (!active) return;
-        const nextCategories = Array.isArray(payload) ? payload : payload.results;
         setCategories(nextCategories);
         setApiState("ready");
       })
@@ -223,7 +229,7 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
     };
   }, []);
 
-  const visibleCategories = useMemo(() => categories.slice(0, 6), [categories]);
+  const visibleCategories = categories;
 
   return (
     <div className="sp-home">
@@ -464,7 +470,7 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
           </IonGrid>
         ) : (
           <div className="sp-empty-state">
-            Levanta Django y carga los datos demo para ver las categorías reales del hogar.
+            {apiState === "ready" ? "No hay categorías disponibles en este momento." : "No pudimos cargar las categorías. Comprueba tu conexión e inténtalo de nuevo."}
           </div>
         )}
       </section>
@@ -477,6 +483,8 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
         initialProfessional={selectedProForModal}
         initialDescription={initialDescriptionForModal}
         initialUrgency={initialUrgencyForModal}
+        initialServiceId={initialServiceIdForModal}
+        diagnosticSessionId={diagnosticSessionIdForModal}
       />
 
       {/* Modal de Orientación Guiada & Diagnóstico del Hogar */}
@@ -484,7 +492,6 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
         isOpen={isDiagnosisModalOpen}
         onClose={() => setIsDiagnosisModalOpen(false)}
         categories={categories}
-        professionals={professionals}
         onTakeService={handleTakeDiagnosedService}
       />
     </div>
