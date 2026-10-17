@@ -1848,7 +1848,244 @@ export const AdminDashboard: React.FC = () => {
     fetchPros();
     fetchDbPqrsAndProblems();
     fetchDbNotifications();
+    fetchRolesAndUsers();
   }, []);
+
+  // Estados para el Módulo de Roles y Permisos (Base de Datos)
+  const [rolesData, setRolesData] = useState<{
+    roles: Array<{
+      id: string;
+      name: string;
+      category: "admin" | "app";
+      badge: string;
+      badge_color: string;
+      description: string;
+      users_count: number;
+      is_system_locked: boolean;
+    }>;
+    available_permissions: Array<{
+      id: string;
+      label: string;
+      category: string;
+      description: string;
+    }>;
+    permission_matrix: Record<string, string[]>;
+    counts: {
+      total: number;
+      clients: number;
+      professionals: number;
+      administrators: number;
+    };
+  } | null>(null);
+
+  const [rolesUsersList, setRolesUsersList] = useState<any[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [rolesSavingMatrix, setRolesSavingMatrix] = useState(false);
+  const [rolesActiveTab, setRolesActiveTab] = useState<"users" | "matrix" | "team">("users");
+  const [rolesSearch, setRolesSearch] = useState("");
+  const [rolesFilter, setRolesFilter] = useState<"todos" | "client" | "professional" | "admin">("todos");
+
+  // Modal para cambio formal de rol
+  const [roleChangeModalOpen, setRoleChangeModalOpen] = useState(false);
+  const [selectedUserForRoleChange, setSelectedUserForRoleChange] = useState<any | null>(null);
+  const [newSelectedRole, setNewSelectedRole] = useState<string>("client");
+  const [roleChangeReason, setRoleChangeReason] = useState("");
+  const [roleChangeSaving, setRoleChangeSaving] = useState(false);
+
+  const fetchRolesAndUsers = async () => {
+    setRolesLoading(true);
+    try {
+      const [rolesRes, usersRes] = await Promise.all([
+        adminService.getRolesAndPermissions(),
+        adminService.getUsers(),
+      ]);
+      if (rolesRes) {
+        setRolesData(rolesRes);
+      }
+      if (usersRes && Array.isArray(usersRes.users)) {
+        setRolesUsersList(usersRes.users);
+      }
+    } catch (err) {
+      console.warn("Error al cargar roles y usuarios de BD:", err);
+    } finally {
+      setRolesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeMenu === "roles") {
+      fetchRolesAndUsers();
+    }
+  }, [activeMenu]);
+
+  const handleOpenRoleChangeModal = (u: any) => {
+    setSelectedUserForRoleChange(u);
+    let target = u.role || "client";
+    if (u.is_superuser) target = "superadmin";
+    else if (u.is_staff) target = "admin";
+    setNewSelectedRole(target);
+    setRoleChangeReason(`Cambio administrativo de rol para ${u.full_name || u.email}`);
+    setRoleChangeModalOpen(true);
+  };
+
+  const handleConfirmRoleChange = async () => {
+    if (!selectedUserForRoleChange) return;
+    setRoleChangeSaving(true);
+    try {
+      const adminDisplayName = user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : "Superadministrador";
+      const res = await adminService.changeUserRole({
+        userId: selectedUserForRoleChange.id,
+        newRole: newSelectedRole,
+        reason: roleChangeReason,
+        adminName: adminDisplayName,
+      });
+
+      if (res && res.ok) {
+        setActiveAlert({
+          kind: "alert",
+          title: "Rol Actualizado en Base de Datos",
+          message: res.message || `Rol de ${selectedUserForRoleChange.full_name || selectedUserForRoleChange.email} actualizado exitosamente.`,
+          variant: "success",
+          value: "",
+        });
+        setRoleChangeModalOpen(false);
+        await Promise.all([
+          fetchRolesAndUsers(),
+          fetchClients(),
+          fetchPros(),
+          fetchLiveOverview(),
+        ]);
+      } else {
+        setActiveAlert({
+          kind: "alert",
+          title: "Aviso",
+          message: res?.message || "No se pudo actualizar el rol.",
+          variant: "error",
+          value: "",
+        });
+      }
+    } catch (err: any) {
+      setActiveAlert({
+        kind: "alert",
+        title: "Error al cambiar rol",
+        message: err?.message || "Ocurrió un error al actualizar el rol en la base de datos.",
+        variant: "error",
+        value: "",
+      });
+    } finally {
+      setRoleChangeSaving(false);
+    }
+  };
+
+  const handleDirectRoleChange = async (userId: number | string, newRole: string, userName: string) => {
+    setRolesLoading(true);
+    try {
+      const adminDisplayName = user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : "Superadministrador";
+      const res = await adminService.changeUserRole({
+        userId,
+        newRole,
+        reason: `Cambio directo a rol ${newRole.toUpperCase()} desde la tabla de Roles y Permisos`,
+        adminName: adminDisplayName,
+      });
+      if (res && res.ok) {
+        setActiveAlert({
+          kind: "alert",
+          title: "Rol Guardado en Base de Datos",
+          message: res.message || `Rol de ${userName} actualizado con éxito.`,
+          variant: "success",
+          value: "",
+        });
+        await Promise.all([
+          fetchRolesAndUsers(),
+          fetchClients(),
+          fetchPros(),
+          fetchLiveOverview(),
+        ]);
+      }
+    } catch (err: any) {
+      setActiveAlert({
+        kind: "alert",
+        title: "Error",
+        message: err?.message || "No se pudo actualizar el rol.",
+        variant: "error",
+        value: "",
+      });
+    } finally {
+      setRolesLoading(false);
+    }
+  };
+
+  const handleToggleMatrixPermission = (roleId: string, permId: string) => {
+    if (roleId === "superadmin") return;
+    if (!rolesData) return;
+    setRolesData((prev) => {
+      if (!prev) return prev;
+      const currentList = prev.permission_matrix[roleId] || [];
+      const hasPerm = currentList.includes(permId);
+      const updatedList = hasPerm ? currentList.filter((p) => p !== permId) : [...currentList, permId];
+      return {
+        ...prev,
+        permission_matrix: {
+          ...prev.permission_matrix,
+          [roleId]: updatedList,
+        },
+      };
+    });
+  };
+
+  const handleSavePermissionMatrix = async () => {
+    if (!rolesData) return;
+    setRolesSavingMatrix(true);
+    try {
+      const adminDisplayName = user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : "Superadministrador";
+      const res = await adminService.saveRolePermissions(
+        rolesData.permission_matrix,
+        "Actualización de matriz de privilegios desde el Panel de Roles y Permisos",
+        adminDisplayName
+      );
+      if (res && res.ok) {
+        setActiveAlert({
+          kind: "alert",
+          title: "Matriz Guardada en BD",
+          message: res.message || "La matriz de permisos se guardó exitosamente en la base de datos.",
+          variant: "success",
+          value: "",
+        });
+      }
+    } catch (err: any) {
+      setActiveAlert({
+        kind: "alert",
+        title: "Error al guardar matriz",
+        message: err?.message || "Error al conectar con la base de datos.",
+        variant: "error",
+        value: "",
+      });
+    } finally {
+      setRolesSavingMatrix(false);
+    }
+  };
+
+  const filteredRolesUsers = rolesUsersList.filter((u) => {
+    const search = rolesSearch.toLowerCase().trim();
+    const matchesSearch =
+      !search ||
+      (u.full_name && u.full_name.toLowerCase().includes(search)) ||
+      (u.email && u.email.toLowerCase().includes(search)) ||
+      (u.document_id && u.document_id.toLowerCase().includes(search)) ||
+      (u.city && u.city.toLowerCase().includes(search));
+
+    if (!matchesSearch) return false;
+
+    if (rolesFilter === "todos") return true;
+    if (rolesFilter === "client") return u.role === "client" && !u.is_staff && !u.is_superuser;
+    if (rolesFilter === "professional") return u.role === "professional" && !u.is_staff && !u.is_superuser;
+    if (rolesFilter === "admin") return u.is_staff || u.is_superuser || u.role === "staff";
+    return true;
+  });
+
+  const adminTeamMembers = rolesUsersList.filter(
+    (u) => u.is_superuser || u.is_staff || u.role === "staff"
+  );
 
   // Estado de modales
   const [modalBloqueoOpen, setModalBloqueoOpen] = useState(false);
@@ -8100,6 +8337,948 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* ═════════════════════════════════════════════════════════════════
+              MÓDULO OFICIAL: GESTIÓN DE ROLES Y PERMISOS (CONEXIÓN A BD)
+             ═════════════════════════════════════════════════════════════════ */}
+          {activeMenu === "roles" && (
+            <section className="ad-section-roles" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              {/* Header Principal del Módulo */}
+              <div
+                className="ad-card"
+                style={{
+                  padding: "24px",
+                  background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+                  color: "#ffffff",
+                  borderRadius: "16px",
+                  boxShadow: "0 10px 25px -5px rgba(15, 23, 42, 0.3)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                      <span style={{ fontSize: "1.75rem" }}>🛡️</span>
+                      <h2 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700, color: "#ffffff" }}>
+                        Gestión de Roles y Permisos
+                      </h2>
+                      <span
+                        style={{
+                          background: "rgba(16, 185, 129, 0.2)",
+                          color: "#34d399",
+                          border: "1px solid rgba(52, 211, 153, 0.4)",
+                          padding: "3px 10px",
+                          borderRadius: "20px",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#34d399" }}></span>
+                        Conectado a BD Serviprox
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem", maxWidth: "700px" }}>
+                      Administra los roles de usuario en la aplicación (Clientes y Contratistas) y el personal administrativo (Superadmin, Admin y Moderadores), con auditoría y persistencia inmediata en la base de datos.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="ad-btn"
+                      onClick={fetchRolesAndUsers}
+                      disabled={rolesLoading}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.1)",
+                        color: "#ffffff",
+                        border: "1px solid rgba(255, 255, 255, 0.2)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 16px",
+                        borderRadius: "8px",
+                        cursor: rolesLoading ? "wait" : "pointer",
+                      }}
+                    >
+                      <span style={{ display: "inline-block", transform: rolesLoading ? "rotate(180deg)" : "none", transition: "transform 0.4s" }}>
+                        🔄
+                      </span>
+                      {rolesLoading ? "Sincronizando..." : "Sincronizar BD"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4 KPIs de Roles en BD */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "16px",
+                    marginTop: "24px",
+                    paddingTop: "20px",
+                    borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+                  }}
+                >
+                  <div style={{ background: "rgba(255, 255, 255, 0.05)", padding: "14px 18px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "0.8rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Usuarios BD</span>
+                      <span style={{ fontSize: "1.2rem" }}>👥</span>
+                    </div>
+                    <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#ffffff" }}>
+                      {rolesData?.counts?.total ?? rolesUsersList.length}
+                    </div>
+                    <span style={{ fontSize: "0.75rem", color: "#38bdf8" }}>Cuentas registradas en SQLite</span>
+                  </div>
+
+                  <div style={{ background: "rgba(255, 255, 255, 0.05)", padding: "14px 18px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "0.8rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px" }}>Clientes (App)</span>
+                      <span style={{ fontSize: "1.2rem" }}>📱</span>
+                    </div>
+                    <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#38bdf8" }}>
+                      {rolesData?.counts?.clients ?? rolesUsersList.filter((u) => u.role === "client").length}
+                    </div>
+                    <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>Consumidores de servicios</span>
+                  </div>
+
+                  <div style={{ background: "rgba(255, 255, 255, 0.05)", padding: "14px 18px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "0.8rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px" }}>Contratistas / Pros</span>
+                      <span style={{ fontSize: "1.2rem" }}>🛠️</span>
+                    </div>
+                    <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#a855f7" }}>
+                      {rolesData?.counts?.professionals ?? rolesUsersList.filter((u) => u.role === "professional").length}
+                    </div>
+                    <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>Prestadores técnicos</span>
+                  </div>
+
+                  <div style={{ background: "rgba(255, 255, 255, 0.05)", padding: "14px 18px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "0.8rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px" }}>Administradores / Staff</span>
+                      <span style={{ fontSize: "1.2rem" }}>⚡</span>
+                    </div>
+                    <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#ef4444" }}>
+                      {rolesData?.counts?.administrators ?? rolesUsersList.filter((u) => u.is_staff || u.is_superuser).length}
+                    </div>
+                    <span style={{ fontSize: "0.75rem", color: "#f87171" }}>Privilegios de gestión activos</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Barra de Pestañas de Navegación del Módulo */}
+              <div className="ad-card" style={{ padding: "8px 12px", background: "#f8fafc", display: "flex", gap: "8px", borderBottom: "2px solid #e2e8f0" }}>
+                <button
+                  type="button"
+                  className={`ad-tab-btn ${rolesActiveTab === "users" ? "active" : ""}`}
+                  onClick={() => setRolesActiveTab("users")}
+                  style={{
+                    padding: "10px 18px",
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                    borderRadius: "8px",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    background: rolesActiveTab === "users" ? "#1e3a8a" : "transparent",
+                    color: rolesActiveTab === "users" ? "#ffffff" : "#475569",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <span>👥</span> Usuarios y Cambio de Roles
+                  <span
+                    style={{
+                      background: rolesActiveTab === "users" ? "rgba(255,255,255,0.2)" : "#e2e8f0",
+                      color: rolesActiveTab === "users" ? "#ffffff" : "#475569",
+                      fontSize: "0.75rem",
+                      padding: "2px 8px",
+                      borderRadius: "12px",
+                    }}
+                  >
+                    {filteredRolesUsers.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`ad-tab-btn ${rolesActiveTab === "matrix" ? "active" : ""}`}
+                  onClick={() => setRolesActiveTab("matrix")}
+                  style={{
+                    padding: "10px 18px",
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                    borderRadius: "8px",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    background: rolesActiveTab === "matrix" ? "#1e3a8a" : "transparent",
+                    color: rolesActiveTab === "matrix" ? "#ffffff" : "#475569",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <span>🔐</span> Matriz de Permisos por Rol
+                  <span
+                    style={{
+                      background: rolesActiveTab === "matrix" ? "rgba(255,255,255,0.2)" : "#e2e8f0",
+                      color: rolesActiveTab === "matrix" ? "#ffffff" : "#475569",
+                      fontSize: "0.75rem",
+                      padding: "2px 8px",
+                      borderRadius: "12px",
+                    }}
+                  >
+                    {rolesData?.roles?.length || 6} roles
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`ad-tab-btn ${rolesActiveTab === "team" ? "active" : ""}`}
+                  onClick={() => setRolesActiveTab("team")}
+                  style={{
+                    padding: "10px 18px",
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                    borderRadius: "8px",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    background: rolesActiveTab === "team" ? "#1e3a8a" : "transparent",
+                    color: rolesActiveTab === "team" ? "#ffffff" : "#475569",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <span>👔</span> Equipo Administrativo Activo
+                  <span
+                    style={{
+                      background: rolesActiveTab === "team" ? "rgba(255,255,255,0.2)" : "#e2e8f0",
+                      color: rolesActiveTab === "team" ? "#ffffff" : "#475569",
+                      fontSize: "0.75rem",
+                      padding: "2px 8px",
+                      borderRadius: "12px",
+                    }}
+                  >
+                    {adminTeamMembers.length}
+                  </span>
+                </button>
+              </div>
+
+              {/* CONTENIDO PESTAÑA 1: USUARIOS Y CAMBIO DE ROLES */}
+              {rolesActiveTab === "users" && (
+                <div className="ad-card" style={{ padding: "0", overflow: "hidden" }}>
+                  {/* Filtros superiores */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "12px",
+                      padding: "16px 20px",
+                      background: "#f8fafc",
+                      borderBottom: "1px solid #e2e8f0",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => setRolesFilter("todos")}
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: "20px",
+                          border: rolesFilter === "todos" ? "1px solid #1e3a8a" : "1px solid #cbd5e1",
+                          background: rolesFilter === "todos" ? "#1e3a8a" : "#ffffff",
+                          color: rolesFilter === "todos" ? "#ffffff" : "#475569",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Todos ({rolesUsersList.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRolesFilter("client")}
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: "20px",
+                          border: rolesFilter === "client" ? "1px solid #0284c7" : "1px solid #cbd5e1",
+                          background: rolesFilter === "client" ? "#0284c7" : "#ffffff",
+                          color: rolesFilter === "client" ? "#ffffff" : "#475569",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        📱 Clientes ({rolesUsersList.filter((u) => u.role === "client" && !u.is_staff && !u.is_superuser).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRolesFilter("professional")}
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: "20px",
+                          border: rolesFilter === "professional" ? "1px solid #6366f1" : "1px solid #cbd5e1",
+                          background: rolesFilter === "professional" ? "#6366f1" : "#ffffff",
+                          color: rolesFilter === "professional" ? "#ffffff" : "#475569",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        🛠️ Profesionales ({rolesUsersList.filter((u) => u.role === "professional" && !u.is_staff && !u.is_superuser).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRolesFilter("admin")}
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: "20px",
+                          border: rolesFilter === "admin" ? "1px solid #dc2626" : "1px solid #cbd5e1",
+                          background: rolesFilter === "admin" ? "#dc2626" : "#ffffff",
+                          color: rolesFilter === "admin" ? "#ffffff" : "#475569",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        🛡️ Administradores / Staff ({adminTeamMembers.length})
+                      </button>
+                    </div>
+
+                    <div style={{ position: "relative", minWidth: "260px" }}>
+                      <input
+                        type="text"
+                        className="ad-search-input"
+                        placeholder="Buscar por nombre, correo o CC..."
+                        value={rolesSearch}
+                        onChange={(e) => setRolesSearch(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px 12px 8px 34px",
+                          fontSize: "0.85rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                        }}
+                      />
+                      <span style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}>
+                        🔍
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tabla de usuarios y asignación de roles */}
+                  <div className="ad-table-wrap" style={{ overflowX: "auto" }}>
+                    <table className="ad-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f1f5f9", textAlign: "left", fontSize: "0.82rem", color: "#475569" }}>
+                          <th style={{ padding: "12px 16px" }}>Usuario</th>
+                          <th style={{ padding: "12px 16px" }}>Documento / Ciudad</th>
+                          <th style={{ padding: "12px 16px" }}>Rol en App</th>
+                          <th style={{ padding: "12px 16px" }}>Rol Administrativo</th>
+                          <th style={{ padding: "12px 16px" }}>Estado</th>
+                          <th style={{ padding: "12px 16px", minWidth: "220px" }}>Cambio Rápido de Rol</th>
+                          <th style={{ padding: "12px 16px", textAlign: "center" }}>Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRolesUsers.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
+                              <div style={{ fontSize: "2rem", marginBottom: "8px" }}>🔍</div>
+                              <p style={{ margin: 0, fontWeight: 600 }}>No se encontraron usuarios con ese criterio.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredRolesUsers.map((u) => {
+                            const effectiveAdminRole = u.is_superuser
+                              ? "superadmin"
+                              : u.is_staff
+                              ? "admin"
+                              : u.role === "staff"
+                              ? "staff"
+                              : "none";
+
+                            return (
+                              <tr key={u.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                <td style={{ padding: "12px 16px" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                    <img
+                                      src={u.avatar_url || `https://ui-avatars.com/api/?name=${(u.full_name || u.email).replace(" ", "+")}&background=1e3a8a&color=fff`}
+                                      alt={u.full_name}
+                                      style={{ width: "38px", height: "38px", borderRadius: "50%", objectFit: "cover", border: "1px solid #e2e8f0" }}
+                                    />
+                                    <div>
+                                      <div style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.88rem" }}>
+                                        {u.full_name || u.username}
+                                      </div>
+                                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>{u.email}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td style={{ padding: "12px 16px", fontSize: "0.84rem", color: "#475569" }}>
+                                  <div>{u.document_id || "CC Sin registrar"}</div>
+                                  <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{u.city || "Colombia"}</div>
+                                </td>
+                                <td style={{ padding: "12px 16px" }}>
+                                  {u.role === "professional" ? (
+                                    <span
+                                      className="ad-badge"
+                                      style={{
+                                        background: "#ede9fe",
+                                        color: "#5b21b6",
+                                        fontWeight: 600,
+                                        padding: "4px 10px",
+                                        borderRadius: "12px",
+                                        fontSize: "0.78rem",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                      }}
+                                    >
+                                      🛠️ Profesional
+                                      {u.is_pro_verified && <span title="Verificado RETIE">✓</span>}
+                                    </span>
+                                  ) : u.role === "client" ? (
+                                    <span
+                                      className="ad-badge"
+                                      style={{
+                                        background: "#e0f2fe",
+                                        color: "#0369a1",
+                                        fontWeight: 600,
+                                        padding: "4px 10px",
+                                        borderRadius: "12px",
+                                        fontSize: "0.78rem",
+                                      }}
+                                    >
+                                      📱 Cliente
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="ad-badge"
+                                      style={{
+                                        background: "#fef3c7",
+                                        color: "#92400e",
+                                        fontWeight: 600,
+                                        padding: "4px 10px",
+                                        borderRadius: "12px",
+                                        fontSize: "0.78rem",
+                                      }}
+                                    >
+                                      👔 Staff App
+                                    </span>
+                                  )}
+                                </td>
+                                <td style={{ padding: "12px 16px" }}>
+                                  {effectiveAdminRole === "superadmin" ? (
+                                    <span
+                                      className="ad-badge"
+                                      style={{
+                                        background: "#fee2e2",
+                                        color: "#b91c1c",
+                                        fontWeight: 700,
+                                        padding: "4px 10px",
+                                        borderRadius: "12px",
+                                        fontSize: "0.78rem",
+                                      }}
+                                    >
+                                      ⚡ Superadmin
+                                    </span>
+                                  ) : effectiveAdminRole === "admin" ? (
+                                    <span
+                                      className="ad-badge"
+                                      style={{
+                                        background: "#dbeafe",
+                                        color: "#1d4ed8",
+                                        fontWeight: 600,
+                                        padding: "4px 10px",
+                                        borderRadius: "12px",
+                                        fontSize: "0.78rem",
+                                      }}
+                                    >
+                                      🛡️ Administrador
+                                    </span>
+                                  ) : effectiveAdminRole === "staff" ? (
+                                    <span
+                                      className="ad-badge"
+                                      style={{
+                                        background: "#d1fae5",
+                                        color: "#065f46",
+                                        fontWeight: 600,
+                                        padding: "4px 10px",
+                                        borderRadius: "12px",
+                                        fontSize: "0.78rem",
+                                      }}
+                                    >
+                                      🎧 Moderador PQR
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "#94a3b8", fontSize: "0.82rem" }}>— Sin acceso staff —</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: "12px 16px" }}>
+                                  {u.is_blocked ? (
+                                    <span
+                                      className="ad-badge"
+                                      style={{
+                                        background: "#fee2e2",
+                                        color: "#b91c1c",
+                                        fontSize: "0.75rem",
+                                        fontWeight: 600,
+                                        padding: "3px 8px",
+                                        borderRadius: "8px",
+                                      }}
+                                    >
+                                      ⛔ Bloqueado
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="ad-badge"
+                                      style={{
+                                        background: "#dcfce7",
+                                        color: "#15803d",
+                                        fontSize: "0.75rem",
+                                        fontWeight: 600,
+                                        padding: "3px 8px",
+                                        borderRadius: "8px",
+                                      }}
+                                    >
+                                      🟢 Activo
+                                    </span>
+                                  )}
+                                </td>
+                                <td style={{ padding: "12px 16px" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <select
+                                      aria-label={`Cambiar rol de ${u.full_name || u.email}`}
+                                      value={
+                                        u.is_superuser
+                                          ? "superadmin"
+                                          : u.is_staff
+                                          ? "admin"
+                                          : u.role || "client"
+                                      }
+                                      onChange={(e) =>
+                                        handleDirectRoleChange(u.id, e.target.value, u.full_name || u.email)
+                                      }
+                                      style={{
+                                        padding: "6px 10px",
+                                        borderRadius: "6px",
+                                        border: "1px solid #cbd5e1",
+                                        fontSize: "0.82rem",
+                                        background: "#ffffff",
+                                        color: "#1e293b",
+                                        fontWeight: 500,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      <option value="client">📱 Cliente (App)</option>
+                                      <option value="professional">🛠️ Profesional (App)</option>
+                                      <option value="staff">🎧 Moderador / Soporte PQR</option>
+                                      <option value="admin">🛡️ Administrador General</option>
+                                      <option value="superadmin">⚡ Superadministrador</option>
+                                    </select>
+                                  </div>
+                                </td>
+                                <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenRoleChangeModal(u)}
+                                    className="ad-btn"
+                                    style={{
+                                      padding: "6px 12px",
+                                      fontSize: "0.78rem",
+                                      borderRadius: "6px",
+                                      background: "#f1f5f9",
+                                      color: "#334155",
+                                      border: "1px solid #cbd5e1",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    ✏️ Gestionar
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* CONTENIDO PESTAÑA 2: MATRIZ DE PERMISOS POR ROL */}
+              {rolesActiveTab === "matrix" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div
+                    className="ad-card"
+                    style={{
+                      padding: "16px 20px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: "12px",
+                      background: "#eff6ff",
+                      borderLeft: "4px solid #2563eb",
+                    }}
+                  >
+                    <div>
+                      <h4 style={{ margin: "0 0 4px", color: "#1e3a8a", fontSize: "0.95rem" }}>
+                        Matriz de Permisos Administrativos (Seguridad en Serviprox)
+                      </h4>
+                      <p style={{ margin: 0, fontSize: "0.84rem", color: "#3b82f6" }}>
+                        Marca o desmarca los privilegios de cada rol administrativo. Al presionar <strong>Guardar Matriz</strong>, la configuración se actualizará de inmediato en la base de datos.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="ad-btn ad-btn-primary"
+                      onClick={handleSavePermissionMatrix}
+                      disabled={rolesSavingMatrix}
+                      style={{
+                        padding: "10px 20px",
+                        fontSize: "0.88rem",
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <span>💾</span> {rolesSavingMatrix ? "Guardando en BD..." : "Guardar Matriz en BD"}
+                    </button>
+                  </div>
+
+                  {/* Resumen de Roles Administrativos */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                      gap: "14px",
+                    }}
+                  >
+                    {(rolesData?.roles || []).filter((r) => r.category === "admin").map((role) => (
+                      <div
+                        key={role.id}
+                        className="ad-card"
+                        style={{
+                          padding: "16px",
+                          borderTop: `4px solid ${role.badge_color || "#2563eb"}`,
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                          <span style={{ fontWeight: 700, color: "#1e293b", fontSize: "0.95rem" }}>{role.name}</span>
+                          <span
+                            style={{
+                              background: role.badge_color + "20",
+                              color: role.badge_color,
+                              padding: "2px 8px",
+                              borderRadius: "10px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {role.badge}
+                          </span>
+                        </div>
+                        <p style={{ margin: "0 0 10px", fontSize: "0.78rem", color: "#64748b", lineHeight: 1.4 }}>
+                          {role.description}
+                        </p>
+                        <div style={{ fontSize: "0.75rem", color: "#94a3b8", display: "flex", justifyContent: "space-between" }}>
+                          <span>Usuarios asignados:</span>
+                          <strong style={{ color: "#334155" }}>{role.users_count} usuarios</strong>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Tabla Matriz de Permisos */}
+                  <div className="ad-card" style={{ padding: 0, overflow: "hidden" }}>
+                    <div className="ad-table-wrap">
+                      <table className="ad-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ background: "#f8fafc", textAlign: "left", fontSize: "0.82rem", color: "#475569" }}>
+                            <th style={{ padding: "14px 18px", width: "40%" }}>Privilegio / Módulo del Sistema</th>
+                            <th style={{ padding: "14px 16px", textAlign: "center", width: "15%" }}>
+                              <div>⚡ Superadmin</div>
+                              <span style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 400 }}>(Bloqueado)</span>
+                            </th>
+                            <th style={{ padding: "14px 16px", textAlign: "center", width: "15%" }}>
+                              <div>🛡️ Admin General</div>
+                            </th>
+                            <th style={{ padding: "14px 16px", textAlign: "center", width: "15%" }}>
+                              <div>🎧 Soporte PQR</div>
+                            </th>
+                            <th style={{ padding: "14px 16px", textAlign: "center", width: "15%" }}>
+                              <div>🛒 Contenido / Tienda</div>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(rolesData?.available_permissions || []).map((perm, idx) => {
+                            const isSuperChecked = true;
+                            const isAdminChecked = rolesData?.permission_matrix?.admin?.includes(perm.id) ?? false;
+                            const isSupportChecked = rolesData?.permission_matrix?.support?.includes(perm.id) ?? false;
+                            const isContentChecked = rolesData?.permission_matrix?.content_manager?.includes(perm.id) ?? false;
+
+                            return (
+                              <tr
+                                key={perm.id}
+                                style={{
+                                  borderBottom: "1px solid #f1f5f9",
+                                  background: idx % 2 === 0 ? "#ffffff" : "#fcfdfe",
+                                }}
+                              >
+                                <td style={{ padding: "12px 18px" }}>
+                                  <div style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.86rem" }}>
+                                    {perm.label}
+                                  </div>
+                                  <div style={{ fontSize: "0.76rem", color: "#64748b" }}>{perm.description}</div>
+                                  <span
+                                    style={{
+                                      display: "inline-block",
+                                      marginTop: "4px",
+                                      fontSize: "0.7rem",
+                                      background: "#f1f5f9",
+                                      color: "#475569",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                    }}
+                                  >
+                                    {perm.category}
+                                  </span>
+                                </td>
+
+                                {/* Superadmin (Locked Check) */}
+                                <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isSuperChecked}
+                                    disabled
+                                    title="El Superadministrador siempre conserva todos los permisos"
+                                    style={{ width: "18px", height: "18px", cursor: "not-allowed", accentColor: "#dc2626" }}
+                                  />
+                                </td>
+
+                                {/* Admin General */}
+                                <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isAdminChecked}
+                                    onChange={() => handleToggleMatrixPermission("admin", perm.id)}
+                                    style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#2563eb" }}
+                                  />
+                                </td>
+
+                                {/* Soporte PQR */}
+                                <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isSupportChecked}
+                                    onChange={() => handleToggleMatrixPermission("support", perm.id)}
+                                    style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#059669" }}
+                                  />
+                                </td>
+
+                                {/* Gestor de Contenido */}
+                                <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isContentChecked}
+                                    onChange={() => handleToggleMatrixPermission("content_manager", perm.id)}
+                                    style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#d97706" }}
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Barra de acción inferior */}
+                    <div
+                      style={{
+                        padding: "16px 20px",
+                        background: "#f8fafc",
+                        borderTop: "1px solid #e2e8f0",
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        gap: "12px",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="ad-btn ad-btn-primary"
+                        onClick={handleSavePermissionMatrix}
+                        disabled={rolesSavingMatrix}
+                        style={{
+                          padding: "10px 24px",
+                          fontSize: "0.9rem",
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <span>💾</span> {rolesSavingMatrix ? "Guardando..." : "Guardar Cambios en Base de Datos"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CONTENIDO PESTAÑA 3: EQUIPO ADMINISTRATIVO ACTIVO */}
+              {rolesActiveTab === "team" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div
+                    className="ad-card"
+                    style={{
+                      padding: "16px 20px",
+                      background: "#f0fdf4",
+                      borderLeft: "4px solid #16a34a",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: "12px",
+                    }}
+                  >
+                    <div>
+                      <h4 style={{ margin: "0 0 4px", color: "#166534", fontSize: "0.95rem" }}>
+                        Personal Administrativo con Acceso al Panel
+                      </h4>
+                      <p style={{ margin: 0, fontSize: "0.84rem", color: "#15803d" }}>
+                        Estos son los usuarios registrados en la base de datos de Serviprox que tienen atributos <code>is_staff=True</code> o <code>is_superuser=True</code>.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="ad-btn ad-btn-secondary"
+                      onClick={() => {
+                        setRolesActiveTab("users");
+                        setRolesFilter("todos");
+                      }}
+                      style={{ padding: "8px 16px", fontSize: "0.84rem", fontWeight: 600 }}
+                    >
+                      ➕ Asignar Nuevo Administrador
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                      gap: "16px",
+                    }}
+                  >
+                    {adminTeamMembers.map((member) => (
+                      <div
+                        key={member.id}
+                        className="ad-card"
+                        style={{
+                          padding: "20px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "14px",
+                          border: member.is_superuser ? "1px solid #fca5a5" : "1px solid #cbd5e1",
+                          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                          <img
+                            src={member.avatar_url || `https://ui-avatars.com/api/?name=${(member.full_name || member.email).replace(" ", "+")}&background=1e3a8a&color=fff`}
+                            alt={member.full_name}
+                            style={{ width: "50px", height: "50px", borderRadius: "50%", objectFit: "cover" }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                              <h4 style={{ margin: 0, fontSize: "1rem", color: "#1e293b", fontWeight: 700 }}>
+                                {member.full_name || member.username}
+                              </h4>
+                              {member.is_superuser ? (
+                                <span style={{ background: "#fee2e2", color: "#b91c1c", fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
+                                  ⚡ Superadmin
+                                </span>
+                              ) : (
+                                <span style={{ background: "#dbeafe", color: "#1d4ed8", fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
+                                  🛡️ Administrador
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: "0.82rem", color: "#64748b" }}>{member.email}</div>
+                          </div>
+                        </div>
+
+                        <div style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", fontSize: "0.82rem", color: "#475569" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                            <span>Identificación:</span>
+                            <strong>{member.document_id || "CC No informada"}</strong>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                            <span>Teléfono:</span>
+                            <strong>{member.phone || "+57 300 000 0000"}</strong>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span>Registrado el:</span>
+                            <strong>{member.date_joined || "Reciente"}</strong>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: "8px", marginTop: "auto" }}>
+                          <button
+                            type="button"
+                            className="ad-btn"
+                            onClick={() => handleOpenRoleChangeModal(member)}
+                            style={{
+                              flex: 1,
+                              padding: "8px",
+                              fontSize: "0.8rem",
+                              background: "#f1f5f9",
+                              color: "#334155",
+                              border: "1px solid #cbd5e1",
+                              borderRadius: "6px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            ✏️ Modificar Rol
+                          </button>
+                          {!member.is_superuser && (
+                            <button
+                              type="button"
+                              className="ad-btn"
+                              onClick={() => handleDirectRoleChange(member.id, "client", member.full_name)}
+                              style={{
+                                padding: "8px 12px",
+                                fontSize: "0.8rem",
+                                background: "#fff1f2",
+                                color: "#e11d48",
+                                border: "1px solid #fecdd3",
+                                borderRadius: "6px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                              title="Revocar acceso de administrador y convertir en cliente"
+                            >
+                              Degradar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════
               VISTAS DE MÓDULOS ADICIONALES (FALLAS, CONTRATACIONES, ETC.)
              ═════════════════════════════════════════════════════════════════ */}
           {activeMenu !== "inicio" &&
@@ -8108,7 +9287,8 @@ export const AdminDashboard: React.FC = () => {
             activeMenu !== "pqr" &&
             activeMenu !== "beneficios" &&
             activeMenu !== "auditoria" &&
-            activeMenu !== "fallas" && (
+            activeMenu !== "fallas" &&
+            activeMenu !== "roles" && (
               <div className="ad-card" style={{ padding: "32px", textAlign: "center" }}>
                 <div style={{ fontSize: "3rem", marginBottom: "12px" }}>📋</div>
                 <h3 style={{ margin: "0 0 8px" }}>Módulo de {activeMenu.replace("_", " ").toUpperCase()}</h3>
@@ -8126,6 +9306,246 @@ export const AdminDashboard: React.FC = () => {
             )}
         </div>
       </main>
+
+      {/* ═════════════════════════════════════════════════════════════════════
+          MODAL: CAMBIO FORMAL DE ROL (PERSISTENCIA DIRECTA EN BD)
+         ═════════════════════════════════════════════════════════════════════ */}
+      {roleChangeModalOpen && selectedUserForRoleChange && (
+        <div className="ad-modal-backdrop" onClick={() => setRoleChangeModalOpen(false)}>
+          <div className="ad-modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "560px" }}>
+            <div className="ad-modal-header">
+              <h3>🛡️ Asignar o Cambiar Rol en Base de Datos</h3>
+              <button
+                type="button"
+                className="ad-modal-close"
+                onClick={() => setRoleChangeModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="ad-modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Resumen del usuario */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "12px 16px",
+                  background: "#f8fafc",
+                  borderRadius: "10px",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <img
+                  src={
+                    selectedUserForRoleChange.avatar_url ||
+                    `https://ui-avatars.com/api/?name=${(selectedUserForRoleChange.full_name || selectedUserForRoleChange.email).replace(" ", "+")}&background=1e3a8a&color=fff`
+                  }
+                  alt={selectedUserForRoleChange.full_name}
+                  style={{ width: "44px", height: "44px", borderRadius: "50%", objectFit: "cover" }}
+                />
+                <div>
+                  <div style={{ fontWeight: 700, color: "#1e293b", fontSize: "0.95rem" }}>
+                    {selectedUserForRoleChange.full_name || selectedUserForRoleChange.username}
+                  </div>
+                  <div style={{ fontSize: "0.82rem", color: "#64748b" }}>{selectedUserForRoleChange.email}</div>
+                  <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                    ID: #{selectedUserForRoleChange.id} • Rol actual: <strong>{selectedUserForRoleChange.role?.toUpperCase()}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Opciones de Selección de Rol */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.86rem", fontWeight: 600, color: "#334155", marginBottom: "8px" }}>
+                  Selecciona el nuevo rol a asignar:
+                </label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      border: newSelectedRole === "client" ? "2px solid #0284c7" : "1px solid #cbd5e1",
+                      background: newSelectedRole === "client" ? "#f0f9ff" : "#ffffff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="selectedRole"
+                      value="client"
+                      checked={newSelectedRole === "client"}
+                      onChange={(e) => setNewSelectedRole(e.target.value)}
+                      style={{ marginTop: "3px" }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#0369a1" }}>📱 Cliente (App)</div>
+                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        Usuario consumidor. Solicita servicios a domicilio, compra en tienda y radica quejas PQR.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      border: newSelectedRole === "professional" ? "2px solid #6366f1" : "1px solid #cbd5e1",
+                      background: newSelectedRole === "professional" ? "#eef2ff" : "#ffffff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="selectedRole"
+                      value="professional"
+                      checked={newSelectedRole === "professional"}
+                      onChange={(e) => setNewSelectedRole(e.target.value)}
+                      style={{ marginTop: "3px" }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#4f46e5" }}>🛠️ Profesional / Contratista (App)</div>
+                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        Prestador de servicios. Habilita perfil profesional, cotizaciones y tienda de productos técnicos.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      border: newSelectedRole === "staff" ? "2px solid #059669" : "1px solid #cbd5e1",
+                      background: newSelectedRole === "staff" ? "#ecfdf5" : "#ffffff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="selectedRole"
+                      value="staff"
+                      checked={newSelectedRole === "staff"}
+                      onChange={(e) => setNewSelectedRole(e.target.value)}
+                      style={{ marginTop: "3px" }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#059669" }}>🎧 Staff / Soporte PQR</div>
+                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        Acceso de moderación para responder tickets PQR y solucionar fallas técnicas reportadas.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      border: newSelectedRole === "admin" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                      background: newSelectedRole === "admin" ? "#eff6ff" : "#ffffff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="selectedRole"
+                      value="admin"
+                      checked={newSelectedRole === "admin"}
+                      onChange={(e) => setNewSelectedRole(e.target.value)}
+                      style={{ marginTop: "3px" }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#1d4ed8" }}>🛡️ Administrador General</div>
+                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        Control administrativo completo sobre usuarios, verificaciones, tienda y soporte.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      border: newSelectedRole === "superadmin" ? "2px solid #dc2626" : "1px solid #cbd5e1",
+                      background: newSelectedRole === "superadmin" ? "#fef2f2" : "#ffffff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="selectedRole"
+                      value="superadmin"
+                      checked={newSelectedRole === "superadmin"}
+                      onChange={(e) => setNewSelectedRole(e.target.value)}
+                      style={{ marginTop: "3px" }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#b91c1c" }}>⚡ Superadministrador (Acceso Total)</div>
+                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        Privilegios de superusuario en la base de datos (is_superuser=True), auditoría y finanzas.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Motivo del cambio para bitácora de auditoría */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.84rem", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>
+                  Motivo del cambio (Registro inmutable en la bitácora de auditoría):
+                </label>
+                <textarea
+                  value={roleChangeReason}
+                  onChange={(e) => setRoleChangeReason(e.target.value)}
+                  placeholder="Ej: Aprobación como contratista oficial o asignación de privilegios de staff..."
+                  rows={2}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.84rem",
+                    resize: "vertical",
+                  }}
+                />
+              </div>
+            </div>
+            <div className="ad-modal-footer">
+              <button
+                type="button"
+                className="ad-btn ad-btn-secondary"
+                onClick={() => setRoleChangeModalOpen(false)}
+                disabled={roleChangeSaving}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="ad-btn ad-btn-primary"
+                onClick={handleConfirmRoleChange}
+                disabled={roleChangeSaving}
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <span>💾</span> {roleChangeSaving ? "Guardando en BD..." : "Confirmar y Guardar en BD"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═════════════════════════════════════════════════════════════════════
           MODAL: BLOQUEAR CUENTA (SEGÚN REQUERIMIENTO OFICIAL)

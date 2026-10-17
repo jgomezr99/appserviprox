@@ -4,6 +4,7 @@ from .admin_views import (
     AdminActionView,
     AdminNotificationListView,
     AdminOverviewView,
+    AdminRolesPermissionsView,
     AdminUsersListView,
 )
 from .platform_views import (
@@ -51,6 +52,7 @@ urlpatterns = [
     path("admin/accounts/<str:kind>/<int:pk>/", AdminDeleteAccountView.as_view(), name="admin-delete-account"),
     path("admin/system-action/", AdminSystemActionView.as_view(), name="admin-system-action"),
     path("admin/users/", AdminUsersListView.as_view(), name="admin-users"),
+    path("admin/roles/", AdminRolesPermissionsView.as_view(), name="admin-roles"),
     path("admin/notifications/", AdminNotificationListView.as_view(), name="admin-notifications"),
     path("notifications/", AdminNotificationListView.as_view(), name="notifications-list"),
 ]

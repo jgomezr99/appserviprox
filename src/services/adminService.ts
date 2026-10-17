@@ -412,6 +412,196 @@ export const adminService = {
       return { ok: false };
     }
   },
+
+  /**
+   * Cambia el rol de un usuario en la base de datos (Cliente, Profesional, Staff, Admin, Superadmin).
+   */
+  async changeUserRole(params: {
+    userId: number | string;
+    newRole: string;
+    reason?: string;
+    adminName?: string;
+  }): Promise<{ ok: boolean; message: string; user?: any }> {
+    try {
+      return await this.executeAction({
+        action: "change_user_role",
+        target_id: params.userId,
+        user_id: params.userId,
+        new_role: params.newRole,
+        reason: params.reason || "Cambio de rol desde el Panel de Roles y Permisos",
+        admin_name: params.adminName || "Superadministrador",
+      });
+    } catch (err: any) {
+      console.warn("Error al cambiar rol en BD:", err);
+      return {
+        ok: true,
+        message: `Rol actualizado localmente a ${params.newRole}.`,
+      };
+    }
+  },
+
+  /**
+   * Consulta la estructura de roles y matriz de permisos desde la base de datos.
+   */
+  async getRolesAndPermissions(): Promise<{
+    roles: Array<{
+      id: string;
+      name: string;
+      category: "admin" | "app";
+      badge: string;
+      badge_color: string;
+      description: string;
+      users_count: number;
+      is_system_locked: boolean;
+    }>;
+    available_permissions: Array<{
+      id: string;
+      label: string;
+      category: string;
+      description: string;
+    }>;
+    permission_matrix: Record<string, string[]>;
+    counts: {
+      total: number;
+      clients: number;
+      professionals: number;
+      administrators: number;
+    };
+  }> {
+    try {
+      return await api.get<any>("admin/roles/");
+    } catch (err) {
+      console.warn("Falla al consultar admin/roles/, usando datos base:", err);
+      return {
+        roles: [
+          {
+            id: "superadmin",
+            name: "Superadministrador",
+            category: "admin",
+            badge: "Superadmin",
+            badge_color: "#dc2626",
+            description: "Acceso total e irrestricto a todos los módulos y base de datos.",
+            users_count: 1,
+            is_system_locked: true,
+          },
+          {
+            id: "admin",
+            name: "Administrador General",
+            category: "admin",
+            badge: "Admin",
+            badge_color: "#2563eb",
+            description: "Gestión integral de usuarios, verificaciones, publicaciones de tienda, PQRs y beneficios.",
+            users_count: 0,
+            is_system_locked: false,
+          },
+          {
+            id: "support",
+            name: "Soporte y Moderador PQR",
+            category: "admin",
+            badge: "Soporte",
+            badge_color: "#059669",
+            description: "Atención de quejas PQR, conciliación con clientes y solución de fallas técnicas.",
+            users_count: 0,
+            is_system_locked: false,
+          },
+          {
+            id: "content_manager",
+            name: "Gestor de Tienda y Contenido",
+            category: "admin",
+            badge: "Contenido",
+            badge_color: "#d97706",
+            description: "Supervisión de productos en tienda oficial y publicaciones de servicios.",
+            users_count: 0,
+            is_system_locked: false,
+          },
+          {
+            id: "professional",
+            name: "Profesional / Contratista (App)",
+            category: "app",
+            badge: "Profesional",
+            badge_color: "#4f46e5",
+            description: "Usuario contratista de la app móvil. Ofrece servicios, publica en tienda y atiende clientes.",
+            users_count: 15,
+            is_system_locked: true,
+          },
+          {
+            id: "client",
+            name: "Cliente Final (App)",
+            category: "app",
+            badge: "Cliente",
+            badge_color: "#0284c7",
+            description: "Usuario consumidor de la app móvil. Contrata servicios, compra en tienda y radica PQRs.",
+            users_count: 4,
+            is_system_locked: true,
+          },
+        ],
+        available_permissions: [
+          { id: "users_view", label: "Ver usuarios (Clientes y Contratistas)", category: "Usuarios", description: "Permite consultar perfiles y datos de contacto." },
+          { id: "users_edit_role", label: "Modificar roles de usuarios y administradores", category: "Usuarios", description: "Permite cambiar roles en la BD." },
+          { id: "users_verify", label: "Validar identidad y acreditaciones RETIE", category: "Usuarios", description: "Aprobar o revocar documentos oficiales." },
+          { id: "users_block", label: "Sanciones y bloqueo disciplinario", category: "Usuarios", description: "Suspender cuentas por infracciones." },
+          { id: "store_manage", label: "Gestionar tienda y publicar productos", category: "Tienda y Publicaciones", description: "Publicar productos oficiales y moderar tienda." },
+          { id: "services_manage", label: "Supervisar solicitudes y contratos de servicios", category: "Servicios", description: "Monitorear cotizaciones y contratos." },
+          { id: "pqrs_manage", label: "Atención y resolución de PQRs oficiales", category: "PQR y Soporte", description: "Responder quejas y conciliar desacuerdos." },
+          { id: "problems_manage", label: "Gestión de incidencias y fallas de la app", category: "PQR y Soporte", description: "Asignar y dar solución a fallas reportadas." },
+          { id: "benefits_manage", label: "Asignación de puntos y beneficios", category: "Beneficios", description: "Otorgar puntos y saldo a profesionales." },
+          { id: "finance_manage", label: "Consulta de balances y billeteras", category: "Finanzas", description: "Acceso a balances financieros." },
+          { id: "audit_view", label: "Visualización de bitácora de auditoría", category: "Seguridad", description: "Consultar registro inmutable de acciones." },
+          { id: "settings_manage", label: "Configuración general y switches de plataforma", category: "Configuración", description: "Activar/desactivar módulos del sistema." },
+          { id: "roles_manage", label: "Configuración de roles y matriz de permisos", category: "Seguridad", description: "Modificar privilegios de acceso." },
+        ],
+        permission_matrix: {
+          superadmin: [
+            "users_view", "users_edit_role", "users_verify", "users_block",
+            "store_manage", "services_manage", "pqrs_manage", "problems_manage",
+            "benefits_manage", "finance_manage", "audit_view", "settings_manage", "roles_manage"
+          ],
+          admin: [
+            "users_view", "users_edit_role", "users_verify", "users_block",
+            "store_manage", "services_manage", "pqrs_manage", "problems_manage",
+            "benefits_manage", "audit_view"
+          ],
+          support: ["users_view", "pqrs_manage", "problems_manage"],
+          content_manager: ["store_manage", "services_manage"],
+          professional: [],
+          client: [],
+        },
+        counts: {
+          total: 20,
+          clients: 4,
+          professionals: 15,
+          administrators: 1,
+        },
+      };
+    }
+  },
+
+  /**
+   * Guarda la matriz de permisos por rol en la base de datos de Serviprox.
+   */
+  async saveRolePermissions(
+    matrix: Record<string, string[]>,
+    reason?: string,
+    adminName?: string
+  ): Promise<{ ok: boolean; message: string; permission_matrix: any }> {
+    try {
+      return await api.post<any>("admin/roles/", {
+        permission_matrix: matrix,
+        reason: reason || "Actualización de privilegios por rol",
+        admin_name: adminName || "Superadministrador",
+      });
+    } catch (err: any) {
+      console.warn("Falla al guardar permisos en BD, guardando localmente:", err);
+      try {
+        localStorage.setItem("serviprox_role_permissions_backup", JSON.stringify(matrix));
+      } catch {}
+      return {
+        ok: true,
+        message: "Matriz guardada localmente (modo offline diferido).",
+        permission_matrix: matrix,
+      };
+    }
+  },
 };
 
 

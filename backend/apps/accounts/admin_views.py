@@ -438,6 +438,108 @@ class AdminActionView(APIView):
 
             return Response({"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
+        elif action_name == "change_user_role":
+            user_id = request.data.get("user_id") or target_id
+            clean_id = str(user_id).replace("user-", "").replace("pro-", "")
+            new_role = request.data.get("new_role", "client").lower()
+            reason = request.data.get("reason") or "Actualización administrativa de rol"
+            req_admin = request.data.get("admin_name") or admin_name
+
+            u = None
+            if clean_id.isdigit():
+                u = User.objects.filter(id=int(clean_id)).first()
+            if not u:
+                u = User.objects.filter(email__iexact=str(user_id)).first()
+
+            if not u:
+                return Response({"error": "Usuario no encontrado en la base de datos."}, status=status.HTTP_404_NOT_FOUND)
+
+            old_role_display = u.get_role_display() if hasattr(u, "get_role_display") else u.role
+
+            # Asignación de rol y perfiles correspondientes
+            if new_role == "client":
+                u.role = UserRole.CLIENT
+                u.is_staff = False
+                u.is_superuser = False
+                from apps.accounts.models import ClientProfile
+                ClientProfile.objects.get_or_create(user=u)
+            elif new_role == "professional":
+                u.role = UserRole.PROFESSIONAL
+                u.is_staff = False
+                u.is_superuser = False
+                pro_p, _ = ProfessionalProfile.objects.get_or_create(
+                    user=u,
+                    defaults={
+                        "display_name": u.get_full_name() or u.username,
+                        "headline": "Profesional de Servicios Serviprox",
+                        "city": u.city or "Bogotá",
+                        "is_verified": False,
+                        "is_active": True,
+                    }
+                )
+                if not pro_p.is_active:
+                    pro_p.is_active = True
+                    pro_p.save()
+            elif new_role in {"staff", "support", "content_manager"}:
+                u.role = UserRole.STAFF
+                u.is_staff = True
+                u.is_superuser = False
+            elif new_role == "admin":
+                u.role = UserRole.STAFF
+                u.is_staff = True
+                u.is_superuser = False
+            elif new_role == "superadmin":
+                u.role = UserRole.STAFF
+                u.is_staff = True
+                u.is_superuser = True
+
+            u.save()
+
+            role_labels = {
+                "client": "Cliente (App)",
+                "professional": "Profesional (App)",
+                "staff": "Staff / Moderador",
+                "support": "Soporte PQR",
+                "content_manager": "Gestor de Contenido",
+                "admin": "Administrador General",
+                "superadmin": "Superadministrador",
+            }
+            new_role_label = role_labels.get(new_role, new_role.upper())
+
+            action_desc = f"Cambio de rol: de {old_role_display} a {new_role_label}"
+            AdminAuditLog.objects.create(
+                admin_name=req_admin,
+                action=action_desc,
+                target=f"{u.get_full_name() or u.email} (ID: #{u.id})",
+                reason=reason,
+            )
+
+            Notification.objects.create(
+                user=u,
+                title="Actualización de rol en Serviprox",
+                text=f"Tu rol en la plataforma ha sido actualizado a: {new_role_label}. Motivo: {reason[:100]}",
+                notification_type="rol",
+                target_id=str(u.id),
+                is_read=False,
+            )
+
+            admin_role_str = "superadmin" if u.is_superuser else ("admin" if u.is_staff else "none")
+
+            return Response({
+                "ok": True,
+                "message": f"Rol de {u.get_full_name() or u.email} actualizado exitosamente a {new_role_label} en la base de datos.",
+                "user": {
+                    "id": u.id,
+                    "email": u.email,
+                    "full_name": u.get_full_name() or u.username,
+                    "role": u.role,
+                    "is_staff": u.is_staff,
+                    "is_superuser": u.is_superuser,
+                    "admin_role": admin_role_str,
+                    "app_role": u.role,
+                }
+            })
+
         elif action_name == "assign_benefits":
             pro_id_str = str(target_id).replace("pro-", "")
             points = int(request.data.get("points", 100))
@@ -707,10 +809,21 @@ class AdminUsersListView(APIView):
         role_filter = request.query_params.get("role")
         qs = User.objects.all().order_by("-date_joined")
         if role_filter:
-            qs = qs.filter(role=role_filter)
+            if role_filter in {"admin", "staff", "administradores"}:
+                qs = qs.filter(Q(is_superuser=True) | Q(is_staff=True) | Q(role=UserRole.STAFF))
+            else:
+                qs = qs.filter(role=role_filter)
 
         users_data = []
         for u in qs:
+            pro_profile = getattr(u, "professional_profile", None)
+            is_pro_verified = pro_profile.is_verified if pro_profile else False
+            pro_headline = pro_profile.headline if pro_profile else ""
+            admin_role = "superadmin" if u.is_superuser else ("admin" if u.is_staff else ("staff" if u.role == UserRole.STAFF else "none"))
+
+            clean_name = (u.get_full_name() or u.username or u.email).strip()
+            avatar = u.avatar_url or f"https://ui-avatars.com/api/?name={clean_name.replace(' ', '+')}&background=1e3a8a&color=fff"
+
             users_data.append({
                 "id": u.id,
                 "email": u.email,
@@ -718,10 +831,15 @@ class AdminUsersListView(APIView):
                 "last_name": u.last_name,
                 "full_name": u.get_full_name() or u.username,
                 "role": u.role,
+                "app_role": u.role,
+                "admin_role": admin_role,
+                "is_staff": u.is_staff,
+                "is_superuser": u.is_superuser,
                 "phone": u.phone or "+57 300 123 4567",
                 "city": u.city or "Bogotá",
                 "address": u.address or "Bogotá, Colombia",
                 "document_id": u.document_id or f"CC 1.020.345.{u.id:03d}",
+                "avatar_url": avatar,
                 "is_active": u.is_active,
                 "is_blocked": u.is_blocked,
                 "block_type": u.block_type,
@@ -731,6 +849,8 @@ class AdminUsersListView(APIView):
                 "blocked_at": u.blocked_at.isoformat() if u.blocked_at else None,
                 "is_currently_blocked": u.is_currently_blocked,
                 "is_identity_verified": u.is_identity_verified,
+                "is_pro_verified": is_pro_verified,
+                "headline": pro_headline,
                 "requests_count": u.service_requests.count(),
                 "date_joined": u.date_joined.strftime("%d/%m/%Y"),
             })
@@ -738,6 +858,251 @@ class AdminUsersListView(APIView):
         return Response({
             "count": len(users_data),
             "users": users_data,
+        })
+
+
+DEFAULT_PERMISSION_MATRIX = {
+    "superadmin": [
+        "users_view",
+        "users_edit_role",
+        "users_verify",
+        "users_block",
+        "store_manage",
+        "services_manage",
+        "pqrs_manage",
+        "problems_manage",
+        "benefits_manage",
+        "finance_manage",
+        "audit_view",
+        "settings_manage",
+        "roles_manage",
+    ],
+    "admin": [
+        "users_view",
+        "users_edit_role",
+        "users_verify",
+        "users_block",
+        "store_manage",
+        "services_manage",
+        "pqrs_manage",
+        "problems_manage",
+        "benefits_manage",
+        "audit_view",
+    ],
+    "support": [
+        "users_view",
+        "pqrs_manage",
+        "problems_manage",
+    ],
+    "content_manager": [
+        "store_manage",
+        "services_manage",
+    ],
+    "professional": [],
+    "client": [],
+}
+
+
+class AdminRolesPermissionsView(APIView):
+    """Consulta y actualiza los roles, usuarios asignados y la matriz de permisos de la plataforma."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from apps.accounts.models import PlatformSettings
+        settings = PlatformSettings.load()
+        stored_matrix = settings.get("role_permissions") or {}
+        matrix = {**DEFAULT_PERMISSION_MATRIX, **stored_matrix}
+        # Garantizar que superadmin conserve siempre todos los permisos
+        matrix["superadmin"] = DEFAULT_PERMISSION_MATRIX["superadmin"]
+
+        clients_count = User.objects.filter(role=UserRole.CLIENT).count()
+        pros_count = User.objects.filter(role=UserRole.PROFESSIONAL).count()
+        superadmins_count = User.objects.filter(is_superuser=True).count()
+        staff_count = User.objects.filter(Q(is_staff=True) & Q(is_superuser=False)).count()
+
+        roles = [
+            {
+                "id": "superadmin",
+                "name": "Superadministrador",
+                "category": "admin",
+                "badge": "Superadmin",
+                "badge_color": "#dc2626",
+                "description": "Acceso total e irrestricto a todos los módulos, configuraciones críticas y base de datos.",
+                "users_count": superadmins_count,
+                "is_system_locked": True,
+            },
+            {
+                "id": "admin",
+                "name": "Administrador General",
+                "category": "admin",
+                "badge": "Admin",
+                "badge_color": "#2563eb",
+                "description": "Gestión integral de usuarios, verificaciones, publicaciones de tienda, PQRs y beneficios.",
+                "users_count": staff_count,
+                "is_system_locked": False,
+            },
+            {
+                "id": "support",
+                "name": "Soporte y Moderador PQR",
+                "category": "admin",
+                "badge": "Soporte",
+                "badge_color": "#059669",
+                "description": "Atención especializada de quejas PQR, conciliación con clientes y solución de fallas técnicas.",
+                "users_count": 0,
+                "is_system_locked": False,
+            },
+            {
+                "id": "content_manager",
+                "name": "Gestor de Tienda y Contenido",
+                "category": "admin",
+                "badge": "Contenido",
+                "badge_color": "#d97706",
+                "description": "Supervisión de productos en tienda oficial, validación de inventario y moderación de ofertas.",
+                "users_count": 0,
+                "is_system_locked": False,
+            },
+            {
+                "id": "professional",
+                "name": "Profesional / Contratista (App)",
+                "category": "app",
+                "badge": "Profesional",
+                "badge_color": "#4f46e5",
+                "description": "Usuario contratista de la app móvil. Ofrece servicios, publica en tienda y atiende clientes.",
+                "users_count": pros_count,
+                "is_system_locked": True,
+            },
+            {
+                "id": "client",
+                "name": "Cliente Final (App)",
+                "category": "app",
+                "badge": "Cliente",
+                "badge_color": "#0284c7",
+                "description": "Usuario consumidor de la app móvil. Contrata servicios, compra en tienda y radica PQRs.",
+                "users_count": clients_count,
+                "is_system_locked": True,
+            },
+        ]
+
+        available_permissions = [
+            {
+                "id": "users_view",
+                "label": "Ver usuarios (Clientes y Contratistas)",
+                "category": "Usuarios",
+                "description": "Permite consultar perfiles y datos de contacto de clientes y profesionales.",
+            },
+            {
+                "id": "users_edit_role",
+                "label": "Modificar roles de usuarios y administradores",
+                "category": "Usuarios",
+                "description": "Permite ascender, degradar o cambiar roles de app y administración en la BD.",
+            },
+            {
+                "id": "users_verify",
+                "label": "Validar identidad y acreditaciones RETIE",
+                "category": "Usuarios",
+                "description": "Aprobar o revocar documentos oficiales y tarjetas profesionales.",
+            },
+            {
+                "id": "users_block",
+                "label": "Sanciones y bloqueo disciplinario",
+                "category": "Usuarios",
+                "description": "Suspender temporal o definitivamente cuentas por infracciones.",
+            },
+            {
+                "id": "store_manage",
+                "label": "Gestionar tienda y publicar productos",
+                "category": "Tienda y Publicaciones",
+                "description": "Publicar productos oficiales, moderar y eliminar artículos.",
+            },
+            {
+                "id": "services_manage",
+                "label": "Supervisar solicitudes y contratos de servicios",
+                "category": "Servicios",
+                "description": "Monitorear estados de cotizaciones y contrataciones en curso.",
+            },
+            {
+                "id": "pqrs_manage",
+                "label": "Atención y resolución de PQRs oficiales",
+                "category": "PQR y Soporte",
+                "description": "Responder quejas, conciliar desacuerdos y notificar resoluciones.",
+            },
+            {
+                "id": "problems_manage",
+                "label": "Gestión de incidencias y fallas de la app",
+                "category": "PQR y Soporte",
+                "description": "Asignar responsables y dar solución a fallas reportadas.",
+            },
+            {
+                "id": "benefits_manage",
+                "label": "Asignación de puntos y beneficios",
+                "category": "Beneficios",
+                "description": "Otorgar puntos de fidelización y saldo a profesionales destacados.",
+            },
+            {
+                "id": "finance_manage",
+                "label": "Consulta de balances y billeteras",
+                "category": "Finanzas",
+                "description": "Acceso a balances financieros, recargas y comisiones de plataforma.",
+            },
+            {
+                "id": "audit_view",
+                "label": "Visualización de bitácora de auditoría",
+                "category": "Seguridad",
+                "description": "Consultar registro inmutable de acciones realizadas por administradores.",
+            },
+            {
+                "id": "settings_manage",
+                "label": "Configuración general y switches de plataforma",
+                "category": "Configuración",
+                "description": "Activar/desactivar módulos de cliente y profesional, modo mantenimiento.",
+            },
+            {
+                "id": "roles_manage",
+                "label": "Configuración de roles y matriz de permisos",
+                "category": "Seguridad",
+                "description": "Modificar privilegios de acceso para roles del sistema.",
+            },
+        ]
+
+        return Response({
+            "roles": roles,
+            "available_permissions": available_permissions,
+            "permission_matrix": matrix,
+            "counts": {
+                "total": User.objects.count(),
+                "clients": clients_count,
+                "professionals": pros_count,
+                "administrators": superadmins_count + staff_count,
+            }
+        })
+
+    def post(self, request):
+        from apps.accounts.models import PlatformSettings, AdminAuditLog
+        new_matrix = request.data.get("permission_matrix")
+        admin_name = request.data.get("admin_name") or "Superadministrador"
+        reason = request.data.get("reason") or "Actualización de matriz de permisos de roles"
+
+        if not isinstance(new_matrix, dict):
+            return Response({"error": "La matriz de permisos enviada no es válida."}, status=status.HTTP_400_BAD_REQUEST)
+
+        new_matrix["superadmin"] = DEFAULT_PERMISSION_MATRIX["superadmin"]
+
+        settings_data = PlatformSettings.load()
+        settings_data["role_permissions"] = new_matrix
+        PlatformSettings.save_data(settings_data)
+
+        AdminAuditLog.objects.create(
+            admin_name=admin_name,
+            action="Actualización de matriz de roles y permisos",
+            target="Matriz de Privilegios del Sistema",
+            reason=reason,
+        )
+
+        return Response({
+            "ok": True,
+            "message": "Matriz de roles y permisos guardada con éxito en la base de datos.",
+            "permission_matrix": new_matrix,
         })
 
 

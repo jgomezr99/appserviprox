@@ -257,9 +257,10 @@ DEFAULT_PLATFORM_SETTINGS = {
     },
     "last_backup": "",
     "sections": {},
+    "role_permissions": {},
 }
 
-_NESTED_KEYS = ("features", "email", "social", "documents", "sections")
+_NESTED_KEYS = ("features", "email", "social", "documents", "sections", "role_permissions")
 
 
 class PlatformSettings(models.Model):
