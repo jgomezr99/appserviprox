@@ -44,6 +44,58 @@ export interface AdminOverviewResponse {
   audit_logs: any[];
 }
 
+export interface ReportsStatsKPI {
+  raw: number;
+  display: string;
+  trend: string;
+  sparkline: number[];
+}
+
+export interface ReportsStatsResponse {
+  database_connected: boolean;
+  database_engine?: string;
+  period: string;
+  kpis: {
+    users: ReportsStatsKPI;
+    pros: ReportsStatsKPI;
+    products: ReportsStatsKPI;
+    hires: ReportsStatsKPI;
+    pqrs: ReportsStatsKPI;
+    revenue: ReportsStatsKPI;
+  };
+  hires_data: Array<{ month: string; val: number }>;
+  top_services: Array<{ name: string; count: number; pct: number }>;
+  top_products: Array<{ name: string; count: number; pct: number }>;
+  new_users_data: Array<{ month: string; clients: number; pros: number }>;
+  monthly_revenue: Array<{ month: string; amount: string; val: number }>;
+  pqr_status: {
+    total: number;
+    raw_total?: number;
+    resueltas: number;
+    resueltas_pct: number;
+    en_proceso: number;
+    en_proceso_pct: number;
+    pendientes: number;
+    pendientes_pct: number;
+    rechazadas: number;
+    rechazadas_pct: number;
+  };
+  recent_activity: Array<{
+    id: string;
+    date: string;
+    module: string;
+    description: string;
+    user: string;
+    status: string;
+  }>;
+  localities: Array<{
+    id: string;
+    name: string;
+    count: number;
+    color: string;
+  }>;
+}
+
 export const adminService = {
   /**
    * Obtiene la visión general en vivo directamente consultada de la base de datos de Serviprox.
@@ -599,6 +651,116 @@ export const adminService = {
         ok: true,
         message: "Matriz guardada localmente (modo offline diferido).",
         permission_matrix: matrix,
+      };
+    }
+  },
+
+  /**
+   * Obtiene los reportes y estadísticas oficiales directamente calculados
+   * desde los registros de la base de datos de Serviprox.
+   */
+  async getReportsStats(): Promise<ReportsStatsResponse> {
+    try {
+      const response = await api.get<ReportsStatsResponse>("admin/reports-stats/");
+      return response;
+    } catch (err) {
+      console.warn("Falla al consultar admin/reports-stats/ en backend, usando respaldo:", err);
+      return {
+        database_connected: false,
+        period: "01/05/2026 - 08/30/2026",
+        kpis: {
+          users: { raw: 18, display: "18", trend: "+12%", sparkline: [6, 10, 14, 18] },
+          pros: { raw: 15, display: "15", trend: "+8%", sparkline: [8, 11, 13, 15] },
+          products: { raw: 71, display: "71", trend: "+15%", sparkline: [15, 30, 48, 71] },
+          hires: { raw: 8, display: "8", trend: "+18%", sparkline: [2, 4, 6, 8] },
+          pqrs: { raw: 7, display: "7", trend: "-6%", sparkline: [9, 8, 8, 7] },
+          revenue: { raw: 84250000, display: "$84.250.000", trend: "+22%", sparkline: [5, 8, 12, 18.5] },
+        },
+        hires_data: [
+          { month: "Ene", val: 45 },
+          { month: "Feb", val: 82 },
+          { month: "Mar", val: 125 },
+          { month: "Abr", val: 154 },
+          { month: "May", val: 198 },
+          { month: "Jun", val: 235 },
+          { month: "Jul", val: 242 },
+          { month: "Ago", val: 290 },
+          { month: "Sep", val: 320 },
+          { month: "Oct", val: 375 },
+        ],
+        top_services: [
+          { name: "Electricista", count: 420, pct: 100 },
+          { name: "Plomero", count: 350, pct: 83 },
+          { name: "Limpieza", count: 280, pct: 66 },
+          { name: "Mantenimiento", count: 210, pct: 50 },
+          { name: "Entrenador personal", count: 190, pct: 45 },
+          { name: "Clases particulares", count: 150, pct: 35 },
+          { name: "Veterinaria a domicilio", count: 120, pct: 28 },
+          { name: "Otros", count: 112, pct: 26 },
+        ],
+        top_products: [
+          { name: "Tecnología", count: 520, pct: 100 },
+          { name: "Muebles", count: 380, pct: 73 },
+          { name: "Multimedia", count: 310, pct: 60 },
+          { name: "Ropa", count: 290, pct: 55 },
+          { name: "Deportes", count: 240, pct: 46 },
+          { name: "Libros", count: 180, pct: 34 },
+          { name: "Juguetes", count: 150, pct: 28 },
+          { name: "Herramientas", count: 120, pct: 23 },
+        ],
+        new_users_data: [
+          { month: "Ene", clients: 140, pros: 80 },
+          { month: "Feb", clients: 165, pros: 95 },
+          { month: "Mar", clients: 195, pros: 125 },
+          { month: "Abr", clients: 150, pros: 108 },
+          { month: "May", clients: 200, pros: 142 },
+          { month: "Jun", clients: 175, pros: 120 },
+          { month: "Jul", clients: 215, pros: 155 },
+          { month: "Ago", clients: 265, pros: 190 },
+          { month: "Sep", clients: 220, pros: 165 },
+          { month: "Oct", clients: 170, pros: 130 },
+        ],
+        monthly_revenue: [
+          { month: "Ene", amount: "5.2M", val: 5.2 },
+          { month: "Feb", amount: "5.8M", val: 5.8 },
+          { month: "Mar", amount: "6.9M", val: 6.9 },
+          { month: "Abr", amount: "8.1M", val: 8.1 },
+          { month: "May", amount: "9.5M", val: 9.5 },
+          { month: "Jun", amount: "10.4M", val: 10.4 },
+          { month: "Jul", amount: "12.2M", val: 12.2 },
+          { month: "Ago", amount: "15.8M", val: 15.8 },
+          { month: "Sep", amount: "17.5M", val: 17.5 },
+          { month: "Oct", amount: "18.8M", val: 18.8 },
+        ],
+        pqr_status: {
+          total: 342,
+          resueltas: 198,
+          resueltas_pct: 58,
+          en_proceso: 82,
+          en_proceso_pct: 24,
+          pendientes: 41,
+          pendientes_pct: 12,
+          rechazadas: 21,
+          rechazadas_pct: 6,
+        },
+        recent_activity: [
+          { id: "1", date: "08/10/2026 16:45", module: "Contrataciones", description: "Nueva contratación #1028", user: "Carlos Díaz", status: "completado" },
+          { id: "2", date: "08/10/2026 16:10", module: "Tienda", description: "Producto publicado", user: "María Torres", status: "aprobado" },
+          { id: "3", date: "08/10/2026 15:20", module: "PQR y Reportes", description: "Nueva queja #450", user: "Andrés López", status: "en_proceso" },
+          { id: "4", date: "08/10/2026 14:15", module: "Usuarios", description: "Registro de usuario", user: "Laura Gómez", status: "completado" },
+          { id: "5", date: "08/10/2026 13:30", module: "Fallas Técnicas", description: "Error en la app", user: "Ricardo Sánchez", status: "resuelto" },
+        ],
+        localities: [
+          { id: "kennedy", name: "Kennedy", count: 420, color: "#1d4ed8" },
+          { id: "suba", name: "Suba", count: 350, color: "#3b82f6" },
+          { id: "engativa", name: "Engativá", count: 290, color: "#60a5fa" },
+          { id: "chapinero", name: "Chapinero", count: 250, color: "#93c5fd" },
+          { id: "usaquen", name: "Usaquén", count: 220, color: "#bfdbfe" },
+          { id: "bosa", name: "Bosa", count: 190, color: "#c7d2fe" },
+          { id: "teusaquillo", name: "Teusaquillo", count: 180, color: "#ddd6fe" },
+          { id: "santafe", name: "Santa Fe", count: 140, color: "#ede9fe" },
+          { id: "otras", name: "Otras", count: 112, color: "#f1f5f9" },
+        ],
       };
     }
   },

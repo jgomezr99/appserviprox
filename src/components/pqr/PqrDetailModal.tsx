@@ -37,9 +37,15 @@ export function PqrDetailModal({
 
   if (!isOpen || !report) return null;
 
+  const isClosed =
+    report.status === 'resuelto' ||
+    report.status === 'sancionado' ||
+    (report.status as string) === 'cerrado' ||
+    (report.status as string) === 'cerrada';
+
   const handleSendReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyText.trim()) return;
+    if (isClosed || !replyText.trim()) return;
     onSendMessage(report.id, replyText.trim());
     setReplyText('');
   };
@@ -359,23 +365,32 @@ export function PqrDetailModal({
               )}
             </div>
 
-            {/* Reply form */}
-            <form onSubmit={handleSendReply} className="mt-3 flex items-center gap-2">
-              <input
-                type="text"
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="Escribir réplica o respuesta al contratista / perito en la app..."
-                className="flex-1 px-3.5 py-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs sm:text-sm text-neutral-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
-              />
-              <button
-                type="submit"
-                className="bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Enviar</span>
-              </button>
-            </form>
+            {/* Reply form or Closed notice */}
+            {isClosed ? (
+              <div className="mt-3 p-3 bg-neutral-100 border border-neutral-200 rounded-xl text-center text-xs text-neutral-600 font-medium flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>
+                  Este caso se encuentra formalmente <strong>{report.status === 'sancionado' ? 'sancionado y cerrado' : 'cerrado y resuelto'}</strong>. No se admiten respuestas adicionales.
+                </span>
+              </div>
+            ) : (
+              <form onSubmit={handleSendReply} className="mt-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Escribir réplica o respuesta al contratista / perito en la app..."
+                  className="flex-1 px-3.5 py-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs sm:text-sm text-neutral-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Enviar</span>
+                </button>
+              </form>
+            )}
           </div>
         </div>
 

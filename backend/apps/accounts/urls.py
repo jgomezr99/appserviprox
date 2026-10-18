@@ -4,6 +4,7 @@ from .admin_views import (
     AdminActionView,
     AdminNotificationListView,
     AdminOverviewView,
+    AdminReportsStatsView,
     AdminRolesPermissionsView,
     AdminUsersListView,
 )
@@ -46,6 +47,7 @@ urlpatterns = [
         name="auth-onboarding-complete",
     ),
     path("admin/overview/", AdminOverviewView.as_view(), name="admin-overview"),
+    path("admin/reports-stats/", AdminReportsStatsView.as_view(), name="admin-reports-stats"),
     path("admin/action/", AdminActionView.as_view(), name="admin-action"),
     path("platform/settings/", PublicPlatformSettingsView.as_view(), name="platform-settings"),
     path("admin/settings/", AdminPlatformSettingsView.as_view(), name="admin-settings"),

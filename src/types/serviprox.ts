@@ -36,6 +36,8 @@ export interface User {
   blocked_until?: string | null;
   blocked_at?: string | null;
   is_currently_blocked?: boolean;
+  is_staff?: boolean;
+  is_superuser?: boolean;
   created_at: string;
 }
 

@@ -111,6 +111,13 @@ class PQRViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="messages")
     def add_message(self, request, pk=None):
         pqr = self.get_object()
+        CLOSED_PQR_STATUSES = {"resuelto", "resuelta", "cerrado", "cerrada", "sancionado", "sancionada", "rechazado", "cancelado"}
+        if pqr.status and str(pqr.status).lower().strip() in CLOSED_PQR_STATUSES:
+            return Response(
+                {"error": f"Este caso PQR se encuentra {pqr.status}. No es posible enviar más mensajes o respuestas a un trámite cerrado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         text = request.data.get("text", "").strip()
         if not text:
             return Response({"error": "El mensaje no puede estar vacío."}, status=status.HTTP_400_BAD_REQUEST)

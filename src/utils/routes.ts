@@ -1,5 +1,10 @@
 import type { User, UserRole } from "../types/serviprox";
 
+export const isUserAdmin = (user?: User | null): boolean => {
+  if (!user) return false;
+  return user.role === "staff" || Boolean(user.is_staff) || Boolean(user.is_superuser);
+};
+
 export const getRoleHomeRoute = (role?: UserRole) => {
   if (role === "professional") return "/profesional/inicio";
   if (role === "staff") return "/admin";
@@ -13,8 +18,8 @@ export const getOnboardingRoute = (role?: UserRole) => {
 };
 
 export const getEntryRoute = (user: User | null) => {
-  if (!user) return "/cliente/inicio";
-  if (user.role === "staff") return "/admin";
+  if (!user) return "/login";
+  if (isUserAdmin(user)) return "/admin";
   if (user.role === "professional") return "/profesional/inicio";
   return "/cliente/inicio";
 };

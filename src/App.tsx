@@ -212,10 +212,14 @@ const App: React.FC = () => {
                 <Redirect to="/tienda" />
               </Route>
               <Route path="/cliente/solicitudes" exact={true}>
-                <ClientSolicitudesRoute />
+                <RequireAuth role="client">
+                  <ClientSolicitudesRoute />
+                </RequireAuth>
               </Route>
               <Route path="/cliente/servicios" exact={true}>
-                <ClientServicesRoute />
+                <RequireAuth role="client">
+                  <ClientServicesRoute />
+                </RequireAuth>
               </Route>
               <Route path="/mapa" exact={true}>
                 <Redirect to="/cliente/mapa" />
@@ -230,7 +234,7 @@ const App: React.FC = () => {
                 <Redirect to="/perfil" />
               </Route>
               <Route path="/perfil" exact={true}>
-                <RequireAuth onboarding="any">
+                <RequireAuth role="professional" onboarding="any">
                   <ProfessionalProfilePage />
                 </RequireAuth>
               </Route>

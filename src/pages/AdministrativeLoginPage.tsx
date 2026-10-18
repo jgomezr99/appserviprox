@@ -19,7 +19,7 @@ import {
 import { useHistory } from "react-router-dom";
 import { authService } from "../services/auth";
 import { checkBackendHealth, ApiError } from "../services/api";
-import { getEntryRoute } from "../utils/routes";
+import { getEntryRoute, isUserAdmin } from "../utils/routes";
 import { useAuth } from "../context/AuthContext";
 import { ServerConnectionModal } from "../components/ServerConnectionModal";
 import logo from "../Assets/logo.png";
@@ -40,7 +40,7 @@ const AGENT_AVATAR =
 
 const AdministrativeLoginPage: React.FC = () => {
 	const history = useHistory();
-	const { login } = useAuth();
+	const { isAuthenticated, isLoading: sessionLoading, login, user: sessionUser } = useAuth();
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
@@ -48,6 +48,16 @@ const AdministrativeLoginPage: React.FC = () => {
 	const [error, setError] = useState("");
 	const [serverModalOpen, setServerModalOpen] = useState(false);
 	const [serverConnected, setServerConnected] = useState<boolean | null>(null);
+
+	useEffect(() => {
+		if (!sessionLoading && isAuthenticated) {
+			if (isUserAdmin(sessionUser)) {
+				history.replace("/admin");
+			} else {
+				history.replace(getEntryRoute(sessionUser));
+			}
+		}
+	}, [history, isAuthenticated, sessionLoading, sessionUser]);
 
 	useEffect(() => {
 		checkBackendHealth().then((res) => {
@@ -108,13 +118,12 @@ const AdministrativeLoginPage: React.FC = () => {
 		try {
 			let currentUser: any;
 			try {
-				currentUser = await authService.loginWithUsername(username.trim(), password);
-			} catch (apiErr) {
-				// Fallback a login por useAuth para credenciales demo staff (admin@serviprox.com o admin)
 				currentUser = await login({ email: username.trim(), password });
+			} catch (loginErr) {
+				currentUser = await authService.loginWithUsername(username.trim(), password);
 			}
-			if (currentUser.role !== "staff") {
-				setError("Esta cuenta no tiene permisos administrativos.");
+			if (!isUserAdmin(currentUser)) {
+				setError("Esta cuenta no tiene permisos administrativos. Acceso denegado.");
 				return;
 			}
 			history.replace("/admin");

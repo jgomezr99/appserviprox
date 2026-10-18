@@ -26,7 +26,7 @@ import { ApiError, checkBackendHealth } from "../services/api";
 import { authService } from "../services/auth";
 import { useAuth } from "../context/AuthContext";
 import { usePlatformSettings } from "../services/platformSettings";
-import { getEntryRoute } from "../utils/routes";
+import { getEntryRoute, isUserAdmin } from "../utils/routes";
 import { ServerConnectionModal } from "../components/ServerConnectionModal";
 import logo from "../Assets/logo.png";
 import imagemain from "../Assets/imag/Categorías de servicios para el hogar.png";
@@ -36,6 +36,14 @@ import type { BlockedAccountInfo } from "../types/serviprox";
 import styles from "./Login.module.css";
 
 const emailOk = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
+const identifierOk = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (trimmed.includes("@")) {
+    return emailOk(trimmed);
+  }
+  return trimmed.length >= 3;
+};
 
 const getLoginErrorMessage = (error: unknown) => {
   const isApi =
@@ -155,15 +163,17 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   /* conexion de login  direccion home*/
   useEffect(() => {
     if (!sessionLoading && isAuthenticated) {
-      if (!administrative && (!user || user.role === "client")) {
-        history.replace("/cliente/inicio");
+      if (isUserAdmin(user)) {
+        history.replace("/admin");
+      } else if (administrative) {
+        history.replace(getEntryRoute(user));
       } else {
         history.replace(getEntryRoute(user));
       }
     }
   }, [administrative, history, isAuthenticated, sessionLoading, user]);
 
-  const canSubmit = emailOk(email) && password.length >= 6 && !isSubmitting;
+  const canSubmit = identifierOk(email) && password.length >= 6 && !isSubmitting;
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -206,15 +216,18 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
         return;
       }
 
-      if (administrative && currentUser.role !== "staff") {
+      // Si es cuenta de administrador, dirigir inmediatamente a /admin
+      if (isUserAdmin(currentUser)) {
+        history.replace("/admin");
+        return;
+      }
+
+      if (administrative && !isUserAdmin(currentUser)) {
         setError("Esta cuenta no tiene permisos administrativos.");
         return;
       }
-      if (!administrative && (!currentUser || currentUser.role === "client")) {
-        history.replace("/cliente/inicio");
-      } else {
-        history.replace(getEntryRoute(currentUser));
-      }
+
+      history.replace(getEntryRoute(currentUser));
     } catch (err) {
       // 2. Revisar si la API devolvió rechazo por cuenta suspendida
       const payload = (err as { payload?: Partial<BlockedAccountInfo> & { maintenance?: boolean; detail?: unknown } })?.payload;
@@ -408,16 +421,15 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
 
             <form className={styles.form} onSubmit={handleLogin} noValidate>
               <label className={styles.field}>
-                <span>Correo electrónico</span>
+                <span>Correo electrónico o usuario</span>
                 <div className={styles.inputShell}>
                   <IonIcon icon={mailOutline} aria-hidden="true" />
                   <IonInput
-                    type="email"
+                    type="text"
                     value={email}
-                    autocomplete="email"
-                    inputmode="email"
+                    autocomplete="username"
                     enterkeyhint="next"
-                    placeholder="tu@correo.com"
+                    placeholder="tu@correo.com o admin"
                     onIonInput={(event) => setEmail(String(event.detail.value ?? ""))}
                     required
                   />

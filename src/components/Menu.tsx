@@ -40,6 +40,7 @@ import './Menu.css';
 import logo from '../Assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import { usePlatformSettings, homeFlags } from '../services/platformSettings';
+import { isUserAdmin } from '../utils/routes';
 
 interface AppPage {
   url: string;
@@ -203,8 +204,15 @@ const Menu: React.FC = () => {
     { title: 'Disponibilidad', url: '/profesional/disponibilidad', iosIcon: timeOutline, mdIcon: timeSharp },
   ];
 
-  const menuPages =
-    user?.role === 'professional'
+  const isAdmin = isUserAdmin(user);
+
+  const staffPagesList: AppPage[] = [
+    { title: 'Panel de Administración', url: '/admin', iosIcon: shieldCheckmarkOutline, mdIcon: shieldCheckmarkSharp },
+  ];
+
+  const menuPages = isAdmin
+    ? staffPagesList
+    : user?.role === 'professional'
       ? proPagesList.filter((page) => {
           const flagKey = proUrlFlag[page.url];
           return flagKey ? proFlags[flagKey] !== false : true;
@@ -274,14 +282,14 @@ const Menu: React.FC = () => {
           {/* Si hay sesión, muestra perfil/acciones y oculta el login */}
           {isAuthenticated ? (
             <IonItem lines="none" className="profile-item" detail={false}>
-              <IonIcon slot="start" icon={personCircleOutline} />
-              <IonLabel>{user?.first_name || user?.email || 'Mi cuenta'}</IonLabel>
+              <IonIcon slot="start" icon={isAdmin ? shieldCheckmarkOutline : personCircleOutline} />
+              <IonLabel>{isAdmin ? 'Administrador Serviprox' : (user?.first_name || user?.email || 'Mi cuenta')}</IonLabel>
               <IonButton slot="end" fill="clear" onClick={onLogout} aria-label="Cerrar sesión" title="Cerrar sesión">
                 <IonIcon slot="icon-only" icon={logOutOutline} />
               </IonButton>
             </IonItem>
           ) : null}
-          {user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (
+          {!isAdmin && user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (
             <IonItem lines="none" detail={false} className="role-switch-item">
               <IonIcon slot="start" icon={briefcaseOutline} />
               <IonLabel>Ofrecer servicios</IonLabel>
@@ -300,7 +308,7 @@ const Menu: React.FC = () => {
               </IonButton>
             </IonItem>
           ) : null}
-          {user?.role === 'professional' ? (
+          {!isAdmin && user?.role === 'professional' ? (
             <IonItem lines="none" detail={false} className="role-switch-item">
               <IonIcon slot="start" icon={homeOutline} />
               <IonLabel>Usar como cliente</IonLabel>

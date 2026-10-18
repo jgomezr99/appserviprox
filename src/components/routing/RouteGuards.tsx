@@ -3,7 +3,7 @@ import { IonContent, IonPage, IonSpinner } from "@ionic/react";
 import { Redirect, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import type { UserRole, BlockedAccountInfo } from "../../types/serviprox";
-import { getEntryRoute, getOnboardingRoute, getRoleHomeRoute } from "../../utils/routes";
+import { getEntryRoute, getOnboardingRoute, getRoleHomeRoute, isUserAdmin } from "../../utils/routes";
 import { BlockedAccountModal } from "../BlockedAccountModal";
 import "../../pages/RolePages.css";
 
@@ -42,7 +42,7 @@ export const RequireAuth: React.FC<GuardProps> = ({
 
   // Verificación de suspensión disciplinaria por el administrador
   const checkIsBlocked = (): BlockedAccountInfo | null => {
-    if (user.role === "staff") return null;
+    if (isUserAdmin(user)) return null;
 
     if (user.is_blocked || (user.is_active === false && user.block_reason)) {
       return {
@@ -87,8 +87,40 @@ export const RequireAuth: React.FC<GuardProps> = ({
     );
   }
 
+  // 1. REGLA ESTRICTA: El administrador NUNCA puede ingresar a las cuentas ni vistas de cliente o profesional
+  if (isUserAdmin(user)) {
+    const isClientOrProRoute =
+      role === "client" ||
+      role === "professional" ||
+      location.pathname.startsWith("/cliente") ||
+      location.pathname.startsWith("/profesional") ||
+      location.pathname.startsWith("/onboarding") ||
+      location.pathname === "/perfil" ||
+      location.pathname.startsWith("/seguimiento") ||
+      location.pathname === "/solicitudes" ||
+      location.pathname === "/mis-solicitudes" ||
+      location.pathname === "/reservas" ||
+      location.pathname === "/misfavorito" ||
+      location.pathname.startsWith("/folder");
+
+    if (role !== "staff" || isClientOrProRoute) {
+      return <Redirect to="/admin" />;
+    }
+  }
+
+  // 2. REGLA ESTRICTA: Los clientes y profesionales NUNCA pueden acceder al portal administrativo
+  if (!isUserAdmin(user)) {
+    const isAdminRoute =
+      role === "staff" ||
+      location.pathname.startsWith("/admin") ||
+      location.pathname.startsWith("/staff");
+
+    if (isAdminRoute) {
+      return <Redirect to={getEntryRoute(user)} />;
+    }
+  }
+
   if (role && user.role !== role) return <Redirect to={getEntryRoute(user)} />;
-  if (user.role === "staff" && role !== "staff") return <Redirect to="/staff" />;
 
   if (onboarding === "required" && user.onboarding_completed) {
     return <Redirect to={getRoleHomeRoute(user.role)} />;

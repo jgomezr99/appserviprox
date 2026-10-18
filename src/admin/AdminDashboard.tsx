@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { adminService } from "../services/adminService";
 import { usePlatformSettings } from "../services/platformSettings";
 import AdminSettings from "./AdminSettings";
+import AdminReportsStats from "./AdminReportsStats";
 import "./AdminDashboard.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ interface RequestItem {
   userName: string;
   userAvatar: string;
   date: string;
-  status: "En revisión" | "Aprobado" | "Abierto" | "En proceso" | "Rechazado";
+  status: "En revisión" | "Aprobado" | "Abierto" | "En proceso" | "Rechazado"; 
   statusClass: string;
 }
 
@@ -3210,6 +3211,11 @@ export const AdminDashboard: React.FC = () => {
 
   const handleConfirmReplyPqr = async () => {
     if (!targetPqrToReply || !replyPqrText.trim()) return;
+    if (isTramiClosed(targetPqrToReply.status)) {
+      showNotification("Este trámite ya se encuentra cerrado o resuelto. No es posible enviar respuestas adicionales.", "error");
+      setModalReplyPqrOpen(false);
+      return;
+    }
     const targetId = targetPqrToReply.raw_id || targetPqrToReply.id;
     const dateNowStr = new Date().toLocaleDateString("es-CO", {
       day: "2-digit",
@@ -3536,10 +3542,23 @@ export const AdminDashboard: React.FC = () => {
   const currentFailure =
     failuresList.find((f) => f.id === selectedFailureId) || failuresList[0] || INITIAL_FAILURES_DATA[0];
 
-  // Función helper: Validar si un trámite está cerrado
-  const isTramiClosed = (status: string): boolean => {
-    return status === "Cerrada";
-  };
+  // Función helper: Validar si un trámite o caso está cerrado/resuelto
+  function isTramiClosed(status?: string): boolean {
+    if (!status) return false;
+    const s = status.toLowerCase().trim();
+    return (
+      s === "cerrada" ||
+      s === "cerrado" ||
+      s === "resuelta" ||
+      s === "resuelto" ||
+      s === "sancionado" ||
+      s === "sancionada" ||
+      s === "rechazado" ||
+      s === "rechazada" ||
+      s === "cancelado" ||
+      s === "cancelada"
+    );
+  }
 
   const handleToggleFailureCheckbox = (id: string) => {
     setSelectedFailureCheckboxIds((prev) =>
@@ -5646,7 +5665,12 @@ export const AdminDashboard: React.FC = () => {
                                     <button
                                       type="button"
                                       className="ad-action-pill gift"
-                                      title="Responder al cliente y notificar"
+                                      title={isTramiClosed(item.status) ? "El trámite ya se encuentra cerrado o resuelto (no admite respuestas)" : "Responder al cliente y notificar"}
+                                      disabled={isTramiClosed(item.status)}
+                                      style={{
+                                        opacity: isTramiClosed(item.status) ? 0.35 : 1,
+                                        cursor: isTramiClosed(item.status) ? "not-allowed" : "pointer",
+                                      }}
                                       onClick={() => handleOpenReplyPqrModal(item)}
                                     >
                                       💬
@@ -5654,7 +5678,12 @@ export const AdminDashboard: React.FC = () => {
                                     <button
                                       type="button"
                                       className="ad-action-pill neutral"
-                                      title="Cerrar caso"
+                                      title={isTramiClosed(item.status) ? "El caso ya está cerrado o resuelto" : "Cerrar caso"}
+                                      disabled={isTramiClosed(item.status)}
+                                      style={{
+                                        opacity: isTramiClosed(item.status) ? 0.35 : 1,
+                                        cursor: isTramiClosed(item.status) ? "not-allowed" : "pointer",
+                                      }}
                                       onClick={() => handleCloseCase(item)}
                                     >
                                       •••
@@ -7932,8 +7961,20 @@ export const AdminDashboard: React.FC = () => {
                                     </button>
                                     <button
                                       type="button"
-                                      title="Cambiar estado"
-                                      style={{ background: "#f1f5f9", border: "none", borderRadius: "6px", width: "28px", height: "28px", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                                      title={isTramiClosed(item.status) ? "Esta incidencia está cerrada o resuelta" : "Cambiar estado"}
+                                      disabled={isTramiClosed(item.status)}
+                                      style={{
+                                        background: "#f1f5f9",
+                                        border: "none",
+                                        borderRadius: "6px",
+                                        width: "28px",
+                                        height: "28px",
+                                        cursor: isTramiClosed(item.status) ? "not-allowed" : "pointer",
+                                        opacity: isTramiClosed(item.status) ? 0.35 : 1,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                      }}
                                       onClick={() => {
                                         if (isTramiClosed(item.status)) {
                                           showNotification("Esta incidencia está cerrada. No se pueden realizar acciones.", "error");
@@ -7948,8 +7989,20 @@ export const AdminDashboard: React.FC = () => {
                                     </button>
                                     <button
                                       type="button"
-                                      title="Asignar especialista"
-                                      style={{ background: "#f1f5f9", border: "none", borderRadius: "6px", width: "28px", height: "28px", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                                      title={isTramiClosed(item.status) ? "Esta incidencia está cerrada o resuelta" : "Asignar especialista"}
+                                      disabled={isTramiClosed(item.status)}
+                                      style={{
+                                        background: "#f1f5f9",
+                                        border: "none",
+                                        borderRadius: "6px",
+                                        width: "28px",
+                                        height: "28px",
+                                        cursor: isTramiClosed(item.status) ? "not-allowed" : "pointer",
+                                        opacity: isTramiClosed(item.status) ? 0.35 : 1,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                      }}
                                       onClick={() => {
                                         if (isTramiClosed(item.status)) {
                                           showNotification("Esta incidencia está cerrada. No se pueden realizar acciones.", "error");
@@ -9279,6 +9332,13 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* ═════════════════════════════════════════════════════════════════
+              VISTA OFICIAL: REPORTES Y ESTADÍSTICAS
+             ═════════════════════════════════════════════════════════════════ */}
+          {activeMenu === "reportes" && (
+            <AdminReportsStats onNavigateToAudit={() => setActiveMenu("auditoria")} />
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════
               VISTAS DE MÓDULOS ADICIONALES (FALLAS, CONTRATACIONES, ETC.)
              ═════════════════════════════════════════════════════════════════ */}
           {activeMenu !== "inicio" &&
@@ -9288,7 +9348,11 @@ export const AdminDashboard: React.FC = () => {
             activeMenu !== "beneficios" &&
             activeMenu !== "auditoria" &&
             activeMenu !== "fallas" &&
-            activeMenu !== "roles" && (
+            activeMenu !== "roles" &&
+            activeMenu !== "reportes" &&
+            activeMenu !== "configuracion" &&
+            activeMenu !== "publicaciones_servicios" &&
+            activeMenu !== "publicaciones_productos" && (
               <div className="ad-card" style={{ padding: "32px", textAlign: "center" }}>
                 <div style={{ fontSize: "3rem", marginBottom: "12px" }}>📋</div>
                 <h3 style={{ margin: "0 0 8px" }}>Módulo de {activeMenu.replace("_", " ").toUpperCase()}</h3>
@@ -10503,12 +10567,35 @@ export const AdminDashboard: React.FC = () => {
                 </p>
               </div>
 
+              {isTramiClosed(targetPqrToReply.status) && (
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fee2e2",
+                    borderRadius: "10px",
+                    padding: "12px 14px",
+                    marginTop: "12px",
+                    fontSize: "0.85rem",
+                    color: "#991b1b",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <span style={{ fontSize: "1.2rem" }}>🔒</span>
+                  <span>
+                    <strong>Caso cerrado o resuelto.</strong> Este trámite se encuentra formalmente finalizado. No es posible enviar respuestas adicionales ni modificar su estado.
+                  </span>
+                </div>
+              )}
+
               <div className="ad-form-group" style={{ marginTop: "14px" }}>
                 <label>Actualizar estado del caso:</label>
                 <select
                   className="ad-form-control"
                   value={replyPqrStatus}
                   onChange={(e) => setReplyPqrStatus(e.target.value as any)}
+                  disabled={isTramiClosed(targetPqrToReply.status)}
                 >
                   <option value="En proceso">En proceso (Investigación técnica en curso)</option>
                   <option value="En revisión">En revisión (Solicitud de pruebas adicionales)</option>
@@ -10524,7 +10611,12 @@ export const AdminDashboard: React.FC = () => {
                   rows={4}
                   value={replyPqrText}
                   onChange={(e) => setReplyPqrText(e.target.value)}
-                  placeholder="Estimado cliente, respecto a su solicitud le informamos que hemos revisado los antecedentes del caso y procedemos a..."
+                  disabled={isTramiClosed(targetPqrToReply.status)}
+                  placeholder={
+                    isTramiClosed(targetPqrToReply.status)
+                      ? "Este trámite está cerrado. Las respuestas están deshabilitadas."
+                      : "Estimado cliente, respecto a su solicitud le informamos que hemos revisado los antecedentes del caso y procedemos a..."
+                  }
                 />
               </div>
 
@@ -10533,10 +10625,11 @@ export const AdminDashboard: React.FC = () => {
                   display: "flex",
                   alignItems: "flex-start",
                   gap: "10px",
-                  background: "#eff6ff",
+                  background: isTramiClosed(targetPqrToReply.status) ? "#f8fafc" : "#eff6ff",
                   padding: "12px",
                   borderRadius: "10px",
-                  border: "1px solid #bfdbfe",
+                  border: isTramiClosed(targetPqrToReply.status) ? "1px solid #cbd5e1" : "1px solid #bfdbfe",
+                  opacity: isTramiClosed(targetPqrToReply.status) ? 0.6 : 1,
                 }}
               >
                 <input
@@ -10544,11 +10637,12 @@ export const AdminDashboard: React.FC = () => {
                   id="sendNotifCheck"
                   checked={replySendNotification}
                   onChange={(e) => setReplySendNotification(e.target.checked)}
-                  style={{ marginTop: "3px", width: "16px", height: "16px", cursor: "pointer" }}
+                  disabled={isTramiClosed(targetPqrToReply.status)}
+                  style={{ marginTop: "3px", width: "16px", height: "16px", cursor: isTramiClosed(targetPqrToReply.status) ? "not-allowed" : "pointer" }}
                 />
-                <label htmlFor="sendNotifCheck" style={{ fontSize: "0.82rem", color: "#1e40af", cursor: "pointer", margin: 0 }}>
+                <label htmlFor="sendNotifCheck" style={{ fontSize: "0.82rem", color: isTramiClosed(targetPqrToReply.status) ? "#64748b" : "#1e40af", cursor: isTramiClosed(targetPqrToReply.status) ? "not-allowed" : "pointer", margin: 0 }}>
                   <strong>Enviar notificación inmediata al cliente</strong>
-                  <span style={{ display: "block", color: "#3b82f6", fontSize: "0.75rem", marginTop: "2px" }}>
+                  <span style={{ display: "block", color: isTramiClosed(targetPqrToReply.status) ? "#94a3b8" : "#3b82f6", fontSize: "0.75rem", marginTop: "2px" }}>
                     El usuario recibirá una alerta push en su aplicación móvil y correo electrónico registrado con el detalle de la respuesta.
                   </span>
                 </label>
@@ -10560,12 +10654,16 @@ export const AdminDashboard: React.FC = () => {
                 className="ad-btn ad-btn-secondary"
                 onClick={() => setModalReplyPqrOpen(false)}
               >
-                Cancelar
+                {isTramiClosed(targetPqrToReply.status) ? "Cerrar ventana" : "Cancelar"}
               </button>
               <button
                 type="button"
                 className="ad-btn ad-btn-primary"
-                disabled={!replyPqrText.trim()}
+                disabled={!replyPqrText.trim() || isTramiClosed(targetPqrToReply.status)}
+                style={{
+                  opacity: isTramiClosed(targetPqrToReply.status) ? 0.4 : 1,
+                  cursor: isTramiClosed(targetPqrToReply.status) ? "not-allowed" : "pointer",
+                }}
                 onClick={handleConfirmReplyPqr}
               >
                 Enviar Respuesta y Notificar

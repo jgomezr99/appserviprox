@@ -11,7 +11,7 @@ import { authService } from "../services/auth";
 import type { LoginPayload, RegisterPayload, UpdateMePayload, User } from "../types/serviprox";
 
 const DEMO_SESSION_KEY = "serviprox_demo_user";
-const DEMO_PASSWORD = "serviprox2026";
+const DEMO_PASSWORDS = ["serviprox2026", "servipro2026"];
 
 const demoUsers: Record<string, User> = {
   "laura.gomez@bogota.co": {
@@ -69,6 +69,8 @@ const demoUsers: Record<string, User> = {
     first_name: "Administrador",
     last_name: "Serviprox",
     role: "staff",
+    is_staff: true,
+    is_superuser: true,
     phone: "+57 300 123 4567",
     city: "Bogotá",
     document_id: "CC 1.000.000.001",
@@ -85,6 +87,8 @@ const demoUsers: Record<string, User> = {
     first_name: "Administrador",
     last_name: "Serviprox",
     role: "staff",
+    is_staff: true,
+    is_superuser: true,
     phone: "+57 300 123 4567",
     city: "Bogotá",
     document_id: "CC 1.000.000.001",
@@ -97,8 +101,10 @@ const demoUsers: Record<string, User> = {
 };
 
 const getDemoUser = (payload: LoginPayload) => {
-  const user = demoUsers[payload.email.trim().toLowerCase()];
-  return user && payload.password === DEMO_PASSWORD ? user : null;
+  const key = payload.email.trim().toLowerCase();
+  const user = demoUsers[key];
+  const validPassword = DEMO_PASSWORDS.includes(payload.password);
+  return user && validPassword ? user : null;
 };
 
 type AuthContextValue = {
