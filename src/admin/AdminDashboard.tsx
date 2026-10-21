@@ -1850,6 +1850,16 @@ export const AdminDashboard: React.FC = () => {
     fetchDbPqrsAndProblems();
     fetchDbNotifications();
     fetchRolesAndUsers();
+
+    const handleSyncEvent = () => {
+      fetchDbPqrsAndProblems();
+    };
+    window.addEventListener("serviprox:pqr-updated", handleSyncEvent);
+    window.addEventListener("serviprox:problem-updated", handleSyncEvent);
+    return () => {
+      window.removeEventListener("serviprox:pqr-updated", handleSyncEvent);
+      window.removeEventListener("serviprox:problem-updated", handleSyncEvent);
+    };
   }, []);
 
   // Estados para el Módulo de Roles y Permisos (Base de Datos)

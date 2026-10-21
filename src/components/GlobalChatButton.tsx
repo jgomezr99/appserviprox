@@ -12,6 +12,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlatformSettings } from '../services/platformSettings';
+import { isUserAdmin } from '../utils/routes';
 import { LiveSupportChatModal } from './pqr/LiveSupportChatModal';
 import type { AppProblemReport, PqrReport } from '../types/serviprox';
 import {
@@ -46,7 +47,7 @@ export const GlobalChatButton: React.FC = () => {
     HIDDEN_PATHS.some((p) => location.pathname.startsWith(p)) ||
     isAdministrativeLogin ||
     location.pathname.startsWith('/onboarding') ||
-    (user && user.role !== 'client');
+    isUserAdmin(user);
 
   if (isHidden) return null;
 
@@ -181,7 +182,7 @@ export const GlobalChatButton: React.FC = () => {
               letterSpacing: '-0.2px',
             }}
           >
-            Chat de Reporte en Vivo
+            Chat IA: PQR &amp; Apelaciones
           </span>
           <span
             style={{
@@ -192,7 +193,7 @@ export const GlobalChatButton: React.FC = () => {
               letterSpacing: '-0.1px',
             }}
           >
-            Quejas &amp; Problemas App
+            Quejas, Fallas &amp; Descargos
           </span>
         </div>
       </button>

@@ -123,9 +123,23 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   }, []);
 
   useEffect(() => {
-    const splashTimer = window.setTimeout(() => setIsSplashVisible(false), 8000);
+    if (isAuthenticated) {
+      setIsSplashVisible(false);
+      return;
+    }
+    const hasSeenSplash = sessionStorage.getItem("serviprox_splash_seen");
+    if (hasSeenSplash) {
+      setIsSplashVisible(false);
+      return;
+    }
+    const splashTimer = window.setTimeout(() => {
+      setIsSplashVisible(false);
+      try {
+        sessionStorage.setItem("serviprox_splash_seen", "1");
+      } catch {}
+    }, 900);
     return () => window.clearTimeout(splashTimer);
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const handleStatus = (e: Event) => {
@@ -319,7 +333,13 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
       <IonContent fullscreen className={styles.authContent}>
         <main className={`${styles.authShell} ${showLoginForm ? styles.loginShell : ""} ${administrative ? `${styles.administrativeLogin} admin-login-shell` : ""}`}>
           {isSplashVisible ? (
-            <section className={styles.splashScreen} aria-label="Cargando Serviprox">
+            <section
+              className={styles.splashScreen}
+              aria-label="Cargando Serviprox"
+              onClick={() => setIsSplashVisible(false)}
+              style={{ cursor: "pointer" }}
+              title="Toca para continuar"
+            >
               <IonImg src={logo} alt="Serviprox" />
               <p>Servicios cerca de ti</p>
               <div className={styles.splashProgress} aria-hidden="true" />

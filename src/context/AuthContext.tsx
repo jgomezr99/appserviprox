@@ -11,7 +11,18 @@ import { authService } from "../services/auth";
 import type { LoginPayload, RegisterPayload, UpdateMePayload, User } from "../types/serviprox";
 
 const DEMO_SESSION_KEY = "serviprox_demo_user";
+const CACHED_USER_KEY = "serviprox_cached_user";
 const DEMO_PASSWORDS = ["serviprox2026", "servipro2026"];
+
+const getCachedUser = (): User | null => {
+  try {
+    const demo = localStorage.getItem(DEMO_SESSION_KEY);
+    if (demo && demoUsers[demo]) return demoUsers[demo];
+    const cached = localStorage.getItem(CACHED_USER_KEY);
+    if (cached) return JSON.parse(cached);
+  } catch {}
+  return null;
+};
 
 const demoUsers: Record<string, User> = {
   "laura.gomez@bogota.co": {
@@ -124,12 +135,28 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(() => getCachedUser());
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    const cached = getCachedUser();
+    if (cached) return false;
+    return !!tokenStorage.getAccessToken() || !!tokenStorage.getRefreshToken();
+  });
+
+  const saveUser = useCallback((u: User | null) => {
+    setUser(u);
+    try {
+      if (u) {
+        localStorage.setItem(CACHED_USER_KEY, JSON.stringify(u));
+      } else {
+        localStorage.removeItem(CACHED_USER_KEY);
+      }
+    } catch {}
+  }, []);
 
   const logout = useCallback(() => {
     tokenStorage.clear();
     localStorage.removeItem(DEMO_SESSION_KEY);
+    localStorage.removeItem(CACHED_USER_KEY);
     setUser(null);
   }, []);
 
@@ -137,7 +164,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const demoSession = localStorage.getItem(DEMO_SESSION_KEY);
     if (demoSession && demoUsers[demoSession]) {
       const currentUser = demoUsers[demoSession];
-      setUser(currentUser);
+      saveUser(currentUser);
       setIsLoading(false);
       return currentUser;
     }
@@ -146,18 +173,21 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const hasRefresh = !!tokenStorage.getRefreshToken();
 
     if (!hasAccess && !hasRefresh) {
-      setUser(null);
+      saveUser(null);
       setIsLoading(false);
       return null;
     }
 
-    setIsLoading(true);
+    const cached = getCachedUser();
+    if (!cached) {
+      setIsLoading(true);
+    }
     try {
       if (!hasAccess && hasRefresh) {
         await authService.refresh();
       }
       const currentUser = await authService.getCurrentUser();
-      setUser(currentUser);
+      saveUser(currentUser);
       return currentUser;
     } catch {
       logout();
@@ -165,7 +195,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     } finally {
       setIsLoading(false);
     }
-  }, [logout]);
+  }, [logout, saveUser]);
 
   const login = useCallback(async (payload: LoginPayload) => {
     const demoUser = getDemoUser(payload);
@@ -173,53 +203,53 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       try {
         await authService.login(payload);
         const currentUser = await authService.getCurrentUser();
-        setUser(currentUser);
+        saveUser(currentUser);
         return currentUser;
       } catch (error) {
         console.warn("Autenticación con backend no disponible para demo, activando sesión demo local:", error);
         localStorage.setItem(DEMO_SESSION_KEY, demoUser.email);
-        setUser(demoUser);
+        saveUser(demoUser);
         return demoUser;
       }
     }
 
     await authService.login(payload);
     const currentUser = await authService.getCurrentUser();
-    setUser(currentUser);
+    saveUser(currentUser);
     return currentUser;
-  }, []);
+  }, [saveUser]);
 
   const register = useCallback(async (payload: RegisterPayload) => {
     await authService.register(payload);
     await authService.login({ email: payload.email, password: payload.password });
     const currentUser = await authService.getCurrentUser();
-    setUser(currentUser);
+    saveUser(currentUser);
     return currentUser;
-  }, []);
+  }, [saveUser]);
 
   const updateMe = useCallback(async (payload: UpdateMePayload) => {
     const updatedUser = await authService.updateCurrentUser(payload);
-    setUser(updatedUser);
+    saveUser(updatedUser);
     return updatedUser;
-  }, []);
+  }, [saveUser]);
 
   const completeOnboarding = useCallback(async () => {
     const updatedUser = await authService.completeOnboarding();
-    setUser(updatedUser);
+    saveUser(updatedUser);
     return updatedUser;
-  }, []);
+  }, [saveUser]);
 
   const becomeProfessional = useCallback(async () => {
     const updatedUser = await authService.becomeProfessional();
-    setUser(updatedUser);
+    saveUser(updatedUser);
     return updatedUser;
-  }, []);
+  }, [saveUser]);
 
   const becomeClient = useCallback(async () => {
     const updatedUser = await authService.becomeClient();
-    setUser(updatedUser);
+    saveUser(updatedUser);
     return updatedUser;
-  }, []);
+  }, [saveUser]);
 
   useEffect(() => {
     void refreshSession();

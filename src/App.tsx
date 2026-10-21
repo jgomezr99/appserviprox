@@ -1,46 +1,115 @@
-import { IonApp, IonRouterOutlet, IonSplitPane, setupIonicReact } from '@ionic/react';
+import React, { Suspense, lazy } from 'react';
+import { IonApp, IonRouterOutlet, IonSplitPane, IonSpinner, setupIonicReact } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import { Redirect, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Menu from './components/Menu';
-import Page from './pages/Page';
-import ClientHome from './pages/ClientHome';
-import ClientProfilePage from './pages/ClientProfilePage';
-import ClientOnboarding from './pages/ClientOnboarding';
-import ClientProfessionalDetail from './pages/ClientProfessionalDetail';
-import ContractorMapPage from './pages/ContractorMapPage';
-
 import Login from './pages/Login';
-import AdministrativeLoginPage from './pages/AdministrativeLoginPage';
-import Register from './pages/Register';
-
-import HistorialPago from './components/historiadepago/historiapago';
-import Misfavorito from './components/misfavorito/misfavorito';
-import HouseholdsPage from './pages/HouseholdsPage';
-import ProfessionalDashboard from './pages/ProfessionalDashboard';
-import ProfessionalOnboarding from './pages/ProfessionalOnboarding';
-import ProfessionalProfilePage from './pages/ProfessionalProfilePage';
-import ProfessionalRequestDetailPage from './pages/ProfessionalRequestDetailPage';
-import ProfessionalRequestsPage from './pages/ProfessionalRequestsPage';
-import RolePlaceholderPage from './pages/RolePlaceholderPage';
-import StaffHome from './pages/StaffHome';
-import WorkTrackingPage from './pages/WorkTrackingPage';
-import PqrPage from './pages/PqrPage';
-import Reservas from './pages/Reservas';
+import ClientHome from './pages/ClientHome';
 import { GlobalChatButton } from './components/GlobalChatButton';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { RequireAuth } from './components/routing/RouteGuards';
-import { useAuth } from './context/AuthContext';
 import { useHomeFlags } from './services/platformSettings';
-import BenefitsPage from './pages/BenefitsPage';
-import StorePage from './pages/StorePage';
+import { getEntryRoute } from './utils/routes';
+
+/* Core CSS required for Ionic components to work properly */
+import '@ionic/react/css/core.css';
+
+/* Basic CSS for apps built with Ionic */
+import '@ionic/react/css/normalize.css';
+import '@ionic/react/css/structure.css';
+import '@ionic/react/css/typography.css';
+
+/* Optional CSS utils that can be commented out */
+import '@ionic/react/css/padding.css';
+import '@ionic/react/css/float-elements.css';
+import '@ionic/react/css/text-alignment.css';
+import '@ionic/react/css/text-transformation.css';
+import '@ionic/react/css/flex-utils.css';
+import '@ionic/react/css/display.css';
+
+/* Ionic Dark Mode */
+import '@ionic/react/css/palettes/dark.system.css';
+
+/* Theme variables */
+import './theme/variables.css';
+
+// Componentes secundarios cargados bajo demanda (Code Splitting) para inicio ultrarrápido
+const Page = lazy(() => import('./pages/Page'));
+const AdministrativeLoginPage = lazy(() => import('./pages/AdministrativeLoginPage'));
+const Register = lazy(() => import('./pages/Register'));
+const ClientProfilePage = lazy(() => import('./pages/ClientProfilePage'));
+const ClientOnboarding = lazy(() => import('./pages/ClientOnboarding'));
+const ClientProfessionalDetail = lazy(() => import('./pages/ClientProfessionalDetail'));
+const ContractorMapPage = lazy(() => import('./pages/ContractorMapPage'));
+const HistorialPago = lazy(() => import('./components/historiadepago/historiapago'));
+const Misfavorito = lazy(() => import('./components/misfavorito/misfavorito'));
+const HouseholdsPage = lazy(() => import('./pages/HouseholdsPage'));
+const ProfessionalDashboard = lazy(() => import('./pages/ProfessionalDashboard'));
+const ProfessionalOnboarding = lazy(() => import('./pages/ProfessionalOnboarding'));
+const ProfessionalProfilePage = lazy(() => import('./pages/ProfessionalProfilePage'));
+const ProfessionalRequestDetailPage = lazy(() => import('./pages/ProfessionalRequestDetailPage'));
+const ProfessionalRequestsPage = lazy(() => import('./pages/ProfessionalRequestsPage'));
+const RolePlaceholderPage = lazy(() => import('./pages/RolePlaceholderPage'));
+const StaffHome = lazy(() => import('./pages/StaffHome'));
+const WorkTrackingPage = lazy(() => import('./pages/WorkTrackingPage'));
+const PqrPage = lazy(() => import('./pages/PqrPage'));
+const Reservas = lazy(() => import('./pages/Reservas'));
+const BenefitsPage = lazy(() => import('./pages/BenefitsPage'));
+const StorePage = lazy(() => import('./pages/StorePage'));
+
+const PageFallback: React.FC = () => (
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100%',
+      minHeight: '60vh',
+      width: '100%',
+      backgroundColor: 'transparent',
+    }}
+  >
+    <IonSpinner name="crescent" color="primary" />
+  </div>
+);
+
+const withLazy = <P extends object>(Component: React.ComponentType<P>): React.FC<P> => {
+  return (props: P) => (
+    <Suspense fallback={<PageFallback />}>
+      <Component {...props} />
+    </Suspense>
+  );
+};
+
+const LazyPage = withLazy(Page);
+const LazyAdministrativeLoginPage = withLazy(AdministrativeLoginPage);
+const LazyRegister = withLazy(Register);
+const LazyClientProfilePage = withLazy(ClientProfilePage);
+const LazyClientOnboarding = withLazy(ClientOnboarding);
+const LazyClientProfessionalDetail = withLazy(ClientProfessionalDetail);
+const LazyContractorMapPage = withLazy(ContractorMapPage);
+const LazyHistorialPago = withLazy(HistorialPago);
+const LazyMisfavorito = withLazy(Misfavorito);
+const LazyHouseholdsPage = withLazy(HouseholdsPage);
+const LazyProfessionalDashboard = withLazy(ProfessionalDashboard);
+const LazyProfessionalOnboarding = withLazy(ProfessionalOnboarding);
+const LazyProfessionalProfilePage = withLazy(ProfessionalProfilePage);
+const LazyProfessionalRequestDetailPage = withLazy(ProfessionalRequestDetailPage);
+const LazyProfessionalRequestsPage = withLazy(ProfessionalRequestsPage);
+const LazyStaffHome = withLazy(StaffHome);
+const LazyWorkTrackingPage = withLazy(WorkTrackingPage);
+const LazyPqrPage = withLazy(PqrPage);
+const LazyReservas = withLazy(Reservas);
+const LazyBenefitsPage = withLazy(BenefitsPage);
+const LazyStorePage = withLazy(StorePage);
 
 const BenefitsRoute: React.FC = () => {
   const flags = useHomeFlags('professional');
   if (!flags.benefits) {
     return <Redirect to="/profesional/inicio" />;
   }
-  return <BenefitsPage />;
+  return <LazyBenefitsPage />;
 };
 
 const ClientBenefitsRoute: React.FC = () => {
@@ -48,7 +117,7 @@ const ClientBenefitsRoute: React.FC = () => {
   if (!flags.benefits) {
     return <Redirect to="/cliente/inicio" />;
   }
-  return <BenefitsPage />;
+  return <LazyBenefitsPage />;
 };
 
 const ClientServicesRoute: React.FC = () => {
@@ -56,7 +125,7 @@ const ClientServicesRoute: React.FC = () => {
   if (!flags.services) {
     return <Redirect to="/cliente/inicio" />;
   }
-  return <Page />;
+  return <LazyPage />;
 };
 
 const ContractorMapRoute: React.FC = () => {
@@ -64,7 +133,7 @@ const ContractorMapRoute: React.FC = () => {
   if (!flags.map) {
     return <Redirect to="/cliente/inicio" />;
   }
-  return <ContractorMapPage />;
+  return <LazyContractorMapPage />;
 };
 
 const SolicitudesRedirect: React.FC = () => {
@@ -83,41 +152,19 @@ const ClientSolicitudesRoute: React.FC = () => {
   if (user?.role === 'professional') {
     return <Redirect to="/login" />;
   }
-  return <Reservas />;
+  return <LazyReservas />;
 };
 
-
-
-
-/* Core CSS required for Ionic components to work properly */
-import '@ionic/react/css/core.css';
-
-/* Basic CSS for apps built with Ionic */
-import '@ionic/react/css/normalize.css';
-import '@ionic/react/css/structure.css';
-import '@ionic/react/css/typography.css';
-
-/* Optional CSS utils that can be commented out */
-import '@ionic/react/css/padding.css';
-import '@ionic/react/css/float-elements.css';
-import '@ionic/react/css/text-alignment.css';
-import '@ionic/react/css/text-transformation.css';
-import '@ionic/react/css/flex-utils.css';
-import '@ionic/react/css/display.css';
-
-/**
- * Ionic Dark Mode
- * -----------------------------------------------------
- * For more info, please see:
- * https://ionicframework.com/docs/theming/dark-mode
- */
-
-/* import '@ionic/react/css/palettes/dark.always.css'; */
-/* import '@ionic/react/css/palettes/dark.class.css'; */
-import '@ionic/react/css/palettes/dark.system.css';
-
-/* Theme variables */
-import './theme/variables.css';
+const RootRedirect: React.FC = () => {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  if (isLoading) {
+    return <PageFallback />;
+  }
+  if (isAuthenticated && user) {
+    return <Redirect to={getEntryRoute(user)} />;
+  }
+  return <Redirect to="/login" />;
+};
 
 setupIonicReact();
 
@@ -129,32 +176,32 @@ const App: React.FC = () => {
           <IonSplitPane contentId="main" when="false">
             <Menu />
             <IonRouterOutlet id="main">
-              {/* Página principal: /login como ingreso principal de la app */}
+              {/* Redirección inteligente al inicio sin demoras ni pasos innecesarios */}
               <Route path="/" exact={true}>
-                <Redirect to="/login" />
+                <RootRedirect />
               </Route>
               <Route path="/login" exact={true}>
                 <Login />
               </Route>
               <Route path="/login/administrativo" exact={true}>
-                <AdministrativeLoginPage />
+                <LazyAdministrativeLoginPage />
               </Route>
               {/* alternate entry path used by the Menu */}
               <Route path="/ingresar" exact={true}>
                 <Redirect to="/login" />
               </Route>
               <Route path="/register" exact={true}>
-                <Register />
+                <LazyRegister />
               </Route>
 
               <Route path="/onboarding/client" exact={true}>
                 <RequireAuth role="client" onboarding="required">
-                  <ClientOnboarding />
+                  <LazyClientOnboarding />
                 </RequireAuth>
               </Route>
               <Route path="/onboarding/professional" exact={true}>
                 <RequireAuth role="professional" onboarding="required">
-                  <ProfessionalOnboarding />
+                  <LazyProfessionalOnboarding />
                 </RequireAuth>
               </Route>
 
@@ -165,24 +212,24 @@ const App: React.FC = () => {
               </Route>
               <Route path="/cliente/perfil" exact={true}>
                 <RequireAuth role="client">
-                  <ClientProfilePage />
+                  <LazyClientProfilePage />
                 </RequireAuth>
               </Route>
               <Route path="/cliente/viviendas" exact={true}>
                 <RequireAuth role="client">
-                  <HouseholdsPage />
+                  <LazyHouseholdsPage />
                 </RequireAuth>
               </Route>
              
               <Route path="/cliente/profesionales/:id" exact={true}>
                 <RequireAuth role="client">
-                  <ClientProfessionalDetail />
+                  <LazyClientProfessionalDetail />
                 </RequireAuth>
               </Route>
             
               <Route path="/cliente/favoritos" exact={true}>
                 <RequireAuth role="client">
-                  <Misfavorito />
+                  <LazyMisfavorito />
                 </RequireAuth>
               </Route>
               <Route path="/cliente/mapa" exact={true}>
@@ -192,12 +239,12 @@ const App: React.FC = () => {
               </Route>
               <Route path="/cliente/historialpago" exact={true}>
                 <RequireAuth role="client">
-                  <HistorialPago />
+                  <LazyHistorialPago />
                 </RequireAuth>
               </Route>
               <Route path="/cliente/pqrs" exact={true}>
                 <RequireAuth role="client">
-                  <PqrPage />
+                  <LazyPqrPage />
                 </RequireAuth>
               </Route>
               <Route path="/cliente/beneficios" exact={true}>
@@ -206,7 +253,7 @@ const App: React.FC = () => {
                 </RequireAuth>
               </Route>
               <Route path="/tienda" exact={true}>
-                <StorePage />
+                <LazyStorePage />
               </Route>
               <Route path="/productos" exact={true}>
                 <Redirect to="/tienda" />
@@ -227,7 +274,7 @@ const App: React.FC = () => {
 
               <Route path="/profesional/inicio" exact={true}>
                 <RequireAuth role="professional">
-                  <ProfessionalDashboard />
+                  <LazyProfessionalDashboard />
                 </RequireAuth>
               </Route>
               <Route path="/profesional/perfil" exact={true}>
@@ -235,22 +282,22 @@ const App: React.FC = () => {
               </Route>
               <Route path="/perfil" exact={true}>
                 <RequireAuth role="professional" onboarding="any">
-                  <ProfessionalProfilePage />
+                  <LazyProfessionalProfilePage />
                 </RequireAuth>
               </Route>
               <Route path="/profesional/solicitudes" exact={true}>
                 <RequireAuth role="professional">
-                  <ProfessionalRequestsPage />
+                  <LazyProfessionalRequestsPage />
                 </RequireAuth>
               </Route>
               <Route path="/profesional/solicitudes/:id" exact={true}>
                 <RequireAuth role="professional">
-                  <ProfessionalRequestDetailPage />
+                  <LazyProfessionalRequestDetailPage />
                 </RequireAuth>
               </Route>
               <Route path="/seguimiento/:id" exact={true}>
                 <RequireAuth onboarding="any">
-                  <WorkTrackingPage />
+                  <LazyWorkTrackingPage />
                 </RequireAuth>
               </Route>
               <Route path="/profesional/trabajos" exact={true}>
@@ -279,7 +326,7 @@ const App: React.FC = () => {
               </Route>
               <Route path="/profesional/pqrs" exact={true}>
                 <RequireAuth role="professional">
-                  <PqrPage />
+                  <LazyPqrPage />
                 </RequireAuth>
               </Route>
 
@@ -290,16 +337,16 @@ const App: React.FC = () => {
               <Route path="/staff" exact={true}>
                 <Redirect to="/admin" />
               </Route>
-{/*ruta  de a administradores*/}
+              {/* Ruta del administrador (panel administrativo bajo demanda) */}
               <Route path="/admin" exact={false}>
                 <RequireAuth role="staff" onboarding="any">
-                  <StaffHome />
+                  <LazyStaffHome />
                 </RequireAuth>
               </Route>
 
               <Route path="/folder/:name" exact={true}>
                 <RequireAuth role="client">
-                  <Page />
+                  <LazyPage />
                 </RequireAuth>
               </Route>
 

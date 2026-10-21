@@ -33,6 +33,7 @@ import {
   cartOutline, cartSharp,
   logOutOutline,
   swapHorizontalOutline,
+  chatbubbleEllipsesOutline,
 } from 'ionicons/icons';
 
 
@@ -260,6 +261,30 @@ const Menu: React.FC = () => {
               </IonItem>
             </IonMenuToggle>
           ))}
+
+          {!isAdmin && (
+            <IonItem
+              button
+              lines="none"
+              detail={false}
+              className="menu-ai-chat-item"
+              style={{
+                '--background': 'rgba(16, 185, 129, 0.09)',
+                borderRadius: '12px',
+                margin: '10px 14px',
+                color: '#059669',
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+              onClick={async () => {
+                await menuController.close('main-menu');
+                window.dispatchEvent(new CustomEvent('serviprox:open-live-chat'));
+              }}
+            >
+              <IonIcon slot="start" icon={chatbubbleEllipsesOutline} style={{ color: '#10b981' }} />
+              <IonLabel>💬 Chat IA: PQR &amp; Apelación</IonLabel>
+            </IonItem>
+          )}
         </IonList>
       </IonContent>
   {/* Footer del menú */}

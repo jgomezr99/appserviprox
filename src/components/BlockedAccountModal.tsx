@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import type { BlockedAccountInfo } from "../types/serviprox";
 import { useAuth } from "../context/AuthContext";
 import { adminService } from "../services/adminService";
+import { SupportAiChatModal } from "./SupportAiChatModal";
 import "./BlockedAccountModal.css";
 
 interface BlockedAccountModalProps {
@@ -21,6 +22,7 @@ export const BlockedAccountModal: React.FC<BlockedAccountModalProps> = ({
   const [appealSubmitting, setAppealSubmitting] = useState(false);
   const [appealSuccess, setAppealSuccess] = useState("");
   const [timeLeftStr, setTimeLeftStr] = useState<string>("");
+  const [showAiChat, setShowAiChat] = useState(false);
 
   const isTemporal = info.block_type !== "permanente" && !!info.blocked_until;
 
@@ -232,14 +234,13 @@ export const BlockedAccountModal: React.FC<BlockedAccountModalProps> = ({
 
         {/* Botones de Acción */}
         <div className="sp-blocked-footer-actions">
-          <a
-            href="https://wa.me/573001234567?text=Hola,%20tengo%20una%20consulta%20sobre%20la%20suspensi%C3%B3n%20de%20mi%20cuenta%20en%20Serviprox"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
             className="sp-btn sp-btn-outline"
+            onClick={() => setShowAiChat(true)}
           >
-            💬 Contactar a Soporte
-          </a>
+            💬 Contactar a Soporte (Chat IA)
+          </button>
 
           <button
             type="button"
@@ -260,6 +261,22 @@ export const BlockedAccountModal: React.FC<BlockedAccountModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Chat de Soporte Asistido por Inteligencia Artificial */}
+      <SupportAiChatModal
+        isOpen={showAiChat}
+        onClose={() => setShowAiChat(false)}
+        context={{
+          userName: info.user_name,
+          blockReason: info.block_reason,
+          blockDurationDays: info.block_duration_days,
+          blockType: info.block_type,
+          blockedUntil: info.blocked_until,
+        }}
+        onAppealSuccess={(ticket) => {
+          setAppealSuccess(`Tu recurso de apelación ha sido radicado bajo el radicado #${ticket}. El comité revisará tu caso.`);
+        }}
+      />
     </div>
   );
 };

@@ -38,6 +38,7 @@ import type {
 } from '../../types/serviprox';
 import { REGISTERED_CONTRACTORS_REF } from '../../data/pqrInitialData';
 import { useAuth } from '../../context/AuthContext';
+import { adminService } from '../../services/adminService';
 import './pqrStyles.css';
 
 
@@ -56,7 +57,15 @@ type ChatFlow =
   | 'problema_app_categoria'
   | 'problema_app_descripcion'
   | 'problema_app_confirmacion'
+  | 'apelacion_motivo'
+  | 'apelacion_descargos'
+  | 'apelacion_confirmacion'
   | 'fin';
+
+interface ApelacionDraft {
+  motivo?: string;
+  argumentos?: string;
+}
 
 interface QuejaDraft {
   contractorId?: string;
@@ -135,12 +144,12 @@ function userMsg(text: string): LiveChatMessage {
 // ─── Mensaje inicial exacto de la interfaz ────────────────────────────────────
 
 const INITIAL_MESSAGE: LiveChatMessage = agentMsg(
-  '¡Hola! Soy Sofía de la Defensoría y Mesa Técnica de Servicio Contratista Bogotá. ¿En qué te puedo ayudar hoy? Puedes radicar quejas directamente por este chat o reportar cualquier problema técnico con la app.',
+  '¡Hola! Soy Sofía de la Defensoría y Mesa Técnica de Serviprox Bogotá. ¿En qué te puedo ayudar hoy? Puedes radicar PQRs contra contratistas, presentar apelaciones contra suspensiones o sanciones de cuenta, o reportar fallas técnicas con la app.',
   [
+    { label: '⚖️ Radicar PQR (Queja o Reclamo)', action: 'queja_contratista' },
+    { label: '🛡️ Presentar Apelación de Cuenta / Sanción', action: 'iniciar_apelacion' },
     { label: '📇 Reportar problema con la app', action: 'problema_app' },
-    { label: '⚖️ Queja directa contra contratista', action: 'queja_contratista' },
     { label: '💳 Falla en pago o cotización', action: 'cat:falla_pago' },
-    { label: '📍 Falla en mapa o GPS Bogotá', action: 'cat:error_mapa' },
   ]
 );
 
@@ -166,6 +175,7 @@ export function LiveSupportChatModal({
   const [flow, setFlow] = useState<ChatFlow>('inicio');
   const [quejaDraft, setQuejaDraft] = useState<QuejaDraft>({});
   const [problemaDraft, setProblemaAppDraft] = useState<ProblemaAppDraft>({});
+  const [apelacionDraft, setApelacionDraft] = useState<ApelacionDraft>({});
   const [simulatedScreenshot, setSimulatedScreenshot] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -243,7 +253,42 @@ export function LiveSupportChatModal({
         break;
       }
 
+      case 'iniciar_apelacion': {
+        pushUser('Deseo presentar una apelación formal ante el Comité Administrativo.');
+        setFlow('apelacion_motivo');
+        pushAgent(
+          '🛡️ **Mesa de Apelaciones y Régimen Disciplinario Serviprox**\n\nTienes derecho al debido proceso, a ser escuchado(a), presentar descargos y solicitar la revocación o reducción de sanciones ante el Administrador.\n\n¿Cuál es la causal o situación por la cual presentas esta apelación?',
+          [
+            { label: '⚠️ Sanción por reporte injustificado o falso', action: 'motivo_apelacion:reporte_injustificado' },
+            { label: '⏱️ Demora o inasistencia por caso fortuito o fuerza mayor', action: 'motivo_apelacion:fuerza_mayor' },
+            { label: '📱 Falla técnica de la app me impidió responder', action: 'motivo_apelacion:falla_tecnica_app' },
+            { label: '🤝 Desacuerdo con cliente/profesional ya conciliado', action: 'motivo_apelacion:acuerdo_previo' },
+            { label: '✍️ Escribir mi propio motivo de apelación', action: 'motivo_apelacion:libre' },
+          ]
+        );
+        break;
+      }
+
       default: {
+        // Selección de motivo de apelación
+        if (action.startsWith('motivo_apelacion:')) {
+          const mKey = action.replace('motivo_apelacion:', '');
+          let motivoLabel = 'Revisión general de sanción disciplinaria';
+          if (mKey === 'reporte_injustificado') motivoLabel = 'Sanción por reporte injustificado o falso';
+          if (mKey === 'fuerza_mayor') motivoLabel = 'Demora o inasistencia por caso fortuito o fuerza mayor';
+          if (mKey === 'falla_tecnica_app') motivoLabel = 'Falla técnica de la app me impidió responder';
+          if (mKey === 'acuerdo_previo') motivoLabel = 'Desacuerdo con cliente/profesional ya conciliado';
+          if (mKey === 'libre') motivoLabel = 'Causal personalizada';
+
+          setApelacionDraft((d) => ({ ...d, motivo: motivoLabel }));
+          pushUser(`Causal seleccionada: ${motivoLabel}`);
+          setFlow('apelacion_descargos');
+          pushAgent(
+            'Por favor expón a continuación tus descargos y argumentos detallados: ¿qué sucedió realmente y qué justificaciones o pruebas presentas para que el Comité Administrativo levante la medida?'
+          );
+          break;
+        }
+
         // Selección de contratista de la base de datos
         if (action.startsWith('sel_contractor:')) {
           const id = action.replace('sel_contractor:', '');
@@ -296,11 +341,17 @@ export function LiveSupportChatModal({
           setFlow('inicio');
           setQuejaDraft({});
           setProblemaAppDraft({});
+          setApelacionDraft({});
           break;
         }
 
         if (action === 'confirmar_radicado') {
           finalizarQueja();
+          break;
+        }
+
+        if (action === 'confirmar_apelacion') {
+          finalizarApelacion();
           break;
         }
 
@@ -326,16 +377,33 @@ export function LiveSupportChatModal({
 
     const lower = text.toLowerCase();
 
-    // 1. Detectar solicitud inicial de radicar queja formal
+    // 1. Detectar solicitud inicial de radicar queja o PQR formal
     if (
       flow === 'inicio' &&
       (lower.includes('queja') ||
         lower.includes('reclamo') ||
         lower.includes('contratista') ||
+        lower.includes('pqr') ||
         lower.includes('formal') ||
         lower.includes('radicar'))
     ) {
       startContractorComplaint();
+      return;
+    }
+
+    // 2. Detectar solicitud de apelación de cuenta o sanción
+    if (
+      flow === 'inicio' &&
+      (lower.includes('apelar') ||
+        lower.includes('apelacion') ||
+        lower.includes('apelación') ||
+        lower.includes('sancion') ||
+        lower.includes('sanción') ||
+        lower.includes('desbloque') ||
+        lower.includes('bloque') ||
+        lower.includes('suspend'))
+    ) {
+      handleQuickAction('iniciar_apelacion');
       return;
     }
 
@@ -470,6 +538,52 @@ export function LiveSupportChatModal({
           setFlow('inicio');
           pushAgent('Reporte cancelado. ¿En qué más puedo colaborarte?', [
             { label: '⚖️ Queja contra contratista', action: 'queja_contratista' },
+            { label: '🛡️ Presentar Apelación', action: 'iniciar_apelacion' },
+            { label: '📇 Reportar problema con la app', action: 'problema_app' },
+          ]);
+        }
+        break;
+      }
+
+      // ── Flujo de Apelaciones Disciplinarias ───────────────────────────────────
+      case 'apelacion_motivo': {
+        setApelacionDraft((d) => ({ ...d, motivo: text }));
+        setFlow('apelacion_descargos');
+        pushAgent(
+          'Por favor expón a continuación tus descargos y argumentos detallados: ¿qué sucedió realmente y qué justificaciones o pruebas presentas para que el Comité Administrativo levante la medida?'
+        );
+        break;
+      }
+
+      case 'apelacion_descargos': {
+        setApelacionDraft((d) => ({ ...d, argumentos: text }));
+        const currentMotivo = apelacionDraft.motivo || 'Revisión general de sanción';
+        setFlow('apelacion_confirmacion');
+        pushAgent(
+          `📋 **Resumen de tu Apelación Formal:**\n\n🛡️ **Causal:** ${currentMotivo}\n📝 **Descargos expuestos:** "${text}"\n⚖️ **Solicitud:** Levantamiento o ajuste de la sanción y reactivación de cuenta.\n\n¿Deseas radicar esta apelación ante el Administrador y el Comité Disciplinario ahora mismo?`,
+          [
+            { label: '✅ Sí, radicar apelación administrativa ahora', action: 'confirmar_apelacion' },
+            { label: '❌ Cancelar y reiniciar', action: 'restart' },
+          ]
+        );
+        break;
+      }
+
+      case 'apelacion_confirmacion': {
+        if (
+          lower.includes('sí') ||
+          lower.includes('si') ||
+          lower.includes('confirmo') ||
+          lower.includes('radicar') ||
+          lower.includes('enviar') ||
+          lower.includes('adelante')
+        ) {
+          finalizarApelacion();
+        } else {
+          setFlow('inicio');
+          pushAgent('Apelación cancelada. ¿En qué más puedo colaborarte?', [
+            { label: '⚖️ Radicar PQR', action: 'queja_contratista' },
+            { label: '🛡️ Presentar Apelación', action: 'iniciar_apelacion' },
             { label: '📇 Reportar problema con la app', action: 'problema_app' },
           ]);
         }
@@ -552,6 +666,63 @@ export function LiveSupportChatModal({
         ticketNumber: radicado,
         type: 'pqr_contratista',
         summary: `${contractor.companyName}: ${(quejaDraft.descripcion || '').slice(0, 75)}`,
+      }
+    );
+  };
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Finalizar y radicar Apelación Formal ante el Comité Administrativo
+  // ───────────────────────────────────────────────────────────────────────────
+  const finalizarApelacion = () => {
+    const radNum = Math.floor(1000 + Math.random() * 9000);
+    const radicado = `APL-${radNum}`;
+    const userFullName =
+      (user && `${user.first_name || ''} ${user.last_name || ''}`.trim()) ||
+      user?.username ||
+      'Usuario Serviprox';
+
+    onPqrCreatedFromChat({
+      type: 'reclamo',
+      reason: 'otro',
+      contractorId: 'administracion-serviprox',
+      contractorName: 'Administración Serviprox Bogotá',
+      contractorCompany: 'Comité Disciplinario y Mesa Técnica',
+      contractorSpecialty: 'Defensoría y Apelaciones',
+      clientName: userFullName,
+      clientPhone: user?.phone || '+57 300 000 0000',
+      clientEmail: user?.email || 'usuario@serviprox.co',
+      clientDocumentId: user?.document_id || 'CC Verificada',
+      clientAddress: user?.address || 'Bogotá D.C.',
+      incidentDate: new Date().toISOString(),
+      description: `Apelación formal radicada por Chat en Vivo:\n\nMotivo / Causal: ${apelacionDraft.motivo || 'Revisión de sanción'}\nDescargos: "${apelacionDraft.argumentos || 'Solicitud de revisión formal'}"`,
+      desiredResolution: 'Revisión por el Comité Administrativo y reactivación de cuenta.',
+      evidenceFiles: simulatedScreenshot ? [simulatedScreenshot] : ['Descargos_Apelacion_Chat.pdf'],
+    });
+
+    // Registrar acción en backend y emitir evento
+    adminService
+      .executeAction({
+        action: 'respond_pqr',
+        target_id: radicado,
+        response_text: `Apelación radicada por Chat en Vivo de ${userFullName}: "${apelacionDraft.argumentos || apelacionDraft.motivo}"`,
+        admin_name: 'Asistente IA - Defensoría',
+        send_notification: true,
+      })
+      .catch(console.warn);
+
+    window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
+
+    setFlow('fin');
+    pushAgent(
+      `✅ ¡Tu apelación formal ha sido radicada ante el Comité Administrativo!\n\n🔖 Número de Radicado: **${radicado}**\n🏛️ Destino: **Administración Serviprox Bogotá (Comité Disciplinario)**\n⏱️ Tiempo de evaluación: **24 a 48 horas hábiles**\n\nEl Administrador evaluará tus descargos en el panel de control administrativo y emitirá el fallo oficial.`,
+      [
+        { label: '📂 Ver mis Reclamos y Apelaciones', action: 'goto_pqrs' },
+        { label: '🔄 Radicar otro trámite', action: 'restart' },
+      ],
+      {
+        ticketNumber: radicado,
+        type: 'pqr_contratista',
+        summary: `Apelación: ${apelacionDraft.motivo || 'Revisión de sanción'}`,
       }
     );
   };

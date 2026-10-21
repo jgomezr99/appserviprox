@@ -168,7 +168,7 @@ export function PqrListView({
               className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs sm:text-sm py-3.5 px-5 rounded-2xl shadow-lg shadow-emerald-950/50 transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-400/30 hover:scale-[1.02]"
             >
               <Bot className="w-4 h-4" />
-              <span>💬 Chat de Reporte en Vivo</span>
+              <span>💬 Chat IA: PQR &amp; Apelación</span>
             </button>
 
             {/* Botón Radicar Formal */}
