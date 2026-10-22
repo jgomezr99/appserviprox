@@ -1,13 +1,14 @@
 import React, { Suspense, lazy } from 'react';
 import { IonApp, IonRouterOutlet, IonSplitPane, IonSpinner, setupIonicReact } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
-import { Redirect, Route } from 'react-router-dom';
+import { Redirect, Route, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Menu from './components/Menu';
 import Login from './pages/Login';
 import ClientHome from './pages/ClientHome';
 import { GlobalChatButton } from './components/GlobalChatButton';
 import { ConnectionBanner } from './components/ConnectionBanner';
+import { RoleThemeController } from './components/RoleThemeController';
 import { RequireAuth } from './components/routing/RouteGuards';
 import { useHomeFlags } from './services/platformSettings';
 import { getEntryRoute } from './utils/routes';
@@ -168,12 +169,24 @@ const RootRedirect: React.FC = () => {
 
 setupIonicReact();
 
+const AppSplitPane: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <IonSplitPane contentId="main" when="false">
+      {children}
+    </IonSplitPane>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <IonApp>
       <AuthProvider>
         <IonReactRouter>
-          <IonSplitPane contentId="main" when="false">
+          {/* ── Dynamic Theme Controller (Rojo Cliente / Azul Profesional) ── */}
+          <RoleThemeController />
+
+          {/* ── SplitPane responsivo: menú al lado de la página principal en desktop/tablet ── */}
+          <AppSplitPane>
             <Menu />
             <IonRouterOutlet id="main">
               {/* Redirección inteligente al inicio sin demoras ni pasos innecesarios */}
@@ -374,7 +387,7 @@ const App: React.FC = () => {
                 <Redirect to="/perfil" />
               </Route>
             </IonRouterOutlet>
-          </IonSplitPane>
+          </AppSplitPane>
 
           {/* ── Global floating "Chat de Reporte en Vivo" button ── */}
           <GlobalChatButton />

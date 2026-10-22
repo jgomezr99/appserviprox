@@ -114,6 +114,16 @@ const Register: React.FC = () => {
     }
   }, [history, isAuthenticated, sessionLoading, user]);
 
+  useEffect(() => {
+    const targetClass = role === "professional" ? "theme-professional" : "theme-client";
+    document.documentElement.classList.remove("theme-client", "theme-professional");
+    document.body.classList.remove("theme-client", "theme-professional");
+    document.documentElement.classList.add(targetClass);
+    document.body.classList.add(targetClass);
+    document.documentElement.setAttribute("data-theme", role);
+    document.body.setAttribute("data-theme", role);
+  }, [role]);
+
   const passwordsMatch = password === confirmPassword;
   const canContinue =
     firstName.trim().length > 0 &&

@@ -28,7 +28,9 @@
   flex-direction: column;
   border-radius: 18px;
   overflow: hidden;
-  box-shadow: 0 4px 18px rgba(0,0,0,.06);
+  background: var(--sp-surface, #ffffff);
+  border: 1px solid var(--sp-border, rgba(0, 0, 0, 0.08));
+  box-shadow: var(--sp-shadow, 0 4px 18px rgba(0,0,0,.06));
 }
 
 .img-wrap {

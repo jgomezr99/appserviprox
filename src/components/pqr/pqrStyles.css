@@ -40,7 +40,7 @@
 #pqr-report-modal-dialog,
 #pqr-detail-modal-dialog,
 #live-support-chat-dialog {
-  background: #ffffff !important;
+  background: var(--sp-surface, #ffffff) !important;
   border-radius: 28px !important;
   box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
   overflow: hidden !important;

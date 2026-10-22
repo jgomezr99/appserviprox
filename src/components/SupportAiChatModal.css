@@ -31,7 +31,7 @@
 }
 
 .sp-ai-chat-card {
-  background: #ffffff;
+  background: var(--sp-surface, #ffffff);
   border-radius: 24px;
   width: 100%;
   max-width: 520px;
@@ -41,7 +41,7 @@
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.45);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--sp-border, #e2e8f0);
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 }
 
@@ -164,7 +164,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: #fdfdfe;
+  background: var(--sp-bg, #fdfdfe);
 }
 
 .sp-ai-msg-row {
@@ -216,10 +216,10 @@
 }
 
 .sp-ai-bubble.agent-bubble {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: var(--sp-surface, #f1f5f9);
+  color: var(--sp-text, #0f172a);
   border-bottom-left-radius: 4px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--sp-border, #e2e8f0);
 }
 
 .sp-ai-bubble.user-bubble {
@@ -281,6 +281,126 @@
 
 .sp-ai-chip-btn:active {
   transform: translateY(0);
+}
+
+/* Chip destacado de Desbloqueo */
+.sp-ai-chip-btn.unblock-btn {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: #ffffff;
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.35);
+}
+
+.sp-ai-chip-btn.unblock-btn:hover {
+  background: linear-gradient(135deg, #047857 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.45);
+}
+
+.sp-ai-chip-btn.enter-app-btn {
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  color: #ffffff;
+  border: none;
+  font-weight: 700;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+.sp-ai-chip-btn.enter-app-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%);
+  color: #ffffff;
+}
+
+/* Imagen adjunta en burbuja de mensaje */
+.sp-ai-msg-image-box {
+  margin-top: 8px;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 260px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.sp-ai-msg-image {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  max-height: 200px;
+}
+
+.sp-ai-msg-image-label {
+  padding: 4px 8px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+/* Tarjetas de Decisión Oficial IA */
+.sp-ai-decision-card {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.82rem;
+  animation: spAiChatFadeIn 0.3s ease-out;
+}
+
+.sp-ai-decision-card.approved {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  color: #14532d;
+}
+
+.sp-ai-decision-card.denied {
+  background: #fff1f2;
+  border: 1.5px solid #fecdd3;
+  color: #881337;
+}
+
+.sp-ai-decision-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 0.88rem;
+}
+
+.sp-ai-decision-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+}
+
+.sp-ai-decision-card.approved .sp-ai-decision-badge {
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.sp-ai-decision-card.denied .sp-ai-decision-badge {
+  background: #f43f5e;
+  color: #ffffff;
+}
+
+.sp-ai-decision-card-body {
+  line-height: 1.45;
+  color: inherit;
+}
+
+.sp-ai-decision-card-ticket {
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.85;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Indicador de escritura IA */
@@ -369,6 +489,76 @@
 
 .sp-ai-composer-input::placeholder {
   color: #94a3b8;
+}
+
+.sp-ai-composer-attach-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  font-size: 1.15rem;
+}
+
+.sp-ai-composer-attach-btn:hover {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.sp-ai-attachment-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+  color: #334155;
+  animation: spAiChatFadeIn 0.2s ease-out;
+}
+
+.sp-ai-attachment-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid #cbd5e1;
+}
+
+.sp-ai-attachment-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.sp-ai-attachment-remove-btn {
+  background: #e2e8f0;
+  border: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: #475569;
+}
+
+.sp-ai-attachment-remove-btn:hover {
+  background: #fecaca;
+  color: #dc2626;
 }
 
 .sp-ai-composer-send-btn {

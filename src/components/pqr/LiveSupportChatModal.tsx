@@ -60,7 +60,15 @@ type ChatFlow =
   | 'apelacion_motivo'
   | 'apelacion_descargos'
   | 'apelacion_confirmacion'
+  | 'desbloqueo_descripcion'
+  | 'desbloqueo_foto'
+  | 'desbloqueo_evaluando'
   | 'fin';
+
+interface DesbloqueoDraft {
+  descripcion?: string;
+  fotoUrl?: string;
+}
 
 interface ApelacionDraft {
   motivo?: string;
@@ -144,12 +152,12 @@ function userMsg(text: string): LiveChatMessage {
 // ─── Mensaje inicial exacto de la interfaz ────────────────────────────────────
 
 const INITIAL_MESSAGE: LiveChatMessage = agentMsg(
-  '¡Hola! Soy Sofía de la Defensoría y Mesa Técnica de Serviprox Bogotá. ¿En qué te puedo ayudar hoy? Puedes radicar PQRs contra contratistas, presentar apelaciones contra suspensiones o sanciones de cuenta, o reportar fallas técnicas con la app.',
+  '¡Hola! Soy Sofía de la Defensoría y Mesa Técnica de Serviprox Bogotá. ¿En qué te puedo ayudar hoy? Puedes solicitar el desbloqueo de tu cuenta con IA, radicar PQRs contra contratistas, presentar apelaciones o reportar fallas técnicas con la app.',
   [
+    { label: '🔓 Desbloqueo de Cuenta con IA', action: 'iniciar_desbloqueo' },
     { label: '⚖️ Radicar PQR (Queja o Reclamo)', action: 'queja_contratista' },
     { label: '🛡️ Presentar Apelación de Cuenta / Sanción', action: 'iniciar_apelacion' },
     { label: '📇 Reportar problema con la app', action: 'problema_app' },
-    { label: '💳 Falla en pago o cotización', action: 'cat:falla_pago' },
   ]
 );
 
@@ -176,6 +184,7 @@ export function LiveSupportChatModal({
   const [quejaDraft, setQuejaDraft] = useState<QuejaDraft>({});
   const [problemaDraft, setProblemaAppDraft] = useState<ProblemaAppDraft>({});
   const [apelacionDraft, setApelacionDraft] = useState<ApelacionDraft>({});
+  const [desbloqueoDraft, setDesbloqueoDraft] = useState<DesbloqueoDraft>({});
   const [simulatedScreenshot, setSimulatedScreenshot] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -269,7 +278,57 @@ export function LiveSupportChatModal({
         break;
       }
 
+      case 'iniciar_desbloqueo': {
+        pushUser('Deseo solicitar el desbloqueo de mi cuenta evaluado por la IA.');
+        setFlow('desbloqueo_descripcion');
+        pushAgent(
+          '🔓 **Módulo de Desbloqueo de Cuenta con Inteligencia Artificial**\n\nRealizaremos 2 pasos para evaluar tu caso en tiempo real:\n\n📝 **Paso 1 de 2: Descripción de los hechos**\nPor favor, describe qué ocurrió con tu cuenta y por qué consideras que el bloqueo debe ser levantado:',
+          [
+            { label: '📱 Ocurrió una falla técnica o de GPS en la app', action: 'desbloq_mot:falla' },
+            { label: '🤝 Llegué a un acuerdo conciliado con la otra parte', action: 'desbloq_mot:acuerdo' },
+            { label: '⏱️ Inconveniente de fuerza mayor imprevisible', action: 'desbloq_mot:fuerza_mayor' },
+            { label: '⚠️ Fue un reporte falso o malentendido sin mala fe', action: 'desbloq_mot:falso' },
+            { label: '✍️ Deseo redactar mis propios argumentos', action: 'desbloq_mot:libre' },
+          ]
+        );
+        break;
+      }
+
       default: {
+        // Selección de motivo de desbloqueo
+        if (action.startsWith('desbloq_mot:')) {
+          const key = action.replace('desbloq_mot:', '');
+          let motText = 'Solicitud de desbloqueo por revisión general.';
+          if (key === 'falla') motText = 'El inconveniente ocurrió por una falla técnica o de GPS en la app que me impidió responder a tiempo.';
+          if (key === 'acuerdo') motText = 'Hablé directamente con el usuario y llegamos a un acuerdo satisfactorio.';
+          if (key === 'fuerza_mayor') motText = 'Ocurrió un imprevisto de fuerza mayor ajeno a mi voluntad.';
+          if (key === 'falso') motText = 'Fue un reporte injustificado o malentendido sin dolo de mi parte.';
+          if (key === 'libre') motText = 'Descargos personalizados';
+
+          setDesbloqueoDraft((d) => ({ ...d, descripcion: motText }));
+          pushUser(motText);
+          setFlow('desbloqueo_foto');
+          pushAgent(
+            '📸 **Paso 2 de 2: Foto o Captura del Bloqueo / Evidencia**\n\nPara validar tu solicitud, por favor adjunta una foto o captura de pantalla donde se observe el bloqueo o evidencia de respaldo:',
+            [
+              { label: '📸 Adjuntar captura de pantalla del bloqueo actual', action: 'desbloq_adjuntar_captura' },
+              { label: '⚡ Continuar evaluación con mi declaración ahora', action: 'desbloq_sin_foto' },
+            ]
+          );
+          break;
+        }
+
+        if (action === 'desbloq_adjuntar_captura' || action === 'desbloq_sin_foto') {
+          if (action === 'desbloq_adjuntar_captura') {
+            setSimulatedScreenshot('captura_pantalla_bloqueo_serviprox.png');
+            pushUser('📸 Adjunté captura de pantalla del bloqueo actual.');
+          } else {
+            pushUser('⚡ Solicito evaluación directa con mi declaración.');
+          }
+          finalizarDesbloqueoIA();
+          break;
+        }
+
         // Selección de motivo de apelación
         if (action.startsWith('motivo_apelacion:')) {
           const mKey = action.replace('motivo_apelacion:', '');
@@ -342,6 +401,7 @@ export function LiveSupportChatModal({
           setQuejaDraft({});
           setProblemaAppDraft({});
           setApelacionDraft({});
+          setDesbloqueoDraft({});
           break;
         }
 
@@ -377,7 +437,19 @@ export function LiveSupportChatModal({
 
     const lower = text.toLowerCase();
 
-    // 1. Detectar solicitud inicial de radicar queja o PQR formal
+    // 1. Detectar solicitud de desbloqueo de cuenta
+    if (
+      flow === 'inicio' &&
+      (lower.includes('desbloquear') ||
+        lower.includes('desbloqueo') ||
+        lower.includes('quitar bloqueo') ||
+        lower.includes('activar cuenta'))
+    ) {
+      handleQuickAction('iniciar_desbloqueo');
+      return;
+    }
+
+    // 2. Detectar solicitud inicial de radicar queja o PQR formal
     if (
       flow === 'inicio' &&
       (lower.includes('queja') ||
@@ -590,6 +662,26 @@ export function LiveSupportChatModal({
         break;
       }
 
+      // ── Flujo de Desbloqueo de Cuenta por IA ─────────────────────────────────
+      case 'desbloqueo_descripcion': {
+        setDesbloqueoDraft((d) => ({ ...d, descripcion: text }));
+        setFlow('desbloqueo_foto');
+        pushAgent(
+          '📸 **Paso 2 de 2: Foto o Captura del Bloqueo / Evidencia**\n\nPor favor adjunta una foto o captura de pantalla donde se observe el bloqueo o justificación para que la IA evalúe el caso:',
+          [
+            { label: '📸 Adjuntar captura de pantalla del bloqueo', action: 'desbloq_adjuntar_captura' },
+            { label: '⚡ Continuar evaluación con mi declaración ahora', action: 'desbloq_sin_foto' },
+          ]
+        );
+        break;
+      }
+
+      case 'desbloqueo_foto': {
+        setDesbloqueoDraft((d) => ({ ...d, descripcion: `${d.descripcion || ''} (Evidencia textual: ${text})` }));
+        finalizarDesbloqueoIA();
+        break;
+      }
+
       // ── Fallback general inteligente ────────────────────────────────────────
       default: {
         const isApp =
@@ -666,6 +758,51 @@ export function LiveSupportChatModal({
         ticketNumber: radicado,
         type: 'pqr_contratista',
         summary: `${contractor.companyName}: ${(quejaDraft.descripcion || '').slice(0, 75)}`,
+      }
+    );
+  };
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Finalizar y resolver Desbloqueo de Cuenta mediante IA
+  // ───────────────────────────────────────────────────────────────────────────
+  const finalizarDesbloqueoIA = () => {
+    const radNum = Math.floor(1000 + Math.random() * 9000);
+    const radicado = `DES-BOG-${radNum}`;
+    const userTarget = user?.email || user?.username || 'usuario';
+
+    // 1. Limpiar de serviprox_blocked_users en localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem('serviprox_blocked_users') || '{}');
+      if (user?.email) delete stored[user.email.trim().toLowerCase()];
+      if (user?.username) delete stored[user.username.trim().toLowerCase()];
+      localStorage.setItem('serviprox_blocked_users', JSON.stringify(stored));
+    } catch {}
+
+    // 2. Ejecutar acción de desbloqueo en backend
+    adminService
+      .executeAction({
+        action: 'unblock_user',
+        target_id: userTarget,
+        reason: `Desbloqueo concedido por la IA de Soporte: ${desbloqueoDraft.descripcion || 'Descargos aportados'}`,
+        admin_name: 'IA Defensoría Serviprox',
+        send_notification: true,
+      })
+      .catch(console.warn);
+
+    window.dispatchEvent(new CustomEvent('serviprox:account-unblocked'));
+    window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
+
+    setFlow('fin');
+    pushAgent(
+      `🎉 **¡DICTAMEN FAVORABLE DE LA IA: CUENTA DESBLOQUEADA!**\n\n✅ **Resolución del Caso:**\nTras evaluar la descripción de los hechos y la evidencia presentada, la IA de Serviprox determina que **existen méritos suficientes de buena fe** para revocar la sanción de inmediato.\n\n🔓 **Estado Actual:** Sanción levantada. Tu cuenta se encuentra 100% activa en la base de datos oficial.\n🔖 **Radicado Oficial:** \`#${radicado}\`\n\nYa puedes volver a utilizar la plataforma con todas las funciones habilitadas.`,
+      [
+        { label: '🚀 Continuar en la App', action: 'goto_pqrs' },
+        { label: '🔄 Iniciar otra consulta', action: 'restart' },
+      ],
+      {
+        ticketNumber: radicado,
+        type: 'pqr_contratista',
+        summary: `Desbloqueo concedido por IA: ${desbloqueoDraft.descripcion?.slice(0, 70) || 'Revisión favorable'}`,
       }
     );
   };

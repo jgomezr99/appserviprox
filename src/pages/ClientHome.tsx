@@ -123,7 +123,7 @@ const ClientHome: React.FC = () => {
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle>Mi perfil de cliente</IonTitle>
+          <IonTitle>Página Principal</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -132,9 +132,9 @@ const ClientHome: React.FC = () => {
           <MaintenanceNotice />
 
           <header className="sp-role-header">
-            <span className="sp-role-kicker">CUENTA DE CLIENTE</span>
+            <span className="sp-role-kicker">PÁGINA PRINCIPAL · CLIENTE</span>
             <h1>Bienvenido, {fullName || "Cliente"}</h1>
-            <p>Consulta, edita y administra tu información registrada en la base de datos.</p>
+            <p>Accede a tus servicios, mapa de profesionales, solicitudes y gestión de cuenta.</p>
           </header>
 
           {/* Tarjeta de Datos Personales con Modo Edición */}

@@ -2,43 +2,315 @@
 http://ionicframework.com/docs/theming/ */
 
 :root {
-	--sp-primary: #0B2F6B;
-	--sp-primary-dark: #071E45;
-	--sp-primary-soft: #EAF2FF;
-	--sp-accent: #D9364A;
-	--sp-accent-soft: #FFECEF;
-	--sp-bg: #F6F8FC;
-	--sp-background: var(--sp-bg);
-	--sp-surface: #ffffff;
-	--sp-surface-glass: rgba(255, 255, 255, 0.74);
-	--sp-text: #101828;
-	--sp-text-muted: #667085;
-	--sp-border: rgba(11, 47, 107, 0.14);
 	--sp-radius-sm: 14px;
 	--sp-radius-md: 20px;
 	--sp-radius-lg: 28px;
 	--sp-radius-xl: 32px;
-	--sp-shadow: 0 18px 45px rgba(16, 24, 40, 0.10);
 	--sp-blur: 18px;
 
-	/* Ionic usa los mismos tokens para evitar dos sistemas visuales. */
+	/* Valores por defecto (Cliente / Rojo) */
+	--sp-primary: #DC2626;
+	--sp-primary-dark: #991B1B;
+	--sp-primary-soft: #FEE2E2;
+	--sp-accent: #0B2F6B;
+	--sp-accent-soft: #EAF2FF;
+	--sp-bg: #FFF1F2;
+	--sp-background: var(--sp-bg);
+	--sp-surface: #FFF5F6;
+	--sp-surface-glass: rgba(255, 241, 242, 0.92);
+	--sp-text: #1E0709;
+	--sp-text-muted: #7F5156;
+	--sp-border: rgba(220, 38, 38, 0.16);
+	--sp-shadow: 0 16px 36px rgba(185, 28, 28, 0.09);
+
 	--ion-color-primary: var(--sp-primary);
-	--ion-color-primary-rgb: 11, 47, 107;
+	--ion-color-primary-rgb: 220, 38, 38;
 	--ion-color-primary-contrast: #ffffff;
 	--ion-color-primary-contrast-rgb: 255, 255, 255;
-	--ion-color-primary-shade: #0a295e;
-	--ion-color-primary-tint: #234477;
+	--ion-color-primary-shade: #B91C1C;
+	--ion-color-primary-tint: #EF4444;
 
-	--ion-color-danger: var(--sp-accent);
+	--ion-color-danger: var(--sp-primary);
 	--ion-background-color: var(--sp-bg);
 	--ion-text-color: var(--sp-text);
+	--ion-item-background: var(--sp-surface);
+	--ion-toolbar-background: var(--sp-bg);
 
 	--brand-soft-bg: rgba(255, 255, 255, 0.18);
 	--brand-soft-bg-rgb: 255, 255, 255;
 
-	--menu-bg: #0B2F6B;
-	--menu-footer-bg: #0B2F6B;
-	--menu-header-bg: #0B2F6B;
+	--menu-bg: #991B1B;
+	--menu-footer-bg: #7F1D1D;
+	--menu-header-bg: #7F1D1D;
 	--menu-list-header-bg: transparent;
-	--menu-list-header-fg: var(--ion-color-primary);
+	--menu-list-header-fg: #ffffff;
+}
+
+/* ========================================================
+   TEMA CLIENTE: ROJO / INTERFAZ ROJO CLARO
+   ======================================================== */
+:root[data-theme="client"],
+body.theme-client,
+ion-app.theme-client,
+.theme-client {
+	--sp-primary: #DC2626;
+	--sp-primary-dark: #991B1B;
+	--sp-primary-soft: #FEE2E2;
+	--sp-accent: #0B2F6B;
+	--sp-accent-soft: #EAF2FF;
+
+	/* Interfaz donde era blanco ahora es rojo color claro */
+	--sp-bg: #FFF1F2;
+	--sp-background: #FFF1F2;
+	--sp-surface: #FFF5F6;
+	--sp-surface-glass: rgba(255, 241, 242, 0.92);
+	--sp-text: #1E0709;
+	--sp-text-muted: #7F5156;
+	--sp-border: rgba(220, 38, 38, 0.16);
+	--sp-shadow: 0 16px 36px rgba(185, 28, 28, 0.09);
+
+	--ion-color-primary: #DC2626;
+	--ion-color-primary-rgb: 220, 38, 38;
+	--ion-color-primary-contrast: #ffffff;
+	--ion-color-primary-contrast-rgb: 255, 255, 255;
+	--ion-color-primary-shade: #B91C1C;
+	--ion-color-primary-tint: #EF4444;
+
+	--ion-color-danger: #DC2626;
+	--ion-background-color: #FFF1F2;
+	--ion-background-color-rgb: 255, 241, 242;
+	--ion-text-color: #1E0709;
+	--ion-item-background: #FFF5F6;
+	--ion-toolbar-background: #FFF1F2;
+	--ion-card-background: #FFF5F6;
+
+	--menu-bg: #991B1B;
+	--menu-footer-bg: #7F1D1D;
+	--menu-header-bg: #7F1D1D;
+	--menu-list-header-bg: transparent;
+	--menu-list-header-fg: #ffffff;
+	--menu-selected-bg: rgba(255, 255, 255, 0.22);
+	--menu-selected-fg: #ffffff;
+}
+
+/* ========================================================
+   TEMA PROFESIONAL: AZUL / INTERFAZ AZUL CLARO
+   ======================================================== */
+:root[data-theme="professional"],
+body.theme-professional,
+ion-app.theme-professional,
+.theme-professional {
+	--sp-primary: #0B2F6B;
+	--sp-primary-dark: #071E45;
+	--sp-primary-soft: #EAF2FF;
+	--sp-accent: #DC2626;
+	--sp-accent-soft: #FEE2E2;
+
+	/* Interfaz donde era blanco ahora es azul color claro */
+	--sp-bg: #F0F7FF;
+	--sp-background: #F0F7FF;
+	--sp-surface: #F8FBFF;
+	--sp-surface-glass: rgba(240, 247, 255, 0.92);
+	--sp-text: #051329;
+	--sp-text-muted: #4B6382;
+	--sp-border: rgba(11, 47, 107, 0.16);
+	--sp-shadow: 0 16px 36px rgba(11, 47, 107, 0.09);
+
+	--ion-color-primary: #0B2F6B;
+	--ion-color-primary-rgb: 11, 47, 107;
+	--ion-color-primary-contrast: #ffffff;
+	--ion-color-primary-contrast-rgb: 255, 255, 255;
+	--ion-color-primary-shade: #082352;
+	--ion-color-primary-tint: #1B448C;
+
+	--ion-color-danger: #DC2626;
+	--ion-background-color: #F0F7FF;
+	--ion-background-color-rgb: 240, 247, 255;
+	--ion-text-color: #051329;
+	--ion-item-background: #F8FBFF;
+	--ion-toolbar-background: #F0F7FF;
+	--ion-card-background: #F8FBFF;
+
+	--menu-bg: #0B2F6B;
+	--menu-footer-bg: #071E45;
+	--menu-header-bg: #071E45;
+	--menu-list-header-bg: transparent;
+	--menu-list-header-fg: #ffffff;
+	--menu-selected-bg: rgba(255, 255, 255, 0.22);
+	--menu-selected-fg: #ffffff;
+}
+
+/* ========================================================
+   REGLAS GLOBALES DE INTERFAZ:
+   Sustitución de fondos blancos por Rojo Claro o Azul Claro
+   ======================================================== */
+
+/* Contenidos y páginas (excluyendo el menú lateral) */
+.theme-client ion-content:not(ion-menu ion-content):not(.menu-content),
+[data-theme="client"] ion-content:not(ion-menu ion-content):not(.menu-content),
+.theme-client ion-page,
+[data-theme="client"] ion-page {
+	--background: #FFF1F2 !important;
+	background: #FFF1F2 !important;
+}
+
+.theme-professional ion-content:not(ion-menu ion-content):not(.menu-content),
+[data-theme="professional"] ion-content:not(ion-menu ion-content):not(.menu-content),
+.theme-professional ion-page,
+[data-theme="professional"] ion-page {
+	--background: #F0F7FF !important;
+	background: #F0F7FF !important;
+}
+
+/* Menú lateral (El host ion-menu debe ser transparente para ver la página a la derecha; el contenedor es el que lleva color) */
+ion-menu,
+.theme-client ion-menu,
+[data-theme="client"] ion-menu,
+.theme-professional ion-menu,
+[data-theme="professional"] ion-menu {
+	background: transparent !important;
+}
+
+.theme-client ion-menu::part(container),
+[data-theme="client"] ion-menu::part(container),
+.theme-client ion-menu ion-content,
+[data-theme="client"] ion-menu ion-content,
+.theme-client .menu-content,
+[data-theme="client"] .menu-content {
+	--background: #B91C1C !important;
+	background: #B91C1C !important;
+	--ion-background-color: #B91C1C !important;
+}
+
+.theme-professional ion-menu::part(container),
+[data-theme="professional"] ion-menu::part(container),
+.theme-professional ion-menu ion-content,
+[data-theme="professional"] ion-menu ion-content,
+.theme-professional .menu-content,
+[data-theme="professional"] .menu-content {
+	--background: #0B2F6B !important;
+	background: #0B2F6B !important;
+	--ion-background-color: #0B2F6B !important;
+}
+
+/* Tarjetas y Contenedores */
+.theme-client ion-card,
+[data-theme="client"] ion-card,
+.theme-client .sp-card,
+[data-theme="client"] .sp-card,
+.theme-client .sp-glass-card,
+[data-theme="client"] .sp-glass-card,
+.theme-client .sp-reserva-card,
+[data-theme="client"] .sp-reserva-card,
+.theme-client .fav-card,
+[data-theme="client"] .fav-card {
+	--background: #FFF5F6 !important;
+	background: #FFF5F6 !important;
+	border-color: rgba(220, 38, 38, 0.16) !important;
+}
+
+.theme-professional ion-card,
+[data-theme="professional"] ion-card,
+.theme-professional .sp-card,
+[data-theme="professional"] .sp-card,
+.theme-professional .sp-glass-card,
+[data-theme="professional"] .sp-glass-card,
+.theme-professional .sp-reserva-card,
+[data-theme="professional"] .sp-reserva-card,
+.theme-professional .fav-card,
+[data-theme="professional"] .fav-card {
+	--background: #F8FBFF !important;
+	background: #F8FBFF !important;
+	border-color: rgba(11, 47, 107, 0.16) !important;
+}
+
+/* Barras de navegación superiores (Toolbars) */
+.theme-client ion-toolbar,
+[data-theme="client"] ion-toolbar {
+	--background: #FFF1F2 !important;
+	--color: #1E0709 !important;
+	border-bottom: 1px solid rgba(220, 38, 38, 0.12);
+}
+
+.theme-professional ion-toolbar,
+[data-theme="professional"] ion-toolbar {
+	--background: #F0F7FF !important;
+	--color: #051329 !important;
+	border-bottom: 1px solid rgba(11, 47, 107, 0.12);
+}
+
+/* Items y listas */
+.theme-client ion-item,
+[data-theme="client"] ion-item {
+	--background: #FFF5F6;
+	--color: #1E0709;
+}
+
+.theme-professional ion-item,
+[data-theme="professional"] ion-item {
+	--background: #F8FBFF;
+	--color: #051329;
+}
+
+/* Formularios e inputs */
+.theme-client ion-input,
+.theme-client ion-textarea,
+.theme-client ion-select,
+[data-theme="client"] ion-input,
+[data-theme="client"] ion-textarea,
+[data-theme="client"] ion-select {
+	--background: #FFF5F6 !important;
+	background: #FFF5F6 !important;
+	border-color: rgba(220, 38, 38, 0.18) !important;
+	--color: #1E0709 !important;
+}
+
+.theme-professional ion-input,
+.theme-professional ion-textarea,
+.theme-professional ion-select,
+[data-theme="professional"] ion-input,
+[data-theme="professional"] ion-textarea,
+[data-theme="professional"] ion-select {
+	--background: #F8FBFF !important;
+	background: #F8FBFF !important;
+	border-color: rgba(11, 47, 107, 0.18) !important;
+	--color: #051329 !important;
+}
+
+/* Modales y Diálogos */
+.theme-client .sp-ai-chat-card,
+[data-theme="client"] .sp-ai-chat-card,
+.theme-client #pqr-report-modal-dialog,
+[data-theme="client"] #pqr-report-modal-dialog,
+.theme-client #pqr-detail-modal-dialog,
+[data-theme="client"] #pqr-detail-modal-dialog,
+.theme-client #live-support-chat-dialog,
+[data-theme="client"] #live-support-chat-dialog {
+	background: #FFF5F6 !important;
+	border-color: rgba(220, 38, 38, 0.2) !important;
+}
+
+.theme-professional .sp-ai-chat-card,
+[data-theme="professional"] .sp-ai-chat-card,
+.theme-professional #pqr-report-modal-dialog,
+[data-theme="professional"] #pqr-report-modal-dialog,
+.theme-professional #pqr-detail-modal-dialog,
+[data-theme="professional"] #pqr-detail-modal-dialog,
+.theme-professional #live-support-chat-dialog,
+[data-theme="professional"] #live-support-chat-dialog {
+	background: #F8FBFF !important;
+	border-color: rgba(11, 47, 107, 0.2) !important;
+}
+
+/* Sidebars (por ejemplo en el mapa) */
+.theme-client .sp-map-sidebar,
+[data-theme="client"] .sp-map-sidebar {
+	background: #FFF5F6 !important;
+	border: 1px solid rgba(220, 38, 38, 0.14) !important;
+}
+
+.theme-professional .sp-map-sidebar,
+[data-theme="professional"] .sp-map-sidebar {
+	background: #F8FBFF !important;
+	border: 1px solid rgba(11, 47, 107, 0.14) !important;
 }

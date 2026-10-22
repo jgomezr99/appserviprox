@@ -130,9 +130,9 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1rem;
-  background: #f8fafc;
+  background: var(--sp-surface, #f8fafc);
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--sp-border, #e2e8f0);
   padding: 1rem 1.25rem;
   margin-bottom: 1.5rem;
 }
@@ -172,10 +172,10 @@
 .sp-address-field-custom {
   width: 100%;
   padding: 12px 14px;
-  border: 1.5px solid #cbd5e1;
+  border: 1.5px solid var(--sp-border, #cbd5e1);
   border-radius: 12px;
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--sp-surface, #ffffff);
+  color: var(--sp-text, #0f172a);
   font-size: 0.95rem;
   font-weight: 500;
   transition: all 0.2s ease;

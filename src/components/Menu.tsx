@@ -34,6 +34,7 @@ import {
   logOutOutline,
   swapHorizontalOutline,
   chatbubbleEllipsesOutline,
+  closeOutline,
 } from 'ionicons/icons';
 
 
@@ -95,7 +96,15 @@ const Menu: React.FC = () => {
     return location.pathname === url || location.pathname.startsWith(url + '/');
   };
 
-  const onLogout = () => {
+  const onLogout = async () => {
+    try {
+      await menuController.close();
+      await menuController.close('main-menu');
+    } catch {}
+    const menuEl = document.querySelector('ion-menu[menu-id="main-menu"]') as any;
+    if (menuEl && typeof menuEl.close === 'function') {
+      menuEl.close();
+    }
     logout();
     router.push('/login');
   };
@@ -159,7 +168,7 @@ const Menu: React.FC = () => {
 
   // Páginas del cliente según funciones activas en la plataforma
   const clientPagesList: AppPage[] = [
-    { title: 'Inicio', url: '/cliente/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
+    { title: 'Página Principal', url: '/cliente/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
     ...(platform.features.professionals !== false && platform.features.services !== false
       ? [{ title: 'Mapa de contratistas', url: '/cliente/mapa', iosIcon: mapOutline, mdIcon: mapSharp }]
       : []),
@@ -185,7 +194,7 @@ const Menu: React.FC = () => {
 
   // Páginas del profesional según funciones activas en la plataforma
   const proPagesList: AppPage[] = [
-    { title: 'Inicio', url: '/profesional/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
+    { title: 'Página Principal', url: '/profesional/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
     ...(platform.features.products !== false
       ? [storePage]
       : []),
@@ -225,10 +234,46 @@ const Menu: React.FC = () => {
 
   const menuDisabled = isPublicPage || isOnboardingPage;
 
+  const homeUrl = user?.role === 'professional' ? '/profesional/inicio' : '/cliente/inicio';
+
   return (
     <IonMenu contentId="main" type="overlay" swipeGesture={!menuDisabled} disabled={menuDisabled} menuId="main-menu">
       <IonHeader className="menu-header-logo">
-        <IonImg className="menu-logo" src={logo} alt="Logo" />
+        <div className="menu-header-toolbar">
+          <IonMenuToggle autoHide={false}>
+            <div
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              onClick={() => router.push(homeUrl)}
+              title="Ir a Página Principal"
+            >
+              <IonImg className="menu-logo" src={logo} alt="Logo Serviprox" />
+            </div>
+          </IonMenuToggle>
+
+          {/* Icono Ocultar / Salir del Menú */}
+          <IonMenuToggle autoHide={false} menu="main-menu">
+            <button
+              type="button"
+              className="menu-close-btn"
+              aria-label="Salir del menú / Ocultar"
+              title="Salir del menú / Ocultar"
+              onClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                  await menuController.close();
+                  await menuController.close('main-menu');
+                } catch {}
+                const menuEl = document.querySelector('ion-menu[menu-id="main-menu"]') as any;
+                if (menuEl && typeof menuEl.close === 'function') {
+                  menuEl.close();
+                }
+              }}
+            >
+              <IonIcon icon={closeOutline} aria-hidden="true" />
+            </button>
+          </IonMenuToggle>
+        </div>
       </IonHeader>
 
       <IonContent className="menu-content menu-has-footer">
@@ -236,7 +281,7 @@ const Menu: React.FC = () => {
           <IonListHeader className="menu-header">
             <IonMenuToggle autoHide={false}>
               <IonItem
-                routerLink="/ingresar"
+                routerLink={homeUrl}
                 routerDirection="none"
                 lines="none"
                 detail={false}
@@ -309,9 +354,11 @@ const Menu: React.FC = () => {
             <IonItem lines="none" className="profile-item" detail={false}>
               <IonIcon slot="start" icon={isAdmin ? shieldCheckmarkOutline : personCircleOutline} />
               <IonLabel>{isAdmin ? 'Administrador Serviprox' : (user?.first_name || user?.email || 'Mi cuenta')}</IonLabel>
-              <IonButton slot="end" fill="clear" onClick={onLogout} aria-label="Cerrar sesión" title="Cerrar sesión">
-                <IonIcon slot="icon-only" icon={logOutOutline} />
-              </IonButton>
+              <IonMenuToggle autoHide={false}>
+                <IonButton slot="end" fill="clear" onClick={onLogout} aria-label="Cerrar sesión / Salir" title="Cerrar sesión / Salir">
+                  <IonIcon slot="icon-only" icon={logOutOutline} />
+                </IonButton>
+              </IonMenuToggle>
             </IonItem>
           ) : null}
           {!isAdmin && user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (

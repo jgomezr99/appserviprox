@@ -23,6 +23,30 @@ export const BlockedAccountModal: React.FC<BlockedAccountModalProps> = ({
   const [appealSuccess, setAppealSuccess] = useState("");
   const [timeLeftStr, setTimeLeftStr] = useState<string>("");
   const [showAiChat, setShowAiChat] = useState(false);
+  const [initialChatAction, setInitialChatAction] = useState<string | undefined>(undefined);
+  const [unblockSuccessMsg, setUnblockSuccessMsg] = useState("");
+
+  const handleAccountUnblocked = () => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("serviprox_blocked_users") || "{}");
+      if (info.user_name) {
+        delete stored[info.user_name.trim().toLowerCase()];
+      }
+      localStorage.setItem("serviprox_blocked_users", JSON.stringify(stored));
+    } catch {}
+
+    setUnblockSuccessMsg("🎉 ¡Tu cuenta ha sido desbloqueada con éxito por la IA! Redirigiendo a la aplicación...");
+    setShowAiChat(false);
+    window.dispatchEvent(new CustomEvent("serviprox:account-unblocked"));
+
+    setTimeout(() => {
+      if (onClose) {
+        onClose();
+      } else {
+        window.location.href = "/cliente/inicio";
+      }
+    }, 1500);
+  };
 
   const isTemporal = info.block_type !== "permanente" && !!info.blocked_until;
 
@@ -232,12 +256,33 @@ export const BlockedAccountModal: React.FC<BlockedAccountModalProps> = ({
           </div>
         )}
 
+        {unblockSuccessMsg && (
+          <div className="sp-blocked-appeal-success" style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#166534', fontWeight: 800 }}>
+            {unblockSuccessMsg}
+          </div>
+        )}
+
         {/* Botones de Acción */}
         <div className="sp-blocked-footer-actions">
+          {/* Botón Principal: Desbloqueo de Cuenta con IA */}
+          <button
+            type="button"
+            className="sp-btn sp-btn-success"
+            onClick={() => {
+              setInitialChatAction('iniciar_desbloqueo');
+              setShowAiChat(true);
+            }}
+          >
+            🔓 Solicitar Desbloqueo Inmediato (Chat IA)
+          </button>
+
           <button
             type="button"
             className="sp-btn sp-btn-outline"
-            onClick={() => setShowAiChat(true)}
+            onClick={() => {
+              setInitialChatAction(undefined);
+              setShowAiChat(true);
+            }}
           >
             💬 Contactar a Soporte (Chat IA)
           </button>
@@ -266,6 +311,7 @@ export const BlockedAccountModal: React.FC<BlockedAccountModalProps> = ({
       <SupportAiChatModal
         isOpen={showAiChat}
         onClose={() => setShowAiChat(false)}
+        initialAction={initialChatAction}
         context={{
           userName: info.user_name,
           blockReason: info.block_reason,
@@ -276,6 +322,7 @@ export const BlockedAccountModal: React.FC<BlockedAccountModalProps> = ({
         onAppealSuccess={(ticket) => {
           setAppealSuccess(`Tu recurso de apelación ha sido radicado bajo el radicado #${ticket}. El comité revisará tu caso.`);
         }}
+        onAccountUnblocked={handleAccountUnblocked}
       />
     </div>
   );

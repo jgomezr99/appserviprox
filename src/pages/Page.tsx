@@ -15,7 +15,7 @@ const Page: React.FC = () => {
       <IonHeader>
         <IonToolbar >
           <IonButtons slot="start">
-            <IonMenuButton menu="main-menu" />
+            <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
           
           <IonTitle color={'primary'}>

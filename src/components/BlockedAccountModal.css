@@ -307,6 +307,20 @@
   transition: all 0.15s;
 }
 
+.sp-btn-success {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  font-size: 0.92rem;
+  padding: 13px 20px;
+}
+
+.sp-btn-success:hover {
+  background: linear-gradient(135deg, #047857 0%, #059669 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+}
+
 .sp-btn-danger {
   background: #dc2626;
   color: #ffffff;

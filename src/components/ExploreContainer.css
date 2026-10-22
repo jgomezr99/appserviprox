@@ -2,8 +2,8 @@
   min-height: 100%;
   color: var(--sp-text);
   background:
-    radial-gradient(circle at top left, rgba(23, 105, 224, 0.16), transparent 34rem),
-    linear-gradient(180deg, #ffffff 0%, var(--sp-bg) 48%, #ffffff 100%);
+    radial-gradient(circle at top left, var(--sp-primary-soft), transparent 34rem),
+    linear-gradient(180deg, var(--sp-surface) 0%, var(--sp-bg) 48%, var(--sp-surface) 100%);
 }
 
 .sp-hero {
@@ -56,9 +56,9 @@
 }
 
 .sp-hero__actions ion-button[fill="outline"] {
-  --border-color: rgba(23, 105, 224, 0.34);
+  --border-color: var(--sp-border);
   --color: var(--sp-primary);
-  --background: rgba(255, 255, 255, 0.55);
+  --background: var(--sp-surface);
 }
 
 .sp-hero__panel,
@@ -84,7 +84,7 @@
   min-height: 52px;
   padding: 10px 12px;
   border-radius: var(--sp-radius-md);
-  background: rgba(255, 255, 255, 0.58);
+  background: var(--sp-surface);
   color: var(--sp-text);
   font-weight: 700;
 }

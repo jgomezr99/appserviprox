@@ -1,8 +1,24 @@
 .sp-role-content {
   --background:
-    radial-gradient(circle at 10% 0%, rgba(11, 47, 107, 0.14), transparent 24rem),
-    radial-gradient(circle at 95% 10%, rgba(217, 54, 74, 0.09), transparent 22rem),
-    linear-gradient(180deg, #ffffff 0%, var(--sp-background) 58%, #ffffff 100%);
+    radial-gradient(circle at 10% 0%, var(--sp-primary-soft), transparent 24rem),
+    radial-gradient(circle at 95% 10%, var(--sp-accent-soft), transparent 22rem),
+    linear-gradient(180deg, var(--sp-surface) 0%, var(--sp-background) 58%, var(--sp-surface) 100%);
+}
+
+.theme-client .sp-role-content,
+[data-theme="client"] .sp-role-content {
+  --background:
+    radial-gradient(circle at 10% 0%, rgba(220, 38, 38, 0.12), transparent 24rem),
+    radial-gradient(circle at 95% 10%, rgba(254, 226, 226, 0.6), transparent 22rem),
+    linear-gradient(180deg, #FFF5F6 0%, #FFF1F2 58%, #FFF5F6 100%);
+}
+
+.theme-professional .sp-role-content,
+[data-theme="professional"] .sp-role-content {
+  --background:
+    radial-gradient(circle at 10% 0%, rgba(11, 47, 107, 0.12), transparent 24rem),
+    radial-gradient(circle at 95% 10%, rgba(234, 242, 255, 0.6), transparent 22rem),
+    linear-gradient(180deg, #F8FBFF 0%, #F0F7FF 58%, #F8FBFF 100%);
 }
 
 .sp-role-page {
@@ -264,10 +280,10 @@ body.dark .sp-field ion-select {
   --padding-start: 14px;
   --padding-end: 14px;
   --border-radius: 18px;
-  --background: rgba(255, 255, 255, 0.86);
+  --background: var(--sp-surface);
   --color: var(--sp-text);
   --placeholder-color: #8d98ab;
-  border: 1px solid rgba(11, 47, 107, 0.13);
+  border: 1px solid var(--sp-border);
   border-radius: 18px;
 }
 
@@ -392,8 +408,8 @@ body.dark .sp-alert-success ion-icon {
   min-height: 62px;
   padding: 14px;
   border-radius: 20px;
-  border: 1px solid rgba(11, 47, 107, 0.12);
-  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid var(--sp-border);
+  background: var(--sp-surface);
   color: var(--sp-text);
   text-align: left;
 }
@@ -417,7 +433,7 @@ body.dark .sp-alert-success ion-icon {
 
 .sp-choice-card.is-selected {
   background: var(--sp-primary-soft);
-  border-color: rgba(11, 47, 107, 0.42);
+  border-color: var(--sp-primary);
 }
 
 .sp-list {
@@ -430,7 +446,7 @@ body.dark .sp-alert-success ion-icon {
   gap: 8px;
   padding: 14px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.68);
+  background: var(--sp-surface);
   border: 1px solid var(--sp-border);
 }
 
@@ -447,9 +463,9 @@ body.dark .sp-alert-success ion-icon {
   gap: 14px;
   min-height: 54px;
   padding: 12px 14px;
-  border: 1px solid rgba(11, 47, 107, 0.12);
+  border: 1px solid var(--sp-border);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--sp-surface);
   color: var(--sp-text);
   font-weight: 780;
 }
@@ -458,14 +474,14 @@ body.dark .sp-alert-success ion-icon {
   flex: 0 1 180px;
   --padding-start: 12px;
   --padding-end: 12px;
-  --background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(11, 47, 107, 0.13);
+  --background: var(--sp-surface);
+  border: 1px solid var(--sp-border);
   border-radius: 16px;
 }
 
 @supports not ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) {
   .sp-card {
-    background: #ffffff;
+    background: var(--sp-surface);
   }
 }
 

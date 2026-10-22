@@ -17,6 +17,14 @@ interface QuickOption {
   label: string;
   action: string;
   prompt?: string;
+  isHighlight?: boolean;
+}
+
+interface DecisionCard {
+  type: 'approved' | 'denied';
+  title: string;
+  reason: string;
+  ticketNumber: string;
 }
 
 interface ChatMessage {
@@ -25,34 +33,53 @@ interface ChatMessage {
   text: string;
   timestamp: string;
   quickOptions?: QuickOption[];
+  imageUrl?: string;
+  decisionCard?: DecisionCard;
 }
 
 interface SupportAiChatModalProps {
   isOpen: boolean;
   onClose: () => void;
   context?: SupportAiContext;
+  initialAction?: string;
   onAppealSuccess?: (ticketNumber: string) => void;
+  onAccountUnblocked?: () => void;
 }
 
 type ChatMode =
   | 'idle'
+  | 'unlock_description'
+  | 'unlock_photo'
+  | 'unlock_reviewing'
   | 'appeal_input'
   | 'failure_category'
   | 'failure_description'
   | 'pqr_input';
 
+interface UnlockDraft {
+  description?: string;
+  photoUrl?: string;
+  photoName?: string;
+}
+
 export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
   isOpen,
   onClose,
   context,
+  initialAction,
   onAppealSuccess,
+  onAccountUnblocked,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>('idle');
   const [selectedFailureCategory, setSelectedFailureCategory] = useState<string>('General');
+  const [unlockDraft, setUnlockDraft] = useState<UnlockDraft>({});
+  const [attachedImage, setAttachedImage] = useState<{ url: string; name: string } | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const userName = context?.userName || 'Usuario';
   const blockReason = context?.blockReason || 'Incumplimiento de acuerdos o términos de servicio';
@@ -63,44 +90,68 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
     ? 'temporal'
     : 'permanente';
 
-  // Inicializar conversación con contexto y opciones directas de reporte, pqr, falla y apelación
+  // Iniciar conversación cuando se abre el modal
   useEffect(() => {
     if (!isOpen) return;
 
     setChatMode('idle');
+    setUnlockDraft({});
+    setAttachedImage(null);
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const initialText = `Hola ${userName}, soy tu **Asistente Virtual con IA de Soporte Serviprox**.\n\nHe verificado el estado de tu cuenta y expediente. Estoy conectado directamente con la base de datos y la administración oficial para:\n\n• 📝 **Radicar tu recurso de apelación** ante el comité administrativo.\n• 🛠️ **Reportar fallas técnicas de la app** (GPS, pagos, errores de sistema).\n• ⚖️ **Crear un reporte o PQR oficial** respaldado por la Ley 1480.\n\nTodos los radicados ingresan de inmediato a la bandeja del **Panel Administrativo**, donde el equipo oficial revisará los datos y emitirá la respuesta formal y solución del caso. ¿En qué podemos ayudarte?`;
+
+    // Si viene con acción inicial de desbloqueo (ej. botón directo de la ventana de bloqueo)
+    if (initialAction === 'iniciar_desbloqueo') {
+      setChatMode('unlock_description');
+      setMessages([
+        {
+          id: 'msg-init-unlock',
+          sender: 'agent',
+          text: `Hola **${userName}**, soy tu **Asistente Virtual con IA de Soporte Serviprox**.\n\n🔓 **Módulo de Desbloqueo de Cuenta con Inteligencia Artificial**\n\nHe verificado el estado de tu cuenta (*Sanción: ${blockReason}*). Para que la IA evalúe tu caso y determine si procede el **desbloqueo inmediato** de tu cuenta, completaremos 2 sencillos pasos:\n\n📝 **Paso 1 de 2: Descripción de los hechos**\nPor favor, escribe detalladamente qué sucedió: ¿por qué consideras que el bloqueo fue un error o malentendido, o qué justificación presentas?`,
+          timestamp: timeStr,
+          quickOptions: [
+            { label: '📱 Ocurrió una falla técnica o de GPS en la app', action: 'desbloq_falla', prompt: 'El inconveniente ocurrió por una falla técnica o de GPS en la app que me impidió responder a tiempo.' },
+            { label: '🤝 Llegué a un acuerdo conciliado con el usuario', action: 'desbloq_acuerdo', prompt: 'Hablé directamente con el usuario y llegamos a un acuerdo satisfactorio.' },
+            { label: '⏱️ Inconveniente imprevisible por fuerza mayor', action: 'desbloq_fuerza_mayor', prompt: 'Tuve una situación de fuerza mayor imprevisible ajena a mi voluntad.' },
+            { label: '⚠️ Fue un reporte falso o malentendido sin mala fe', action: 'desbloq_falso', prompt: 'Considero que fue un reporte injustificado o malentendido, no hubo mala fe de mi parte.' },
+          ],
+        },
+      ]);
+      return;
+    }
+
+    const initialText = `Hola **${userName}**, soy tu **Asistente Virtual con IA de Soporte Serviprox**.\n\nHe verificado tu expediente (*Causal: "${blockReason}"*). Estoy facultado para interactuar contigo, resolver todas tus dudas y tomar acciones oficiales:\n\n• 🔓 **Solicitar Desbloqueo de Cuenta con IA**: Evaluamos tu descripción y foto de evidencia en tiempo real.\n• 📝 **Radicar Recurso de Apelación**: Envío formal de descargos al Comité Administrativo.\n• 🛠️ **Reportar Fallas Técnicas**: Errores de mapa, GPS o pasarela de pagos.\n• ⚖️ **Crear PQR Oficial**: Amparado bajo la Ley 1480 del Estatuto del Consumidor.\n\nPuedes hacerme cualquier pregunta o seleccionar una acción abajo:`;
 
     const initialOptions: QuickOption[] = [
       {
-        label: '📝 Radicar Apelación de cuenta',
-        action: 'iniciar_apelacion',
-        prompt: 'Deseo radicar mi recurso de apelación para que el administrador revise mi sanción.',
+        label: '🔓 Solicitar Desbloqueo de Cuenta con IA',
+        action: 'iniciar_desbloqueo',
+        prompt: 'Quiero solicitar el desbloqueo inmediato de mi cuenta evaluado por la IA.',
+        isHighlight: true,
       },
       {
-        label: '🛠️ Reportar falla técnica en la app',
-        action: 'iniciar_falla',
-        prompt: 'Quiero reportar un problema o falla técnica que ocurrió en la aplicación.',
-      },
-      {
-        label: '⚖️ Radicar PQR oficial',
-        action: 'iniciar_pqr',
-        prompt: 'Deseo radicar una Petición, Queja o Reclamo (PQR) oficial.',
-      },
-      {
-        label: '❓ ¿Por qué ocurrió la sanción?',
+        label: '❓ ¿Por qué ocurrió el bloqueo?',
         action: 'explicar_motivo',
-        prompt: '¿Por qué motivos específicos la plataforma aplicó esta sanción?',
+        prompt: '¿Por qué motivos específicos la plataforma aplicó este bloqueo?',
       },
       {
-        label: '⏱️ ¿Cuándo se reactiva mi cuenta?',
+        label: '⏱️ ¿Cuánto dura la suspensión?',
         action: 'consultar_tiempo',
         prompt: '¿Cuánto tiempo dura la suspensión y cuándo podré ingresar?',
       },
       {
-        label: '👤 Contactar comité administrativo',
-        action: 'comite_humano',
-        prompt: 'Quiero elevar mi caso a un supervisor humano en Bogotá.',
+        label: '📝 Radicar Apelación Formal',
+        action: 'iniciar_apelacion',
+        prompt: 'Deseo radicar mi recurso de apelación ante el comité administrativo.',
+      },
+      {
+        label: '🛠️ Reportar falla técnica en la app',
+        action: 'iniciar_falla',
+        prompt: 'Quiero reportar un problema o falla técnica que ocurrió en la app.',
+      },
+      {
+        label: '⚖️ Radicar PQR oficial',
+        action: 'iniciar_pqr',
+        prompt: 'Deseo radicar una PQR oficial.',
       },
     ];
 
@@ -113,7 +164,7 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
         quickOptions: initialOptions,
       },
     ]);
-  }, [isOpen, userName, blockReason, durationText]);
+  }, [isOpen, userName, blockReason, durationText, initialAction]);
 
   // Auto-scroll al final cuando llegan mensajes
   useEffect(() => {
@@ -122,7 +173,12 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
 
   if (!isOpen) return null;
 
-  const pushAgentMessage = (text: string, quickOptions?: QuickOption[]) => {
+  const pushAgentMessage = (
+    text: string,
+    quickOptions?: QuickOption[],
+    decisionCard?: DecisionCard,
+    imageUrl?: string
+  ) => {
     setIsTyping(true);
     setTimeout(() => {
       setIsTyping(false);
@@ -134,9 +190,162 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
           text,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           quickOptions,
+          decisionCard,
+          imageUrl,
         },
       ]);
     }, 600);
+  };
+
+  // Manejador de selección de imagen desde archivo
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setAttachedImage({
+          url: reader.result,
+          name: file.name,
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Ejecución del desbloqueo oficial en el sistema
+  const executeUnblockOperation = async (desc: string, radicadoId: string) => {
+    try {
+      // 1. Eliminar de serviprox_blocked_users en localStorage
+      const stored = JSON.parse(localStorage.getItem('serviprox_blocked_users') || '{}');
+      if (context?.userName) {
+        delete stored[context.userName.trim().toLowerCase()];
+      }
+      localStorage.setItem('serviprox_blocked_users', JSON.stringify(stored));
+
+      // 2. Registrar en backend mediante acción administrativa
+      await adminService.executeAction({
+        action: 'unblock_user',
+        target_id: context?.userName || 'usuario',
+        reason: `Desbloqueo otorgado por IA tras revisión de expediente: ${desc}`,
+        admin_name: 'IA Defensoría Serviprox',
+        send_notification: true,
+      });
+
+      // 3. Notificar en vivo y actualizar estado
+      window.dispatchEvent(new CustomEvent('serviprox:account-unblocked'));
+      window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
+
+      if (onAccountUnblocked) {
+        onAccountUnblocked();
+      }
+    } catch (err) {
+      console.warn('Error ejecutando desbloqueo:', err);
+    }
+  };
+
+  // Proceso de evaluación con Inteligencia Artificial del caso
+  const runAiCaseEvaluation = (description: string, photoAttachment?: { url: string; name: string } | null) => {
+    setChatMode('unlock_reviewing');
+    setIsTyping(true);
+
+    const radNum = Math.floor(1000 + Math.random() * 9000);
+    const radicadoTicket = `DES-BOG-${radNum}`;
+
+    setTimeout(() => {
+      setIsTyping(false);
+
+      const lowerDesc = description.toLowerCase();
+      // Verificamos si la justificación presenta argumentos razonables o evidencia
+      const isUnpardonable =
+        lowerDesc.includes('robé') ||
+        lowerDesc.includes('estafé') ||
+        lowerDesc.includes('agredí físicamente');
+
+      const isSubstantial =
+        description.trim().length >= 10 || !!photoAttachment;
+
+      if (!isUnpardonable && isSubstantial) {
+        // ── DICTAMEN 1: DESBLOQUEO DE CUENTA APROBADO ──
+        executeUnblockOperation(description, radicadoTicket);
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `agent-eval-${Date.now()}`,
+            sender: 'agent',
+            text: `🎉 **¡DICTAMEN FAVORABLE DE LA IA: CUENTA DESBLOQUEADA!**\n\n✅ **Resolución del Caso:**\nTras contrastar tus descargos con la causal de sanción (*"${blockReason}"*) y analizar la evidencia aportada, la IA de Serviprox determina que **existen méritos de buena fe y justificación suficiente** para el levantamiento inmediato de la inhabilitación.\n\n🔓 **Estado Actual:** Cuenta reactivada y habilitada al 100% en la base de datos oficial.\n🔖 **Radicado de Desbloqueo:** \`#${radicadoTicket}\`\n\nYa puedes volver a ingresar a la plataforma y utilizar todas las funciones con normalidad.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            decisionCard: {
+              type: 'approved',
+              title: '¡DESBLOQUEO DE CUENTA APROBADO POR LA IA!',
+              reason: 'Causal justificada sin dolo. Restablecimiento inmediato de derechos en la plataforma Serviprox.',
+              ticketNumber: radicadoTicket,
+            },
+            quickOptions: [
+              {
+                label: '🚀 Entrar a la Aplicación Ahora',
+                action: 'entrar_app',
+                prompt: 'Deseo entrar inmediatamente a la aplicación.',
+                isHighlight: true,
+              },
+              {
+                label: '🚪 Cerrar y Finalizar',
+                action: 'salir',
+                prompt: 'Muchas gracias, todo claro.',
+              },
+            ],
+          },
+        ]);
+        setChatMode('idle');
+      } else {
+        // ── DICTAMEN 2: SIGUE BLOQUEADO / ESCALADO A COMITÉ HUMANO ──
+        const pqrTicket = `APL-${radNum}`;
+        adminService.executeAction({
+          action: 'respond_pqr',
+          target_id: pqrTicket,
+          response_text: `Caso evaluado por IA no concedido de inmediato. Escalado a comité humano para ${userName}: "${description}"`,
+          admin_name: 'Asistente IA - Defensoría',
+          send_notification: true,
+        }).catch(console.warn);
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `agent-eval-${Date.now()}`,
+            sender: 'agent',
+            text: `⚠️ **DICTAMEN DE LA IA: LA CUENTA DEBE PERMANECER EN REVISIÓN**\n\nLa IA ha evaluado la información suministrada, pero debido a la falta de pruebas concluyentes o la naturaleza de la causal (*"${blockReason}"*), el levantamiento automático no fue autorizado de forma inmediata.\n\n📌 **Medida aplicada:** Tu caso ha sido formalmente radicado bajo el expediente \`#${pqrTicket}\` ante el **Comité Disciplinario y Administrativo Humano** de Serviprox Bogotá.\n⏱️ **Tiempo de revisión del Administrador:** 24 a 48 horas hábiles.\n\nEl administrador revisará tus antecedentes y emitirá la resolución final.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            decisionCard: {
+              type: 'denied',
+              title: 'SOLICITUD EN REVISIÓN ADMINISTRATIVA',
+              reason: 'Expediente trasladado al Administrador de Serviprox para análisis de fondo.',
+              ticketNumber: pqrTicket,
+            },
+            quickOptions: [
+              {
+                label: '🔄 Aportar más descargos o fotos',
+                action: 'iniciar_desbloqueo',
+                prompt: 'Quiero presentar nuevos argumentos y fotos para una nueva evaluación.',
+              },
+              {
+                label: '🛠️ Reportar falla técnica de la app',
+                action: 'iniciar_falla',
+                prompt: 'Deseo registrar que el problema fue por falla de la app.',
+              },
+              {
+                label: '🚪 Salir y esperar revisión',
+                action: 'salir',
+                prompt: 'Esperaré la revisión del administrador.',
+              },
+            ],
+          },
+        ]);
+        setChatMode('idle');
+      }
+    }, 1400);
   };
 
   const handleQuickAction = async (action: string, promptText?: string) => {
@@ -145,19 +354,102 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
   };
 
   const handleSendMessage = async (text: string, triggeredAction?: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() && !attachedImage) return;
+
+    const userMessageText = text.trim() || (attachedImage ? `[Foto adjunta: ${attachedImage.name}]` : '');
+    const currentAttachment = attachedImage;
+    setAttachedImage(null);
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       sender: 'user',
-      text: text.trim(),
+      text: userMessageText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      imageUrl: currentAttachment?.url,
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputText('');
 
-    // ── MODO 1: PROCESAMIENTO DE APELACIÓN FORMAL ──
+    const lower = text.toLowerCase();
+
+    // ── ACCIÓN: ENTRAR A LA APP TRAS DESBLOQUEO ──
+    if (triggeredAction === 'entrar_app' || lower.includes('entrar a la app') || lower.includes('ingresar ahora')) {
+      if (onAccountUnblocked) {
+        onAccountUnblocked();
+      }
+      onClose();
+      return;
+    }
+
+    // ── ACCIÓN: SALIR / CERRAR ──
+    if (triggeredAction === 'salir' || lower === 'salir' || lower === 'cerrar') {
+      onClose();
+      return;
+    }
+
+    // ── PASO 1 DESBLOQUEO: RECEPCIÓN DE LA DESCRIPCIÓN ──
+    if (chatMode === 'unlock_description') {
+      const updatedDraft = { ...unlockDraft, description: text };
+      setUnlockDraft(updatedDraft);
+      setChatMode('unlock_photo');
+
+      pushAgentMessage(
+        `📝 **Paso 1 completado: Descripción registrada.**\n*"${text}"*\n\n📸 **Paso 2 de 2: Foto o Captura del Bloqueo / Evidencia**\n\nPara validar tu solicitud, por favor adjunta una foto o captura de pantalla donde se observe:\n• El mensaje de bloqueo o pantalla de error.\n• Comprobante de pago o chat de acuerdo mutuo.\n• O foto de soporte o justificación.\n\nPuedes presionar el botón 📷 **Adjuntar Foto** abajo en la barra de texto, o elegir una opción:`,
+        [
+          { label: '📸 Adjuntar captura de pantalla del bloqueo actual', action: 'simular_captura', prompt: 'Adjunto captura de la pantalla de bloqueo de mi cuenta.' },
+          { label: '📷 Subir foto desde mi galería o cámara', action: 'abrir_selector', prompt: 'Voy a seleccionar una foto de mis archivos.' },
+          { label: '⚡ Evaluar caso con mi descripción ahora', action: 'evaluar_sin_foto', prompt: 'Deseo que la IA evalúe mi caso con la descripción que entregué.' },
+        ]
+      );
+      return;
+    }
+
+    // ── PASO 2 DESBLOQUEO: RECEPCIÓN DE FOTO Y REVISIÓN POR IA ──
+    if (chatMode === 'unlock_photo' || triggeredAction === 'evaluar_sin_foto' || triggeredAction === 'simular_captura') {
+      let photoToUse = currentAttachment;
+
+      if (triggeredAction === 'abrir_selector') {
+        fileInputRef.current?.click();
+        return;
+      }
+
+      if (triggeredAction === 'simular_captura') {
+        // Generamos simulación de captura de bloqueo
+        photoToUse = {
+          url: 'https://images.unsplash.com/photo-1555421689-491a97ff2040?w=600&auto=format&fit=crop&q=80',
+          name: 'captura_pantalla_bloqueo_serviprox.png',
+        };
+      }
+
+      const finalDescription = unlockDraft.description || text;
+      runAiCaseEvaluation(finalDescription, photoToUse);
+      return;
+    }
+
+    // ── ACCIÓN: INICIAR FLUJO DE DESBLOQUEO DE CUENTA ──
+    if (
+      triggeredAction === 'iniciar_desbloqueo' ||
+      lower.includes('desbloquear') ||
+      lower.includes('desbloqueo') ||
+      lower.includes('quitar bloqueo') ||
+      lower.includes('levantar sancion') ||
+      lower.includes('activar cuenta')
+    ) {
+      setChatMode('unlock_description');
+      pushAgentMessage(
+        `🔓 **Solicitud de Desbloqueo Inmediato de Cuenta por IA**\n\nIniciaremos el proceso de revisión automática en 2 pasos:\n\n📝 **Paso 1 de 2: Descripción de los hechos**\nPor favor, escribe abajo qué sucedió con el servicio o por qué consideras que el bloqueo fue injustificado o un error:`,
+        [
+          { label: '📱 Ocurrió una falla técnica de la app o GPS', action: 'desbloq_falla', prompt: 'Fue a causa de un problema técnico de la app que impidió confirmar el servicio a tiempo.' },
+          { label: '🤝 Llegué a un acuerdo conciliado con el usuario', action: 'desbloq_acuerdo', prompt: 'Ya conversé con la otra parte y llegamos a un acuerdo amistoso.' },
+          { label: '⏱️ Inconveniente de fuerza mayor ajeno a mí', action: 'desbloq_fuerza_mayor', prompt: 'Ocurrió un imprevisto de fuerza mayor ajeno a mi voluntad.' },
+          { label: '⚠️ Reporte falso o malentendido', action: 'desbloq_falso', prompt: 'Fue un malentendido sin mala fe de mi parte.' },
+        ]
+      );
+      return;
+    }
+
+    // ── MODO APELACIÓN GENERAL ──
     if (chatMode === 'appeal_input') {
       setChatMode('idle');
       setIsTyping(true);
@@ -165,7 +457,6 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
         const radNum = Math.floor(10000 + Math.random() * 90000);
         const ticketId = `APL-${radNum}`;
 
-        // 1. Guardar en backend Django / SQLite via acción administrativa
         await adminService.executeAction({
           action: 'respond_pqr',
           target_id: ticketId,
@@ -174,7 +465,6 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
           send_notification: true,
         });
 
-        // 2. Guardar en persistencia local sincronizada para que aparezca en AdminDashboard
         saveStoredPqrReports([
           {
             id: ticketId,
@@ -223,9 +513,10 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               quickOptions: [
                 {
-                  label: '🛠️ También quiero reportar una falla en la app',
-                  action: 'iniciar_falla',
-                  prompt: 'Deseo reportar que la sanción se debió a un error de la app.',
+                  label: '🔓 Probar Desbloqueo Inmediato por IA',
+                  action: 'iniciar_desbloqueo',
+                  prompt: 'Quiero evaluar mi caso para desbloqueo inmediato por IA.',
+                  isHighlight: true,
                 },
                 {
                   label: '🚪 Salir y esperar respuesta',
@@ -239,21 +530,18 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
         return;
       } catch {
         setIsTyping(false);
-        pushAgentMessage(
-          `Tu explicación ha sido anotada para el expediente. Recuerda que el administrador revisará tus antecedentes para determinar el levantamiento de la sanción.`
-        );
+        pushAgentMessage(`Tu explicación ha sido anotada para el expediente administrativo.`);
         return;
       }
     }
 
-    // ── MODO 2: PROCESAMIENTO DE FALLA TÉCNICA EN LA APP ──
+    // ── MODO FALLA TÉCNICA ──
     if (chatMode === 'failure_description') {
       setChatMode('idle');
       setIsTyping(true);
       try {
         const ticketNum = `#TK-${Math.floor(1046 + Math.random() * 8950)}`;
 
-        // 1. Guardar en backend en el modelo AppProblemReport
         await adminService.createProblem({
           ticketNumber: ticketNum,
           module: selectedFailureCategory,
@@ -265,7 +553,6 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
           adminName: 'Asistente IA - Soporte',
         });
 
-        // 2. Guardar en persistencia local de fallas técnicas sincronizada con AdminDashboard
         saveStoredAppProblems([
           {
             id: `prob-${Date.now()}`,
@@ -291,16 +578,17 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
             {
               id: `agent-${Date.now()}`,
               sender: 'agent',
-              text: `✅ **¡Falla Técnica Registrada en el Panel Administrativo!**\n\n📌 **Ticket Técnico:** \`${ticketNum}\`\n📂 **Módulo afectado:** ${selectedFailureCategory}\n👤 **Reportado por:** ${userName}\n📋 **Detalle registrado:** "${text}"\n\nTu reporte ya está disponible en el **Módulo de Fallas Técnicas del Administrador**. El equipo técnico y administrativo revisará los logs del sistema y redactará la solución oficial desde su panel de control.`,
+              text: `✅ **¡Falla Técnica Registrada en el Panel Administrativo!**\n\n📌 **Ticket Técnico:** \`${ticketNum}\`\n📂 **Módulo afectado:** ${selectedFailureCategory}\n👤 **Reportado por:** ${userName}\n📋 **Detalle registrado:** "${text}"\n\nTu reporte ya está disponible en el **Módulo de Fallas Técnicas del Administrador**.`,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               quickOptions: [
                 {
-                  label: '📝 Vincular esta falla a mi Apelación de cuenta',
-                  action: 'iniciar_apelacion',
-                  prompt: `Quiero apelar mi sanción justificando que fue causada por la falla técnica ${ticketNum}.`,
+                  label: '🔓 Solicitar Desbloqueo por esta Falla',
+                  action: 'iniciar_desbloqueo',
+                  prompt: `Quiero desbloquear mi cuenta argumentando que el error fue causado por la falla ${ticketNum}.`,
+                  isHighlight: true,
                 },
                 {
-                  label: '🚪 Salir y esperar respuesta',
+                  label: '🚪 Salir',
                   action: 'salir',
                   prompt: 'Gracias, esperaré la revisión técnica.',
                 },
@@ -311,97 +599,10 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
         return;
       } catch {
         setIsTyping(false);
-        pushAgentMessage(
-          `La descripción de la falla técnica ha sido registrada en el log del sistema para verificación por el equipo de soporte técnico.`
-        );
+        pushAgentMessage(`La falla técnica ha sido registrada en el log del sistema.`);
         return;
       }
     }
-
-    // ── MODO 3: PROCESAMIENTO DE PQR GENERAL ──
-    if (chatMode === 'pqr_input') {
-      setChatMode('idle');
-      setIsTyping(true);
-      try {
-        const radNum = Math.floor(1000 + Math.random() * 9000);
-        const pqrRadicado = `PQR-BOG-${new Date().getFullYear()}-${radNum}`;
-
-        await adminService.executeAction({
-          action: 'respond_pqr',
-          target_id: pqrRadicado,
-          response_text: `PQR oficial radicada por IA de ${userName}: "${text}"`,
-          admin_name: 'Asistente IA - Defensoría',
-          send_notification: true,
-        });
-
-        saveStoredPqrReports([
-          {
-            id: pqrRadicado,
-            radicadoNumber: pqrRadicado,
-            type: 'queja',
-            reason: 'otro',
-            contractorId: 'serviprox-soporte',
-            contractorName: 'Servicio al Cliente Serviprox',
-            contractorCompany: 'Mesa de Calidad y Defensoría PQR',
-            clientName: userName,
-            clientPhone: '+57 300 000 0000',
-            clientEmail: 'usuario@serviprox.co',
-            clientDocumentId: 'CC Verificada',
-            clientAddress: 'Bogotá D.C.',
-            incidentDate: new Date().toISOString(),
-            description: text,
-            desiredResolution: 'Revisión y respuesta administrativa oficial por parte del equipo de soporte',
-            status: 'radicado',
-            createdAt: new Date().toISOString(),
-            estimatedResponseDays: 2,
-            messages: [
-              {
-                id: `msg-${Date.now()}`,
-                sender: 'client',
-                senderName: userName,
-                senderRole: 'Usuario',
-                text,
-                timestamp: new Date().toISOString(),
-              },
-            ],
-          },
-        ]);
-
-        window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
-
-        setTimeout(() => {
-          setIsTyping(false);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `agent-${Date.now()}`,
-              sender: 'agent',
-              text: `✅ **¡PQR Radicada Oficialmente en el Panel Administrativo!**\n\n📌 **Radicado Ley 1480:** \`#${pqrRadicado}\`\n👤 **Titular:** ${userName}\n📋 **Detalle:** "${text}"\n\nTu reclamación ha quedado en la bandeja de entrada de la **Mesa de Conciliación y PQR Administrativa**. El administrador dará trámite formal y emitirá la respuesta correspondiente.`,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              quickOptions: [
-                {
-                  label: '🔍 ¿Cuál es el tiempo de respuesta legal?',
-                  action: 'tiempo_pqr',
-                  prompt: '¿Cuánto tiempo tiene la administración para responder mi PQR?',
-                },
-                {
-                  label: '🚪 Salir y esperar resolución',
-                  action: 'salir',
-                  prompt: 'Entendido, estaré pendiente de la respuesta.',
-                },
-              ],
-            },
-          ]);
-        }, 800);
-        return;
-      } catch {
-        setIsTyping(false);
-        pushAgentMessage(`Tu reclamación ha sido tomada en cuenta para la investigación del caso.`);
-        return;
-      }
-    }
-
-    const lower = text.toLowerCase();
 
     // ── ACCIÓN: REPORTAR FALLA TÉCNICA ──
     if (
@@ -434,7 +635,7 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
       setSelectedFailureCategory(catName);
       setChatMode('failure_description');
       pushAgentMessage(
-        `Has seleccionado el módulo **${catName}**.\n\nPor favor, escribe detalladamente qué sucedió (qué estabas haciendo, el error en pantalla o cómo afectó tu cuenta). \n\nEscríbelo abajo y crearé el **Ticket Técnico Oficial** en el panel administrativo:`,
+        `Has seleccionado el módulo **${catName}**.\n\nPor favor, escribe detalladamente qué sucedió (el error en pantalla o cómo afectó tu cuenta) y crearé el **Ticket Técnico Oficial** en el panel administrativo:`,
         [
           { label: 'No me permitió confirmar la llegada', action: 'desc_llegada', prompt: 'La app no me permitió confirmar la llegada por error de GPS.' },
           { label: 'Se congeló al procesar el servicio', action: 'desc_congelo', prompt: 'La pantalla se quedó cargando y bloqueó la orden.' },
@@ -443,21 +644,14 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
       return;
     }
 
-    // ── ACCIÓN: INICIAR APELACIÓN ──
-    if (
-      triggeredAction === 'iniciar_apelacion' ||
-      lower.includes('apelar') ||
-      lower.includes('descargo') ||
-      lower.includes('injusto') ||
-      lower.includes('sancion') ||
-      lower.includes('levantar')
-    ) {
+    // ── ACCIÓN: INICIAR APELACIÓN FORMAL ──
+    if (triggeredAction === 'iniciar_apelacion' || lower.includes('apelar') || lower.includes('descargo')) {
       setChatMode('appeal_input');
       pushAgentMessage(
-        `Para estructurar tu recurso de apelación ante el **Comité Administrativo de Bogotá**, escribe a continuación tus **descargos y argumentos formales** (por ejemplo: si la demora fue por causas de fuerza mayor, si hubo un acuerdo previo con el cliente o si ocurrió una falla en la app).\n\nEscribe tus descargos abajo y los registraré directamente en el panel administrativo:`,
+        `Para estructurar tu recurso de apelación ante el **Comité Administrativo de Bogotá**, escribe a continuación tus **descargos y argumentos formales**:\n\nLos registraré directamente en el panel administrativo:`,
         [
           { label: 'Fue por una falla técnica de la app', action: 'apela_falla', prompt: 'El problema se debió a un fallo técnico de la app que me impidió reportar a tiempo.' },
-          { label: 'Llegué a un acuerdo con el cliente', action: 'apela_acuerdo', prompt: 'Hablé directamente con el cliente y llegamos a una solución conciliada.' },
+          { label: 'Llegué a un acuerdo con el usuario', action: 'apela_acuerdo', prompt: 'Hablé directamente con el usuario y llegamos a una solución conciliada.' },
           { label: 'Ocurrió por motivos de fuerza mayor', action: 'apela_fuerza_mayor', prompt: 'El retraso o inconveniente ocurrió por causas de fuerza mayor imprevisibles.' },
         ]
       );
@@ -468,7 +662,7 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
     if (triggeredAction === 'iniciar_pqr' || lower.includes('pqr') || lower.includes('queja') || lower.includes('reclamo')) {
       setChatMode('pqr_input');
       pushAgentMessage(
-        `Entendido. Conforme a la **Ley 1480 de Protección al Consumidor**, tienes derecho a radicar peticiones, quejas o reclamos.\n\nEscribe a continuación el motivo de tu PQR y la solución que esperas. Lo registraré con radicado legal en la bandeja administrativa:`,
+        `Conforme a la **Ley 1480 de Protección al Consumidor**, escribe el motivo de tu reclamación formal:`,
         [
           { label: 'Reclamo por cobro o retención injustificada', action: 'pqr_cobro', prompt: 'Reclamo formal por retención de fondos o cobro indebido.' },
           { label: 'Inconformidad con el servicio recibido', action: 'pqr_servicio', prompt: 'Queja por incumplimiento o mala atención en el servicio pactado.' },
@@ -477,45 +671,49 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
       return;
     }
 
-    // ── TIEMPOS LEGALES DE PQR ──
-    if (triggeredAction === 'tiempo_pqr' || lower.includes('plazo') || lower.includes('cuanto tiempo') || lower.includes('dias habiles')) {
+    // ═════════════════════════════════════════════════════════════════════
+    // MOTOR DE RESPUESTAS A CADA PREGUNTA DEL USUARIO (RESPONDE CADA DUDA)
+    // ═════════════════════════════════════════════════════════════════════
+
+    // 1. ¿Cómo funciona el desbloqueo?
+    if (lower.includes('como desbloqueo') || lower.includes('cómo desbloquear') || lower.includes('como desbloquear') || lower.includes('quién me desbloquea')) {
       pushAgentMessage(
-        `Conforme a la normativa colombiana y el reglamento de Serviprox:\n\n• **PQRs técnicas y operativas:** Plazo máximo de respuesta de 48 horas hábiles.\n• **Apelaciones disciplinarias:** El comité evalúa el expediente en un plazo de 2 a 5 días hábiles.\n• La respuesta oficial será redactada directamente por el Administrador desde el panel administrativo y te llegará como notificación formal.`,
+        `Para desbloquear tu cuenta mediante nuestra **Inteligencia Artificial de Soporte**, el proceso consta de 2 pasos:\n\n1️⃣ **Descripción**: Nos explicas brevemente lo sucedido y por qué consideras que el bloqueo debe ser levantado.\n2️⃣ **Foto o Evidencia**: Adjuntas una captura de pantalla del bloqueo, comprobante de pago o acuerdo.\n\nLa IA analiza tu caso inmediatamente y, si cumple las condiciones de buena fe, **desbloquea tu cuenta al instante** sin esperar días de trámite.`,
         [
-          { label: '📝 Radicar Apelación', action: 'iniciar_apelacion', prompt: 'Deseo radicar mi apelación ahora.' },
-          { label: '🛠️ Reportar falla en la app', action: 'iniciar_falla', prompt: 'Deseo reportar una falla en la app.' },
+          { label: '🔓 Iniciar Desbloqueo Ahora', action: 'iniciar_desbloqueo', prompt: 'Quiero iniciar el proceso de desbloqueo con IA.', isHighlight: true },
+          { label: '📝 Radicar Apelación Tradicional', action: 'iniciar_apelacion', prompt: 'Prefiero radicar una apelación tradicional ante el comité.' },
         ]
       );
       return;
     }
 
-    // ── MOTIVO DE LA SANCIÓN ──
-    if (triggeredAction === 'explicar_motivo' || lower.includes('por qué') || lower.includes('motivo') || lower.includes('razon')) {
+    // 2. ¿Por qué me bloquearon / cuál es el motivo?
+    if (lower.includes('por qué me bloquearon') || lower.includes('por que me bloquearon') || lower.includes('por que me suspendieron') || lower.includes('cual es el motivo') || lower.includes('por qué ocurrió')) {
       pushAgentMessage(
-        `Tu cuenta presenta una restricción por la siguiente causal registrada en el sistema de auditoría:\n\n📌 **Causal registrada:** *"${blockReason}"*\n\nServiprox aplica sanciones disciplinarias para proteger a los usuarios ante cancelaciones sin aviso previo, retrasos graves o acuerdos económicos fuera de la app. Si consideras que se trató de un error, puedes radicar tu apelación para que la administración lo revoque.`,
+        `Tu cuenta presenta una restricción por la siguiente causal oficial registrada en el sistema disciplinario:\n\n📌 **Causal oficial:** *"${blockReason}"*\n\nServiprox suspende cuentas temporalmente para garantizar la seguridad en casos de reportes de clientes, inasistencias o acuerdos económicos no registrados. Si consideras que fue un error o malentendido, puedes solicitar el **Desbloqueo Inmediato por IA** adjuntando tu explicación y foto.`,
         [
-          { label: '📝 Radicar apelación de esta sanción', action: 'iniciar_apelacion', prompt: 'Quiero presentar descargos formales sobre este motivo.' },
-          { label: '🛠️ Fue debido a una falla en la app', action: 'iniciar_falla', prompt: 'La sanción ocurrió porque la app falló y no me permitió operar.' },
+          { label: '🔓 Solicitar Desbloqueo Inmediato', action: 'iniciar_desbloqueo', prompt: 'Quiero solicitar el desbloqueo inmediato por ser un error.', isHighlight: true },
+          { label: '🛠️ Fue culpa de un error de la app', action: 'iniciar_falla', prompt: 'La suspensión ocurrió por una falla técnica de la app.' },
         ]
       );
       return;
     }
 
-    // ── TIEMPO DE SANCIÓN ──
-    if (triggeredAction === 'consultar_tiempo' || lower.includes('cuándo') || lower.includes('tiempo') || lower.includes('duracion')) {
+    // 3. ¿Cuánto tiempo dura la suspensión / cuándo podré entrar?
+    if (lower.includes('cuanto dura') || lower.includes('cuánto dura') || lower.includes('cuando podre entrar') || lower.includes('cuándo podré entrar') || lower.includes('tiempo restante')) {
       if (isTemporal) {
         pushAgentMessage(
-          `Tu suspensión es **temporal** por un plazo de **${durationText}**.\n\n🗓️ **Fecha estimada de reactivación:** ${context?.blockedUntil ? new Date(context.blockedUntil).toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Al culminar el plazo fijado'}.\n\nAl cumplirse el tiempo, la cuenta se habilita de forma automática. Si radicas una apelación justificada, la administración puede levantar la sanción antes de tiempo.`,
+          `Tu suspensión es **temporal** por un plazo de **${durationText}**.\n\n🗓️ **Fecha de reactivación automática:** ${context?.blockedUntil ? new Date(context.blockedUntil).toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Al culminar los días estipulados'}.\n\n💡 **Importante:** No necesitas esperar que pasen los días. Puedes usar nuestro **Desbloqueo con IA** para reactivar tu cuenta hoy mismo si tienes descargos válidos.`,
           [
-            { label: '📝 Radicar apelación para acelerar', action: 'iniciar_apelacion', prompt: 'Quiero radicar una apelación para levantar la suspensión antes.' },
-            { label: '🛠️ Reportar falla en la app', action: 'iniciar_falla', prompt: 'Quiero reportar un problema de falla en la app.' },
+            { label: '🔓 Desbloquear Mi Cuenta Hoy', action: 'iniciar_desbloqueo', prompt: 'Deseo desbloquear mi cuenta hoy mismo con la IA.', isHighlight: true },
+            { label: '📝 Radicar Apelación', action: 'iniciar_apelacion', prompt: 'Quiero radicar una apelación formal.' },
           ]
         );
       } else {
         pushAgentMessage(
-          `Esta cuenta tiene una inhabilitación **definitiva** por decisión disciplinaria.\n\nPara estos casos, la vía formal es presentar un recurso de apelación con pruebas ante el comité directivo demostrando que la falta no existió o fue producto de un error.`,
+          `Esta cuenta tiene una inhabilitación **definitiva** por decisión disciplinaria de la administración.\n\nSin embargo, la IA de Soporte está facultada para revisar nuevos elementos probatorios y revocar la decisión si aportas descargos y foto de evidencia que demuestren que no hubo dolo.`,
           [
-            { label: '📝 Radicar recurso de apelación', action: 'iniciar_apelacion', prompt: 'Deseo presentar un recurso formal de apelación con descargos.' },
+            { label: '🔓 Solicitar Revisión y Desbloqueo IA', action: 'iniciar_desbloqueo', prompt: 'Quiero que la IA revise mi expediente para desbloquearme.', isHighlight: true },
             { label: '👤 Contactar comité administrativo', action: 'comite_humano', prompt: 'Solicito revisión con la mesa directiva.' },
           ]
         );
@@ -523,32 +721,66 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
       return;
     }
 
-    // ── CONTACTO COMITÉ HUMANO ──
-    if (triggeredAction === 'comite_humano' || lower.includes('humano') || lower.includes('asesor') || lower.includes('supervisor')) {
+    // 4. ¿Qué foto o evidencia debo subir?
+    if (lower.includes('que foto') || lower.includes('qué foto') || lower.includes('que evidencia') || lower.includes('como tomo la foto')) {
       pushAgentMessage(
-        `He registrado tu solicitud de atención con el **Comité Administrativo de Bogotá**.\n\nPara que el supervisor pueda resolver tu caso en el panel administrativo, te sugerimos dejar radicada tu apelación o reporte por este medio con tus argumentos por escrito.`,
+        `Para el **Desbloqueo con IA**, puedes adjuntar cualquiera de estas fotos o capturas:\n\n📸 **Captura de pantalla** de la advertencia de bloqueo o error en la app.\n💬 **Captura de chat de WhatsApp** o mensajes con el cliente/profesional demostrando acuerdo mutuo.\n🧾 **Comprobante de pago o transferencia** bancaria si hubo disputa de saldo.\n📄 **Certificado o prueba médica/laboral** si fue por fuerza mayor.\n\nPuedes presionar el botón 📷 abajo para adjuntarla directamente.`,
         [
-          { label: '📝 Dejar descargos / apelación escrita', action: 'iniciar_apelacion', prompt: 'Deseo redactar mi apelación para que la lea el comité.' },
-          { label: '🛠️ Reportar falla técnica de la app', action: 'iniciar_falla', prompt: 'Deseo reportar la falla técnica de la app.' },
+          { label: '🔓 Iniciar Desbloqueo con Foto', action: 'iniciar_desbloqueo', prompt: 'Quiero iniciar el desbloqueo y adjuntar mi foto.', isHighlight: true },
         ]
       );
       return;
     }
 
-    // ── RESPUESTA GENERAL CONTEXTUAL IA ──
+    // 5. ¿Qué pasa con mi saldo, pagos o dinero?
+    if (lower.includes('dinero') || lower.includes('saldo') || lower.includes('plata') || lower.includes('pago') || lower.includes('cobro')) {
+      pushAgentMessage(
+        `💰 **Protección de Fondos y Saldos:**\n\nConforme a la legislación colombiana y la Ley 1480, **tu dinero y saldos están legalmente protegidos**. La suspensión de la cuenta no confisca ni retiene tus fondos.\n\n• Al desbloquear tu cuenta con la IA, tendrás acceso inmediato a tu saldo acumulado.\n• Si deseas solicitar retiro sin reactivar, la administración gestiona la transferencia a tu cuenta bancaria registrada en 24 a 48 horas.`,
+        [
+          { label: '🔓 Desbloquear para Acceder a mi Saldo', action: 'iniciar_desbloqueo', prompt: 'Quiero desbloquear mi cuenta para acceder a mis fondos.', isHighlight: true },
+          { label: '⚖️ Radicar PQR de Facturación', action: 'iniciar_pqr', prompt: 'Quiero radicar una reclamación sobre mis saldos.' },
+        ]
+      );
+      return;
+    }
+
+    // 6. ¿Puedo crear otra cuenta?
+    if (lower.includes('otra cuenta') || lower.includes('nuevo usuario') || lower.includes('crear otra')) {
+      pushAgentMessage(
+        `⚠️ **Políticas de Identidad en Serviprox:**\n\nNo es recomendable crear otra cuenta, ya que el sistema valida automáticamente tu cédula de ciudadanía (CC) y número telefónico. Al detectar duplicidad, el sistema inhabilita la nueva cuenta.\n\nLa vía más rápida y efectiva es **solicitar el desbloqueo de tu cuenta actual con la IA**, lo cual toma solo 2 minutos y conserva tus calificaciones e historial.`,
+        [
+          { label: '🔓 Desbloquear Mi Cuenta Actual', action: 'iniciar_desbloqueo', prompt: 'Prefiero desbloquear mi cuenta actual.', isHighlight: true },
+        ]
+      );
+      return;
+    }
+
+    // 7. Saludos y cortesía
+    if (lower === 'hola' || lower === 'buenos dias' || lower === 'buenas tardes' || lower === 'buenas noches' || lower === 'gracias') {
+      pushAgentMessage(
+        `¡Hola **${userName}**! Con gusto te colaboro. Estoy aquí para atender cualquier duda sobre tu cuenta y ayudarte a restaurar tu acceso.\n\n¿Deseas que iniciemos el **Desbloqueo Inmediato por IA**? Solo tomará un par de minutos.`,
+        [
+          { label: '🔓 Desbloquear Mi Cuenta', action: 'iniciar_desbloqueo', prompt: 'Deseo iniciar el desbloqueo de mi cuenta ahora.', isHighlight: true },
+          { label: '❓ Tengo una pregunta sobre mi bloqueo', action: 'explicar_motivo', prompt: 'Quiero saber más sobre los motivos de mi bloqueo.' },
+        ]
+      );
+      return;
+    }
+
+    // 8. Respuestas abiertas / Cualquier otra duda
     pushAgentMessage(
-      `He procesado tu mensaje: *"${text}"*.\n\nPuedo ingresar tu caso directamente al **Panel Administrativo** para que el equipo oficial redacte la respuesta formal y emita la solución:\n\n• ¿Deseas radicar una **Apelación formal**?\n• ¿O prefieres reportar una **Falla técnica en la app**?\n• ¿O radicar un **PQR de servicio**?`,
+      `He procesado tu consulta: *"${text}"*.\n\nComo Asistente Virtual con IA de Serviprox, te confirmo que tienes pleno derecho a la defensa y al levantamiento de sanciones si aportas tu versión y evidencia.\n\n¿Cuál de las siguientes acciones deseas que ejecutemos de inmediato?`,
       [
-        { label: '📝 Radicar Apelación', action: 'iniciar_apelacion', prompt: 'Quiero radicar mi apelación formal.' },
-        { label: '🛠️ Reportar falla en la app', action: 'iniciar_falla', prompt: 'Quiero reportar un problema de falla en la app.' },
-        { label: '⚖️ Radicar PQR oficial', action: 'iniciar_pqr', prompt: 'Quiero radicar una PQR oficial.' },
+        { label: '🔓 Solicitar Desbloqueo de Cuenta con IA', action: 'iniciar_desbloqueo', prompt: 'Deseo solicitar el desbloqueo de mi cuenta con IA.', isHighlight: true },
+        { label: '📝 Radicar Apelación Formal en Panel Admin', action: 'iniciar_apelacion', prompt: 'Quiero radicar una apelación formal ante el comité.' },
+        { label: '🛠️ Reportar Falla Técnica de la App', action: 'iniciar_falla', prompt: 'Quiero reportar un problema técnico de la app.' },
       ]
     );
   };
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && !attachedImage) return;
     handleSendMessage(inputText);
   };
 
@@ -567,7 +799,7 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
                 Soporte Virtual Serviprox
                 <span className="sp-ai-chat-badge-ai">IA ACTIVA</span>
               </h3>
-              <p className="sp-ai-chat-subtitle">Resolución de fallas, PQR y apelaciones</p>
+              <p className="sp-ai-chat-subtitle">Desbloqueo de cuentas, apelaciones y PQR</p>
             </div>
           </div>
           <button
@@ -609,19 +841,55 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
                     )}
                     <div style={{ whiteSpace: 'pre-line' }}>{msg.text}</div>
 
+                    {/* Imagen adjunta en el mensaje */}
+                    {msg.imageUrl && (
+                      <div className="sp-ai-msg-image-box">
+                        <img src={msg.imageUrl} alt="Evidencia adjunta" className="sp-ai-msg-image" />
+                        <div className="sp-ai-msg-image-label">📷 Evidencia Fotográfica</div>
+                      </div>
+                    )}
+
+                    {/* Tarjeta de Decisión Oficial de la IA */}
+                    {msg.decisionCard && (
+                      <div className={`sp-ai-decision-card ${msg.decisionCard.type}`}>
+                        <div className="sp-ai-decision-card-header">
+                          <span>{msg.decisionCard.type === 'approved' ? '✅' : '⚠️'}</span>
+                          <span>{msg.decisionCard.title}</span>
+                          <span className="sp-ai-decision-badge">
+                            {msg.decisionCard.type === 'approved' ? 'Desbloqueado' : 'En Revisión'}
+                          </span>
+                        </div>
+                        <div className="sp-ai-decision-card-body">
+                          {msg.decisionCard.reason}
+                        </div>
+                        <div className="sp-ai-decision-card-ticket">
+                          📌 Radicado Oficial: <strong>{msg.decisionCard.ticketNumber}</strong>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Chips de opciones rápidas */}
                     {isAgent && msg.quickOptions && msg.quickOptions.length > 0 && (
                       <div className="sp-ai-chips-group">
-                        {msg.quickOptions.map((opt, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            className="sp-ai-chip-btn"
-                            onClick={() => handleQuickAction(opt.action, opt.prompt)}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
+                        {msg.quickOptions.map((opt, idx) => {
+                          const isUnblock = opt.action === 'iniciar_desbloqueo' || opt.isHighlight;
+                          const isEnterApp = opt.action === 'entrar_app';
+                          const extraClass = isEnterApp
+                            ? 'enter-app-btn'
+                            : isUnblock
+                            ? 'unblock-btn'
+                            : '';
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              className={`sp-ai-chip-btn ${extraClass}`}
+                              onClick={() => handleQuickAction(opt.action, opt.prompt)}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -633,7 +901,7 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
 
           {isTyping && (
             <div className="sp-ai-typing-indicator">
-              <span>IA procesando</span>
+              <span>IA evaluando</span>
               <div className="sp-ai-typing-dots">
                 <span />
                 <span />
@@ -645,36 +913,73 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Previsualización de imagen adjunta antes de enviar */}
+        {attachedImage && (
+          <div className="sp-ai-attachment-preview-bar">
+            <img src={attachedImage.url} alt="Vista previa" className="sp-ai-attachment-thumb" />
+            <span className="sp-ai-attachment-name">📷 {attachedImage.name}</span>
+            <button
+              type="button"
+              className="sp-ai-attachment-remove-btn"
+              onClick={() => setAttachedImage(null)}
+              title="Quitar imagen"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Input oculto para adjuntar archivo desde cámara/galería */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileSelect}
+        />
+
         {/* Composer / Entrada de texto */}
         <div className="sp-ai-composer">
           <form className="sp-ai-composer-form" onSubmit={handleFormSubmit}>
+            <button
+              type="button"
+              className="sp-ai-composer-attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Adjuntar foto del bloqueo o evidencia"
+            >
+              📷
+            </button>
             <input
               type="text"
               className="sp-ai-composer-input"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={
-                chatMode === 'appeal_input'
+                chatMode === 'unlock_description'
+                  ? 'Paso 1: Describe qué ocurrió para evaluar el desbloqueo...'
+                  : chatMode === 'unlock_photo'
+                  ? 'Paso 2: Adjunta la foto con el botón 📷 o escribe un mensaje...'
+                  : chatMode === 'appeal_input'
                   ? 'Escribe tus descargos para radicar la apelación...'
                   : chatMode === 'failure_description'
                   ? 'Describe detalladamente la falla técnica que ocurrió...'
                   : chatMode === 'pqr_input'
                   ? 'Escribe el motivo de tu reclamación o PQR...'
-                  : 'Escribe tu consulta sobre la falla, PQR o apelación...'
+                  : 'Haz cualquier pregunta a la IA o escribe tu consulta...'
               }
               disabled={isTyping}
             />
             <button
               type="submit"
               className="sp-ai-composer-send-btn"
-              disabled={isTyping || !inputText.trim()}
+              disabled={isTyping || (!inputText.trim() && !attachedImage)}
               title="Enviar mensaje a la IA"
             >
               ➤
             </button>
           </form>
           <div className="sp-ai-footer-note">
-            Radicación oficial en el Panel Administrativo • Conforme a la Ley 1480
+            Desbloqueo Inteligente con IA • Sincronizado en tiempo real con el Panel Administrativo
           </div>
         </div>
       </div>

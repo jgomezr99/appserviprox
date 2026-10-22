@@ -187,15 +187,15 @@ const ProfessionalDashboard: React.FC = () => {
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle> Profesional</IonTitle>
+          <IonTitle>Página Principal</IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent fullscreen className="sp-role-content">
         <main className="sp-role-page">
           <header className="sp-role-header">
-            <span className="sp-role-kicker">PROFESIONAL</span>
+            <span className="sp-role-kicker">PÁGINA PRINCIPAL · PROFESIONAL</span>
             <h1>Hola, {displayName}</h1>
-            <p>Gestiona tu perfil y prepara tu operación en Serviprox.</p>
+            <p>Gestiona tu perfil, solicitudes y prepara tu operación en Serviprox.</p>
           </header>
 
           {loading ? (
