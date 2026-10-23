@@ -312,10 +312,34 @@ export const AdminSettings: React.FC<{ onChanged?: () => void }> = ({ onChanged 
               <span className="as-label">Logo actual</span>
               <div className="as-logo">
                 {form.logo ? <img src={form.logo} alt="Logo actual" /> : <strong className="as-logo-text">{form.platform_name}</strong>}
-                <label className="as-btn as-btn-outline">
-                  ⬆ Cambiar logo
-                  <input type="file" accept="image/png,image/jpeg" hidden onChange={(e) => onLogo(e.target.files?.[0])} />
-                </label>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                  <label className="as-btn as-btn-outline">
+                    ⬆ Cambiar logo
+                    <input type="file" accept="image/png,image/jpeg" hidden onChange={(e) => onLogo(e.target.files?.[0])} />
+                  </label>
+                  {form.logo && (
+                    <button
+                      type="button"
+                      className="as-btn as-btn-danger"
+                      disabled={busy}
+                      onClick={async () => {
+                        set("logo", "");
+                        setBusy(true);
+                        try {
+                          await platformSettingsService.saveAdmin({ ...form, logo: "" });
+                          setMsg({ type: "ok", text: "Logo eliminado y cambios guardados correctamente." });
+                          onChanged?.();
+                        } catch (err) {
+                          setMsg({ type: "error", text: errorMessage(err) });
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      🗑 Eliminar
+                    </button>
+                  )}
+                </div>
               </div>
               <small>Formatos: PNG, JPG (máx. 2 MB)</small>
               {saveButton}

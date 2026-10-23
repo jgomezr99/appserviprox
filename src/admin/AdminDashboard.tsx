@@ -1690,7 +1690,10 @@ export const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.getUsers("client");
       if (res && Array.isArray(res.users) && res.users.length > 0) {
-        setClientsList(res.users);
+        const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
+        const filtered = res.users.filter((c: any) => !deleted.includes(`client:${c.id}`) && !deleted.includes(String(c.id)));
+        setClientsList(filtered);
+        try { localStorage.setItem("serviprox_clients_list", JSON.stringify(filtered)); } catch {}
       }
     } catch (err) {
       console.warn("Error cargando clientes de BD:", err);
@@ -1705,7 +1708,10 @@ export const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.getProfessionals();
       if (Array.isArray(res) && res.length > 0) {
-        setAllProsList(res);
+        const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
+        const filtered = res.filter((p: any) => !deleted.includes(`professional:${p.id}`) && !deleted.includes(String(p.id)));
+        setAllProsList(filtered);
+        try { localStorage.setItem("serviprox_pros_list", JSON.stringify(filtered)); } catch {}
       }
     } catch (err) {
       console.warn("Error cargando profesionales de BD:", err);

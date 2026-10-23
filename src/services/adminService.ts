@@ -232,9 +232,14 @@ export const adminService = {
    */
   async getUsers(role?: string): Promise<{ count: number; users: any[] }> {
     try {
-      return await api.get<{ count: number; users: any[] }>("admin/users/", {
+      const res = await api.get<{ count: number; users: any[] }>("admin/users/", {
         params: role ? { role } : undefined,
       });
+      const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
+      const users = (res.users || []).filter(
+        (u: any) => !deleted.includes(`client:${u.id}`) && !deleted.includes(String(u.id))
+      );
+      return { count: users.length, users };
     } catch {
       return { count: 0, users: [] };
     }
@@ -354,9 +359,11 @@ export const adminService = {
   async getProfessionals(): Promise<any[]> {
     try {
       const res = await api.get<any>("professionals/");
-      if (Array.isArray(res)) return res;
-      if (res && Array.isArray(res.results)) return res.results;
-      return [];
+      const list = Array.isArray(res) ? res : (res && Array.isArray(res.results) ? res.results : []);
+      const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
+      return list.filter(
+        (p: any) => !deleted.includes(`professional:${p.id}`) && !deleted.includes(String(p.id))
+      );
     } catch {
       return [];
     }

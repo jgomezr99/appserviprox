@@ -1,5 +1,5 @@
 import React from "react";
-import { applyAppearance } from "../../services/platformSettings";
+import { applyAppearance, platformSettingsService } from "../../services/platformSettings";
 import { Card, FieldList, TabProps } from "./ui";
 
 const PALETTE = ["#2563EB", "#38BDF8", "#8B5CF6", "#EC4899", "#EF4444", "#F97316", "#22C55E", "#14B8A6", "#94A3B8"];

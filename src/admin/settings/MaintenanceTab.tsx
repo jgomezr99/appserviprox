@@ -1,3 +1,4 @@
+import { platformSettingsService } from "../../services/platformSettings";
 import React, { useState } from "react";
 import { Card, Empty, Footer, TabProps, Toggle } from "./ui";
 
@@ -98,7 +99,19 @@ export const MaintenanceTab: React.FC<TabProps> = ({ form, sec, setSec, busy, sa
           {sec.ips.map((p: string) => (
             <div className="as-row" key={p}>
               <span>{p}</span>
-              <button type="button" className="as-btn as-btn-danger as-btn-sm" aria-label={`Quitar ${p}`} onClick={() => { setSec({ ips: sec.ips.filter((x: string) => x !== p) }); notify("ok", `IP ${p} eliminada de la lista.`); }}>🗑 Eliminar</button>
+              <button type="button" className="as-btn as-btn-danger as-btn-sm" aria-label={`Quitar ${p}`} onClick={async () => {
+                const updatedIps = sec.ips.filter((x: string) => x !== p);
+                setSec({ ips: updatedIps });
+                try {
+                  await platformSettingsService.saveAdmin({
+                    ...form,
+                    sections: { ...form.sections, maintenance: { ...sec, ips: updatedIps } },
+                  });
+                  notify("ok", `IP ${p} eliminada y guardada.`);
+                } catch {
+                  notify("error", "No se pudo guardar la eliminación de la IP.");
+                }
+              }}>🗑 Eliminar</button>
             </div>
           ))}
           <div className="as-two">
