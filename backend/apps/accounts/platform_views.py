@@ -286,6 +286,16 @@ class AdminSystemActionView(APIView):
             deleted = AdminAuditLog.objects.filter(created_at__lt=cutoff).delete()[0]
             return Response({"detail": f"Registros eliminados: {deleted}."})
 
+        if action == "delete_backup":
+            name = request.data.get("name")
+            if name and BACKUP_DIR.exists():
+                target = BACKUP_DIR / name
+                if target.exists() and target.is_file():
+                    target.unlink()
+                    _audit(request, "Eliminar copia de seguridad", name)
+                    return Response({"detail": f"Copia eliminada: {name}"})
+            return Response({"detail": "Copia no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
         if action == "restore_backup":
             backups = sorted(BACKUP_DIR.glob("backup_*.json")) if BACKUP_DIR.exists() else []
             name = request.data.get("name")

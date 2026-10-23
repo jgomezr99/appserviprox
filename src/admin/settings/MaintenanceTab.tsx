@@ -98,7 +98,7 @@ export const MaintenanceTab: React.FC<TabProps> = ({ form, sec, setSec, busy, sa
           {sec.ips.map((p: string) => (
             <div className="as-row" key={p}>
               <span>{p}</span>
-              <button type="button" className="as-btn as-btn-danger as-btn-sm" aria-label={`Quitar ${p}`} onClick={() => setSec({ ips: sec.ips.filter((x: string) => x !== p) })}>🗑</button>
+              <button type="button" className="as-btn as-btn-danger as-btn-sm" aria-label={`Quitar ${p}`} onClick={() => { setSec({ ips: sec.ips.filter((x: string) => x !== p) }); notify("ok", `IP ${p} eliminada de la lista.`); }}>🗑 Eliminar</button>
             </div>
           ))}
           <div className="as-two">

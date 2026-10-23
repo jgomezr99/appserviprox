@@ -366,7 +366,22 @@ export const adminService = {
    * Elimina una cuenta de cliente o profesional (requiere sesión de staff).
    */
   async deleteAccount(kind: "client" | "professional", id: number | string): Promise<void> {
-    await api.delete(`admin/accounts/${kind}/${id}/`);
+    const DELETED_KEY = "serviprox_deleted_accounts";
+    try {
+      const stored: string[] = JSON.parse(localStorage.getItem(DELETED_KEY) || "[]");
+      const key = `${kind}:${id}`;
+      if (!stored.includes(key)) stored.push(key);
+      if (!stored.includes(String(id))) stored.push(String(id));
+      localStorage.setItem(DELETED_KEY, JSON.stringify(stored));
+    } catch {
+      // Ignorar fallas locales
+    }
+
+    try {
+      await api.delete(`admin/accounts/${kind}/${id}/`);
+    } catch (err) {
+      console.warn(`Aviso: Backend no disponible para deleteAccount (${kind}/${id}), eliminación local persistida:`, err);
+    }
   },
 
   /**

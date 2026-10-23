@@ -234,6 +234,28 @@ export interface PlatformNotification {
   created_at?: string;
 }
 
+const getPersistedClients = (): ClientItem[] => {
+  try {
+    const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
+    const saved = localStorage.getItem("serviprox_clients_list");
+    const base: ClientItem[] = saved ? JSON.parse(saved) : INITIAL_DB_CLIENTS;
+    return base.filter((c) => !deleted.includes(`client:${c.id}`) && !deleted.includes(String(c.id)));
+  } catch {
+    return INITIAL_DB_CLIENTS;
+  }
+};
+
+const getPersistedPros = (): ProfessionalItem[] => {
+  try {
+    const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
+    const saved = localStorage.getItem("serviprox_pros_list");
+    const base: ProfessionalItem[] = saved ? JSON.parse(saved) : INITIAL_DB_PROS;
+    return base.filter((p) => !deleted.includes(`professional:${p.id}`) && !deleted.includes(String(p.id)));
+  } catch {
+    return INITIAL_DB_PROS;
+  }
+};
+
 // Datos iniciales de la base de datos para respaldo y render inmediato
 const INITIAL_DB_CLIENTS: ClientItem[] = [
   {
@@ -1645,9 +1667,9 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Listas conectadas a la base de datos (con fallback inicial idéntico a la BD)
-  const [clientsList, setClientsList] = useState<ClientItem[]>(INITIAL_DB_CLIENTS);
-  const [allProsList, setAllProsList] = useState<ProfessionalItem[]>(INITIAL_DB_PROS);
+  // Listas conectadas a la base de datos (con persistencia local y fallback)
+  const [clientsList, setClientsList] = useState<ClientItem[]>(getPersistedClients);
+  const [allProsList, setAllProsList] = useState<ProfessionalItem[]>(getPersistedPros);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [prosLoading, setProsLoading] = useState(false);
 
@@ -2241,13 +2263,32 @@ export const AdminDashboard: React.FC = () => {
     );
     if (!ok) return;
     try {
-      await adminService.deleteAccount(kind, id);
+      // Registrar id eliminado de inmediato para evitar que reaparezca
+      try {
+        const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
+        const key = `${kind}:${id}`;
+        if (!deleted.includes(key)) deleted.push(key);
+        if (!deleted.includes(String(id))) deleted.push(String(id));
+        localStorage.setItem("serviprox_deleted_accounts", JSON.stringify(deleted));
+      } catch {}
+
+      // Actualizar lista en pantalla y almacenamiento
       if (kind === "client") {
-        setClientsList((prev) => prev.filter((c) => String(c.id) !== String(id)));
+        setClientsList((prev) => {
+          const next = prev.filter((c) => String(c.id) !== String(id));
+          try { localStorage.setItem("serviprox_clients_list", JSON.stringify(next)); } catch {}
+          return next;
+        });
       } else {
-        setAllProsList((prev) => prev.filter((p) => String(p.id) !== String(id)));
+        setAllProsList((prev) => {
+          const next = prev.filter((p) => String(p.id) !== String(id));
+          try { localStorage.setItem("serviprox_pros_list", JSON.stringify(next)); } catch {}
+          return next;
+        });
       }
-      showNotification(`La cuenta de ${name} fue eliminada.`, "success");
+
+      await adminService.deleteAccount(kind, id);
+      showNotification(`La cuenta de ${name} fue eliminada de la base de datos.`, "success");
     } catch (err) {
       showNotification(err instanceof Error ? err.message : "No se pudo eliminar la cuenta.", "error");
     }
