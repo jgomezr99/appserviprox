@@ -42,8 +42,21 @@ const ClientHome: React.FC = () => {
   const { user, updateMe } = useAuth();
   const flags = useHomeFlags("client");
   const { active: maintenance } = useMaintenance();
-  const [household, setHousehold] = useState<Household | null>(null);
-  const [loadingHousehold, setLoadingHousehold] = useState(true);
+  const [household, setHousehold] = useState<Household | null>(() => {
+    try {
+      const saved = localStorage.getItem("serviprox_primary_household");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loadingHousehold, setLoadingHousehold] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem("serviprox_primary_household");
+    } catch {
+      return true;
+    }
+  });
 
   // Estados de edición del perfil de cliente
   const [isEditing, setIsEditing] = useState(false);
@@ -71,11 +84,15 @@ const ClientHome: React.FC = () => {
   }, [user]);
 
   const loadPrimaryHousehold = async () => {
-    setLoadingHousehold(true);
     try {
       const list = await householdService.list();
       const primary = list.find((h) => h.is_default) || list[0] || null;
       setHousehold(primary);
+      if (primary) {
+        try {
+          localStorage.setItem("serviprox_primary_household", JSON.stringify(primary));
+        } catch {}
+      }
       if (primary && !address && primary.address_line) {
         setAddress(primary.address_line);
       }

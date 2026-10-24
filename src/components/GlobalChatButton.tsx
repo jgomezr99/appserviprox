@@ -99,6 +99,7 @@ export const GlobalChatButton: React.FC = () => {
           setChatOpen(true);
         }}
         aria-label="Abrir Chat de Reporte en Vivo"
+        title="Chat IA: PQR & Apelaciones"
         style={{
           position: 'fixed',
           bottom: '88px',
@@ -107,13 +108,14 @@ export const GlobalChatButton: React.FC = () => {
           pointerEvents: 'auto',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
+          justifyContent: 'center',
+          width: '52px',
+          height: '52px',
           backgroundColor: '#09090b',
           color: '#ffffff',
           border: '1.5px solid rgba(255, 255, 255, 0.15)',
-          borderRadius: '9999px',
-          padding: '8px 18px',
-          fontFamily: "'Plus Jakarta Sans', sans-serif",
+          borderRadius: '50%',
+          padding: 0,
           cursor: 'pointer',
           boxShadow: '0 8px 30px rgba(0, 0, 0, 0.55)',
           transition: 'transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease',
@@ -122,7 +124,7 @@ export const GlobalChatButton: React.FC = () => {
         }}
 
         onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px) scale(1.02)';
+          (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px) scale(1.05)';
           (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 12px 36px rgba(0, 0, 0, 0.7)';
         }}
         onMouseLeave={(e) => {
@@ -130,22 +132,22 @@ export const GlobalChatButton: React.FC = () => {
           (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 30px rgba(0, 0, 0, 0.55)';
         }}
         onMouseDown={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.96)';
+          (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.94)';
         }}
         onMouseUp={(e) => {
           (e.currentTarget as HTMLButtonElement).style.transform = 'none';
         }}
       >
         {/* Ícono de Robot con punto verde superior */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {/* Punto verde pulsante de "En Línea" */}
           <span
             style={{
               position: 'absolute',
               top: '-4px',
               right: '-4px',
-              width: '8px',
-              height: '8px',
+              width: '9px',
+              height: '9px',
               borderRadius: '50%',
               backgroundColor: '#10b981',
               boxShadow: '0 0 6px #10b981',
@@ -153,8 +155,8 @@ export const GlobalChatButton: React.FC = () => {
           />
           {/* Robot SVG icon */}
           <svg
-            width="22"
-            height="22"
+            width="26"
+            height="26"
             viewBox="0 0 24 24"
             fill="none"
             stroke="#fda4af"
@@ -169,32 +171,6 @@ export const GlobalChatButton: React.FC = () => {
             <path d="M9 13v-2" />
             <path d="M15 13v-2" />
           </svg>
-        </div>
-
-        {/* Dos líneas de texto: Título blanco + Subtítulo verde esmeralda */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left' }}>
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 800,
-              color: '#ffffff',
-              lineHeight: 1.2,
-              letterSpacing: '-0.2px',
-            }}
-          >
-            Chat IA: PQR &amp; Apelaciones
-          </span>
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: '#10b981',
-              lineHeight: 1.2,
-              letterSpacing: '-0.1px',
-            }}
-          >
-            Quejas, Fallas &amp; Descargos
-          </span>
         </div>
       </button>
 

@@ -234,28 +234,6 @@ export interface PlatformNotification {
   created_at?: string;
 }
 
-const getPersistedClients = (): ClientItem[] => {
-  try {
-    const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
-    const saved = localStorage.getItem("serviprox_clients_list");
-    const base: ClientItem[] = saved ? JSON.parse(saved) : INITIAL_DB_CLIENTS;
-    return base.filter((c) => !deleted.includes(`client:${c.id}`) && !deleted.includes(String(c.id)));
-  } catch {
-    return INITIAL_DB_CLIENTS;
-  }
-};
-
-const getPersistedPros = (): ProfessionalItem[] => {
-  try {
-    const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
-    const saved = localStorage.getItem("serviprox_pros_list");
-    const base: ProfessionalItem[] = saved ? JSON.parse(saved) : INITIAL_DB_PROS;
-    return base.filter((p) => !deleted.includes(`professional:${p.id}`) && !deleted.includes(String(p.id)));
-  } catch {
-    return INITIAL_DB_PROS;
-  }
-};
-
 // Datos iniciales de la base de datos para respaldo y render inmediato
 const INITIAL_DB_CLIENTS: ClientItem[] = [
   {
@@ -412,6 +390,31 @@ const INITIAL_DB_PROS: ProfessionalItem[] = [
     city: "Bogotá",
   },
 ];
+
+const getPersistedClients = (): ClientItem[] => {
+  try {
+    const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
+    const saved = localStorage.getItem("serviprox_clients_list");
+    const parsed = saved ? JSON.parse(saved) : null;
+    const base: ClientItem[] = Array.isArray(parsed) ? parsed : INITIAL_DB_CLIENTS;
+    return base.filter((c) => c && !deleted.includes(`client:${c.id}`) && !deleted.includes(String(c.id)));
+  } catch {
+    return INITIAL_DB_CLIENTS;
+  }
+};
+
+const getPersistedPros = (): ProfessionalItem[] => {
+  try {
+    const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
+    const saved = localStorage.getItem("serviprox_pros_list");
+    const parsed = saved ? JSON.parse(saved) : null;
+    const base: ProfessionalItem[] = Array.isArray(parsed) ? parsed : INITIAL_DB_PROS;
+    return base.filter((p) => p && !deleted.includes(`professional:${p.id}`) && !deleted.includes(String(p.id)));
+  } catch {
+    return INITIAL_DB_PROS;
+  }
+};
+
 
 // Datos del panel de Beneficios y Puntos sincronizados con la captura oficial
 const INITIAL_BENEFIT_PROS: BenefitProItem[] = [

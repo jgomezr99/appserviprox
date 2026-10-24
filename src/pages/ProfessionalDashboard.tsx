@@ -86,8 +86,21 @@ const DEFAULT_CONVERSATIONS: ChatConversation[] = [
 const ProfessionalDashboard: React.FC = () => {
   const { user } = useAuth();
   const flags = useHomeFlags("professional");
-  const [profile, setProfile] = useState<ProfessionalProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<ProfessionalProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem("serviprox_cached_pro_profile");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem("serviprox_cached_pro_profile");
+    } catch {
+      return true;
+    }
+  });
 
   // Estados de publicidad de profesionales
   const [adsModalOpen, setAdsModalOpen] = useState(false);
@@ -112,10 +125,15 @@ const ProfessionalDashboard: React.FC = () => {
     professionalProfileService
       .getMine()
       .then((payload) => {
-        if (active) setProfile(payload);
+        if (active) {
+          setProfile(payload);
+          try {
+            localStorage.setItem("serviprox_cached_pro_profile", JSON.stringify(payload));
+          } catch {}
+        }
       })
       .catch((error) => {
-        if (active && !(error instanceof ApiError && error.status === 404)) {
+        if (active && error instanceof ApiError && error.status === 404) {
           setProfile(null);
         }
       })

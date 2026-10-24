@@ -53,8 +53,6 @@ const AdministrativeLoginPage: React.FC = () => {
 		if (!sessionLoading && isAuthenticated) {
 			if (isUserAdmin(sessionUser)) {
 				history.replace("/admin");
-			} else {
-				history.replace(getEntryRoute(sessionUser));
 			}
 		}
 	}, [history, isAuthenticated, sessionLoading, sessionUser]);

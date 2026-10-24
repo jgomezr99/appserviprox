@@ -137,7 +137,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
       try {
         sessionStorage.setItem("serviprox_splash_seen", "1");
       } catch {}
-    }, 900);
+    }, 350);
     return () => window.clearTimeout(splashTimer);
   }, [isAuthenticated]);
 

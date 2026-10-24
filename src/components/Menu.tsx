@@ -82,7 +82,7 @@ const proPqrPage: AppPage = {
 const Menu: React.FC = () => {
   const location = useLocation();
   const router = useIonRouter();
-  const { becomeClient, becomeProfessional, isAuthenticated, isLoading, logout, user } = useAuth();
+  const { becomeClient, becomeProfessional, becomeStaff, isAuthenticated, isLoading, logout, user } = useAuth();
   const [roleChangeError, setRoleChangeError] = React.useState('');
   const [roleChanging, setRoleChanging] = React.useState(false);
 
@@ -214,13 +214,13 @@ const Menu: React.FC = () => {
     { title: 'Disponibilidad', url: '/profesional/disponibilidad', iosIcon: timeOutline, mdIcon: timeSharp },
   ];
 
-  const isAdmin = isUserAdmin(user);
+  const ischat = isUserAdmin(user);
 
   const staffPagesList: AppPage[] = [
     { title: 'Panel de Administración', url: '/admin', iosIcon: shieldCheckmarkOutline, mdIcon: shieldCheckmarkSharp },
   ];
 
-  const menuPages = isAdmin
+  const menuPages = ischat
     ? staffPagesList
     : user?.role === 'professional'
       ? proPagesList.filter((page) => {
@@ -307,7 +307,7 @@ const Menu: React.FC = () => {
             </IonMenuToggle>
           ))}
 
-          {!isAdmin && (
+          {!ischat && (
             <IonItem
               button
               lines="none"
@@ -352,8 +352,8 @@ const Menu: React.FC = () => {
           {/* Si hay sesión, muestra perfil/acciones y oculta el login */}
           {isAuthenticated ? (
             <IonItem lines="none" className="profile-item" detail={false}>
-              <IonIcon slot="start" icon={isAdmin ? shieldCheckmarkOutline : personCircleOutline} />
-              <IonLabel>{isAdmin ? 'Administrador Serviprox' : (user?.first_name || user?.email || 'Mi cuenta')}</IonLabel>
+              <IonIcon slot="start" icon={ischat ? shieldCheckmarkOutline : personCircleOutline} />
+              <IonLabel>{ischat ? 'Administrador Serviprox' : (user?.first_name || user?.email || 'Mi cuenta')}</IonLabel>
               <IonMenuToggle autoHide={false}>
                 <IonButton slot="end" fill="clear" onClick={onLogout} aria-label="Cerrar sesión / Salir" title="Cerrar sesión / Salir">
                   <IonIcon slot="icon-only" icon={logOutOutline} />
@@ -361,7 +361,7 @@ const Menu: React.FC = () => {
               </IonMenuToggle>
             </IonItem>
           ) : null}
-          {!isAdmin && user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (
+          {!ischat && user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (
             <IonItem lines="none" detail={false} className="role-switch-item">
               <IonIcon slot="start" icon={briefcaseOutline} />
               <IonLabel>Ofrecer servicios</IonLabel>
@@ -380,7 +380,7 @@ const Menu: React.FC = () => {
               </IonButton>
             </IonItem>
           ) : null}
-          {!isAdmin && user?.role === 'professional' ? (
+          {!ischat && user?.role === 'professional' ? (
             <IonItem lines="none" detail={false} className="role-switch-item">
               <IonIcon slot="start" icon={homeOutline} />
               <IonLabel>Usar como cliente</IonLabel>
@@ -393,6 +393,28 @@ const Menu: React.FC = () => {
                 onClick={(event) => {
                   event.stopPropagation();
                   void onBecomeClient();
+                }}
+              >
+                <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
+              </IonButton>
+            </IonItem>
+          ) : null}
+
+
+          {ischat ? (
+            <IonItem lines="none" detail={false} className="role-switch-item">
+              <IonIcon slot="start" icon={homeOutline} />
+              <IonLabel>Vista cliente</IonLabel>
+              <IonButton
+                slot="end"
+                fill="clear"
+                aria-label="Cambiar a cliente"
+                title="Cambiar a cliente"
+                onClick={async (event) => {
+                  event.stopPropagation();
+                  await becomeClient();
+                  try { await menuController.close('main-menu'); } catch {}
+                  router.push('/cliente/inicio');
                 }}
               >
                 <IonIcon slot="icon-only" icon={swapHorizontalOutline} />

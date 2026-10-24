@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { tokenStorage } from "../services/api";
+import { tokenStorage, ApiError } from "../services/api";
 import { authService } from "../services/auth";
 import type { LoginPayload, RegisterPayload, UpdateMePayload, User } from "../types/serviprox";
 
@@ -129,6 +129,7 @@ type AuthContextValue = {
   updateMe: (payload: UpdateMePayload) => Promise<User>;
   becomeProfessional: () => Promise<User>;
   becomeClient: () => Promise<User>;
+  becomeStaff: () => Promise<User>;
   completeOnboarding: () => Promise<User>;
 };
 
@@ -189,7 +190,17 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       const currentUser = await authService.getCurrentUser();
       saveUser(currentUser);
       return currentUser;
-    } catch {
+    } catch (err) {
+      // Si el token fue rechazado expresamente con 401, cerramos sesión
+      if (err instanceof ApiError && err.status === 401) {
+        logout();
+        return null;
+      }
+      // Si el backend está iniciando, sin conexión o responde lento, mantenemos la sesión en caché
+      if (cached) {
+        console.warn("Backend no disponible de inmediato, conservando sesión local:", err);
+        return cached;
+      }
       logout();
       return null;
     } finally {
@@ -251,6 +262,32 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     return updatedUser;
   }, [saveUser]);
 
+  const becomeStaff = useCallback(async () => {
+    const adminUser = demoUsers["admin@serviprox.com"] || {
+      id: 9999,
+      email: "admin@serviprox.com",
+      username: "admin",
+      first_name: "Administrador",
+      last_name: "Serviprox",
+      role: "staff",
+      is_staff: true,
+      is_superuser: true,
+      phone: "+57 300 123 4567",
+      city: "Bogotá",
+      document_id: "CC 1.000.000.001",
+      address: "Oficinas Serviprox Bogotá",
+      initials: "AD",
+      is_identity_verified: true,
+      onboarding_completed: true,
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    try {
+      localStorage.setItem(DEMO_SESSION_KEY, "admin@serviprox.com");
+    } catch {}
+    saveUser(adminUser);
+    return adminUser;
+  }, [saveUser]);
+
   useEffect(() => {
     void refreshSession();
   }, [refreshSession]);
@@ -271,11 +308,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       updateMe,
       becomeProfessional,
       becomeClient,
+      becomeStaff,
       completeOnboarding,
       logout,
       refreshSession,
     }),
-    [becomeClient, becomeProfessional, completeOnboarding, isLoading, login, logout, refreshSession, register, updateMe, user]
+    [becomeClient, becomeProfessional, becomeStaff, completeOnboarding, isLoading, login, logout, refreshSession, register, updateMe, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

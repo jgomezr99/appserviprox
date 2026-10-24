@@ -46,6 +46,20 @@ const resolveApiBaseUrl = (): string => {
     return normalizeApiUrl(customHost);
   }
 
+  // 2.5. Última URL funcional comprobada en la sesión actual o anterior
+  if (typeof window !== "undefined") {
+    try {
+      const working =
+        sessionStorage.getItem("serviprox_working_base_url") ||
+        localStorage.getItem("serviprox_last_working_url");
+      if (working) {
+        return normalizeApiUrl(working);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // 3. Dispositivo nativo compilado con Capacitor (Emulador o App instalada)
   if (Capacitor.isNativePlatform()) {
     // Celular físico conectado por Wi-Fi usa la IP local del servidor (192.168.0.6)
@@ -57,6 +71,10 @@ const resolveApiBaseUrl = (): string => {
     // En Netlify estático, window.location.origin no ejecuta Python
     if (window.location.hostname.includes("netlify.app")) {
       return "/api/v1";
+    }
+    // En localhost, conectar directo al puerto 8000 de Django evita el socket timeout del proxy de Vite
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "http://127.0.0.1:8000/api/v1";
     }
     return `${window.location.origin.replace(/\/$/, "")}/api/v1`;
   }
@@ -73,6 +91,20 @@ export const getApiBaseUrl = (): string => activeBaseUrl;
 export const getCandidateBaseUrls = (): string[] => {
   const candidates: string[] = [];
 
+  // 1. Si ya se verificó un host exitoso en esta sesión o guardado, darle máxima prioridad absoluta
+  if (typeof window !== "undefined") {
+    try {
+      const working =
+        sessionStorage.getItem("serviprox_working_base_url") ||
+        localStorage.getItem("serviprox_last_working_url");
+      if (working) {
+        candidates.push(normalizeApiUrl(working));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const saved = getSavedCustomHost();
   if (saved) {
     candidates.push(normalizeApiUrl(saved));
@@ -82,16 +114,12 @@ export const getCandidateBaseUrls = (): string[] => {
     candidates.push(normalizeApiUrl(import.meta.env.VITE_API_URL));
   }
 
-  if (activeBaseUrl && activeBaseUrl !== "/api/v1") {
-    candidates.push(activeBaseUrl);
-  }
-
   if (typeof window !== "undefined" && window.location) {
     const hostname = window.location.hostname;
     const isNetlify = hostname.includes("netlify.app");
 
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-      // Fallbacks directos a Django para saltarse posibles fallos de proxy de Vite
+      // Fallbacks directos a Django para saltarse posibles fallos o demoras del proxy de Vite
       candidates.push("http://127.0.0.1:8000/api/v1");
       candidates.push("http://localhost:8000/api/v1");
     } else if (hostname && !hostname.includes("devtunnels.ms") && !isNetlify) {
@@ -102,6 +130,10 @@ export const getCandidateBaseUrls = (): string[] => {
     if (window.location.origin && !isNetlify) {
       candidates.push(`${window.location.origin.replace(/\/$/, "")}/api/v1`);
     }
+  }
+
+  if (activeBaseUrl && activeBaseUrl !== "/api/v1") {
+    candidates.push(activeBaseUrl);
   }
 
   if (Capacitor.isNativePlatform()) {
@@ -119,6 +151,8 @@ export const setWorkingBaseUrl = (url: string) => {
   API_BASE_URL = activeBaseUrl;
   if (typeof window !== "undefined") {
     try {
+      sessionStorage.setItem("serviprox_working_base_url", activeBaseUrl);
+      localStorage.setItem("serviprox_last_working_url", activeBaseUrl);
       localStorage.setItem("serviprox_api_host", activeBaseUrl.replace(/\/api\/v1$/, ""));
     } catch {
       // Ignorar restricciones de almacenamiento
@@ -219,7 +253,7 @@ async function fetchWithResilience(
   path: string,
   init: RequestInit,
   params?: Record<string, string | number | boolean | undefined | null>,
-  maxRounds = 2
+  maxRounds = 1
 ): Promise<Response> {
   const candidates = getCandidateBaseUrls();
   let lastError: unknown = null;
@@ -230,7 +264,8 @@ async function fetchWithResilience(
       const url = buildUrlForBase(base, path, params);
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        // Timeout ultrarrápido de 1200ms para evitar demoras en la carga inicial
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
         const response = await fetch(url, {
           ...init,
           signal: init.signal || controller.signal,
@@ -261,14 +296,6 @@ async function fetchWithResilience(
       } catch (err) {
         lastError = err;
       }
-
-      // Pequeña pausa antes de intentar el siguiente candidato
-      await sleep(150);
-    }
-
-    // Espera incremental entre rondas completas de reintentos
-    if (round < maxRounds - 1) {
-      await sleep(600);
     }
   }
 
@@ -459,7 +486,7 @@ export const checkBackendHealth = async (
     try {
       const url = `${base.replace(/\/$/, "")}/health/`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
       const res = await fetch(url, {
         method: "GET",
         headers: { Accept: "application/json" },

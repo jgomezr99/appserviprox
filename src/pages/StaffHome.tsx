@@ -5,7 +5,7 @@ import AdminDashboard from "../admin/AdminDashboard";
 const StaffHome: React.FC = () => {
   return (
     <IonPage>
-      <IonContent fullscreen style={{ "--background": "#1c88f5" }}>
+      <IonContent fullscreen style={{ "--background": "#f8fafc" }}>
         <AdminDashboard />
       </IonContent>
     </IonPage>
