@@ -31,7 +31,7 @@ call ".venv\Scripts\activate.bat"
 :: Solo instalar dependencias si Django no esta presente o si se solicita explicitamente
 python -c "import django" >nul 2>&1
 if errorlevel 1 (
-  echo [2/4] Instalando dependencias de Serviprox (primera ejecucion)...
+  echo [2/4] Instalando dependencias de Serviprox ^(primera ejecucion^)...
   python -m pip install -r requirements.txt
   if errorlevel 1 (
     echo ERROR: Fallo la instalacion de dependencias.
@@ -52,7 +52,7 @@ if errorlevel 1 (
 
 findstr /B "EMAIL_HOST=" "%~dp0..\.env" >nul 2>&1
 if errorlevel 1 (
-  echo AVISO: Los correos de recuperacion saldran en consola (no hay SMTP configurado).
+  echo AVISO: Los correos de recuperacion saldran en consola ^(no hay SMTP configurado^).
 )
 
 echo [4/4] Verificando datos demo de la base de datos...
