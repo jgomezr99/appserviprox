@@ -1,6 +1,7 @@
 """Configuracion de Django para el proyecto Serviprox."""
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlsplit
 import os
 
 from django.core.exceptions import ImproperlyConfigured
@@ -111,8 +112,10 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+# DATABASE_URL (Render, Neon, Supabase...) tiene prioridad sobre las variables POSTGRES_*.
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DATABASE_ENGINE = os.getenv(
-    "SERVIPROX_DATABASE", "sqlite" if DEBUG else ""
+    "SERVIPROX_DATABASE", "postgres" if DATABASE_URL else "sqlite" if DEBUG else ""
 ).strip().lower()
 if not DATABASE_ENGINE:
     raise ImproperlyConfigured("Configura SERVIPROX_DATABASE para el entorno.")
@@ -128,6 +131,20 @@ WOMPI_EVENTS_SECRET = os.getenv("WOMPI_EVENTS_SECRET", "").strip()
 WOMPI_INTEGRITY_SECRET = os.getenv("WOMPI_INTEGRITY_SECRET", "").strip()
 # URL pública de la app a la que Wompi devuelve al cliente tras pagar.
 FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
+
+if DATABASE_URL:
+    database_url = urlsplit(DATABASE_URL)
+    if database_url.scheme not in ("postgres", "postgresql"):
+        raise ImproperlyConfigured("DATABASE_URL debe empezar por postgres:// o postgresql://.")
+    DATABASE_ENGINE = "postgres"
+    os.environ["POSTGRES_DB"] = unquote(database_url.path.lstrip("/"))
+    os.environ["POSTGRES_USER"] = unquote(database_url.username or "")
+    os.environ["POSTGRES_PASSWORD"] = unquote(database_url.password or "")
+    os.environ["POSTGRES_HOST"] = database_url.hostname or ""
+    os.environ["POSTGRES_PORT"] = str(database_url.port or 5432)
+    database_url_sslmode = parse_qs(database_url.query).get("sslmode")
+    if database_url_sslmode:
+        os.environ["POSTGRES_SSLMODE"] = database_url_sslmode[0]
 
 if DATABASE_ENGINE == "postgres":
     postgres_credentials = {

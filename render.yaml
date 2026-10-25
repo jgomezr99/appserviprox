@@ -18,16 +18,11 @@ services:
         generateValue: true
       - key: SERVIPROX_DATABASE
         value: postgres
-      - key: POSTGRES_DB
-        sync: false
-      - key: POSTGRES_USER
-        sync: false
-      - key: POSTGRES_PASSWORD
-        sync: false
-      - key: POSTGRES_HOST
-        sync: false
-      - key: POSTGRES_SSLMODE
-        sync: false
+      # Render inyecta la cadena de conexion interna de la base declarada abajo.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: serviprox-db
+          property: connectionString
       - key: SERVIPROX_MEDIA_STORAGE
         value: s3
       - key: SERVIPROX_S3_BUCKET_NAME
@@ -41,6 +36,12 @@ services:
       - key: SERVIPROX_S3_ENDPOINT_URL
         sync: false
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://serviproxweb.netlify.app,https://deploy-preview-2--serviproxweb.netlify.app"
+        value: "https://cool-toffee-8b902e.netlify.app,https://serviproxweb.netlify.app,https://deploy-preview-2--serviproxweb.netlify.app"
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://serviproxweb.netlify.app,https://deploy-preview-2--serviproxweb.netlify.app"
+        value: "https://cool-toffee-8b902e.netlify.app,https://serviproxweb.netlify.app,https://deploy-preview-2--serviproxweb.netlify.app"
+
+databases:
+  - name: serviprox-db
+    databaseName: serviprox
+    user: serviprox
+    plan: free
