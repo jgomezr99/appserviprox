@@ -31,6 +31,7 @@ yarn-error.log*
 hs_err_pid*.log
 replay_pid*.log
 backend/db.sqlite3
+backend/db.sqlite3-*
 backend/media/
 
 # Optional eslint cache

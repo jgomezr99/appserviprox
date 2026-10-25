@@ -21,7 +21,7 @@ services:
     env_file:
       - .env
     environment:
-      SERVIPROX_DATABASE: postgres
+      SERVIPROX_DATABASE: ${SERVIPROX_DATABASE:-postgres}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
     command: python manage.py runserver 0.0.0.0:8000

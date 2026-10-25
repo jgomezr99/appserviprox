@@ -1,3 +1,4 @@
+
 Hecho por JUAN PALO GOMEZ ROBLES
 PROYECTO DE LA UNIVERSIDAD 
 1. Clonar el repositorio
@@ -29,13 +30,13 @@ Compose informa el error en lugar de construirla o descargarla.
 Si los contenedores ya estan ejecutandose, basta con `npm.cmd run dev`.
 Si existen pero estan detenidos, tambien puedes usar
 `docker compose -f docker-compose.yml start db backend`.
-El Compose actual contiene Django y PostgreSQL; Vite ejecuta solo el frontend y no puede iniciar Python local.
+El Compose contiene Django y PostgreSQL. El backend usa PostgreSQL por defecto; para conservar una base SQLite existente, configura SERVIPROX_DATABASE=sqlite en .env. Vite ejecuta solo el frontend.
 
 5. Lanzadores manuales con Docker
 
-`iniciar_serviprox.bat` inicia tus contenedores existentes y el frontend.
-`backend/start_local.bat` inicia solo los contenedores existentes.
-Los lanzadores no crean .venv, instalan dependencias, aplican migraciones ni cargan seeds.
+`iniciar_serviprox.bat docker` inicia los contenedores existentes y el frontend.
+`backend/start_local.bat docker` inicia solo los contenedores existentes.
+Sin el argumento docker, los lanzadores usan Python local y SQLite; el backend local prepara dependencias y aplica migraciones.
 Los scripts de inicio automatico quedaron deshabilitados.
 
 6. Configuracion historica de Render (no usar para el despliegue nuevo)
@@ -78,6 +79,7 @@ Recuperacion de contrasena:
   Al definir `EMAIL_HOST`, Django usa SMTP automáticamente.
 - Los cambios de entorno requieren actualizar explicitamente el contenedor; start conserva su configuracion actual.
 
+<img width="819" height="304" alt="image-removebg-preview" src="https://github.com/user-attachments/assets/feeea22d-489d-4e8c-b609-b7f142db7d37" />
 <img width="2056" height="765" alt="image" src="https://github.com/user-attachments/assets/4915fc92-bb99-4232-870f-7c424c0b6d6e" />
 
 ## Produccion definitiva: Netlify + Google Cloud
