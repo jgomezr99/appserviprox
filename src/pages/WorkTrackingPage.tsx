@@ -42,6 +42,7 @@ import {
   normalizeBogotaAddress,
 } from "../utils/geocoding";
 import "./WorkTrackingPage.css";
+import AuthenticatedImage from "../components/serviprox/AuthenticatedImage";
 
 type Params = { id: string };
 type WorkStatus =
@@ -889,7 +890,7 @@ const WorkTrackingPage: React.FC = () => {
             {order.work_evidence && order.work_evidence.length > 0 ? (
               <div className="tracking-evidence">
                 {order.work_evidence.map((item) => (
-                  <img
+                  <AuthenticatedImage
                     key={item.id}
                     src={item.image_url}
                     alt={item.caption || "Evidencia del trabajo"}

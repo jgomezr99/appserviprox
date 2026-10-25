@@ -1,5 +1,5 @@
-Django==5.0.6
-djangorestframework==3.15.1
+Django==5.2.18
+djangorestframework==3.16.1
 djangorestframework-simplejwt==5.3.1
 django-cors-headers==4.3.1
 django-filter==24.2
@@ -7,7 +7,7 @@ drf-spectacular==0.27.2
 psycopg[binary]==3.2.13
 pymongo==4.10.1
 python-dotenv==1.0.1
-gunicorn==22.0.0
+gunicorn==26.2.0
 whitenoise==6.6.0
 Pillow==11.3.0
 django-storages[s3]==1.14.6

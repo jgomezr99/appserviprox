@@ -98,6 +98,8 @@ class ServiceRequest(models.Model):
     @property
     def followed_suggestion(self) -> bool | None:
         """True si el cliente confirmo la sugerencia; None si no hubo sugerencia."""
+        if self.diagnostic_session_id and self.diagnostic_session.suggested_service_id:
+            return self.diagnostic_session.suggested_service_id == self.selected_service_id
         if self.suggested_category_id is None:
             return None
         return self.suggested_category_id == self.selected_category_id

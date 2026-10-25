@@ -1,4 +1,4 @@
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from rest_framework import viewsets
 
 from .models import Service, ServiceCategory
@@ -20,11 +20,11 @@ class ServiceCategoryViewSet(viewsets.ReadOnlyModelViewSet):
             .annotate(
                 professionals_count=Count(
                     "services__professional_services",
-                    filter=Q(services__professional_services__profile__is_active=True),
+                    filter=Q(services__is_active=True, services__professional_services__profile__is_active=True),
                     distinct=True,
                 )
             )
-            .prefetch_related("services")
+            .prefetch_related(Prefetch("services", queryset=Service.objects.filter(is_active=True)))
             # El GROUP BY del annotate descarta Meta.ordering: lo reponemos para
             # que la paginacion de DRF sea estable.
             .order_by("sort_order", "name")
@@ -40,4 +40,8 @@ class ServiceViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ServiceSerializer
     filterset_fields = ["category", "category__slug"]
     search_fields = ["name", "description"]
-    queryset = Service.objects.filter(is_active=True).select_related("category")
+    queryset = (
+        Service.objects.filter(is_active=True, category__is_active=True)
+        .select_related("category")
+        .order_by("category__sort_order", "name", "id")
+    )

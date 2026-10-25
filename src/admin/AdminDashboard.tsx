@@ -5,6 +5,7 @@ import { adminService } from "../services/adminService";
 import { usePlatformSettings } from "../services/platformSettings";
 import AdminSettings from "./AdminSettings";
 import AdminReportsStats from "./AdminReportsStats";
+import { AdminCatalogManager } from "./AdminCatalogManager";
 import "./AdminDashboard.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,6 +16,8 @@ type AdminMenuId =
   | "usuarios_clientes"
   | "usuarios_profesionales"
   | "publicaciones_servicios"
+  | "catalogo_categorias"
+  | "catalogo_sugerencias"
   | "publicaciones_productos"
   | "contrataciones"
   | "pqr"
@@ -1232,7 +1235,7 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => {
     const blocked =
       (activeMenu === "beneficios" && !benefitsEnabled) ||
-      (activeMenu === "publicaciones_servicios" && !servicesEnabled) ||
+      (["publicaciones_servicios", "catalogo_categorias", "catalogo_sugerencias"].includes(activeMenu) && !servicesEnabled) ||
       (activeMenu === "publicaciones_productos" && !productsEnabled) ||
       (activeMenu === "pqr" && !pqrEnabled) ||
       (activeMenu === "contrataciones" && !hiringsEnabled);
@@ -3723,7 +3726,7 @@ export const AdminDashboard: React.FC = () => {
               <button
                 type="button"
                 className={`ad-nav-item ${
-                  activeMenu.startsWith("publicaciones") ? "active" : ""
+                  activeMenu.startsWith("publicaciones") || activeMenu.startsWith("catalogo") ? "active" : ""
                 }`}
                 onClick={() => setMenuPublicacionesOpen((prev) => !prev)}
               >
@@ -3731,7 +3734,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
                 </svg>
                 <div className="ad-nav-group-header">
-                  <span>Publicaciones</span>
+                  <span>Catálogo y publicaciones</span>
                   <svg
                     className={`ad-chevron ${menuPublicacionesOpen ? "open" : ""}`}
                     viewBox="0 0 24 24"
@@ -3746,6 +3749,14 @@ export const AdminDashboard: React.FC = () => {
               {menuPublicacionesOpen && (
                 <div className="ad-subnav">
                   {servicesEnabled && (
+                  <>
+                  <button
+                    type="button"
+                    className={`ad-subnav-item ${activeMenu === "catalogo_categorias" ? "active" : ""}`}
+                    onClick={() => setActiveMenu("catalogo_categorias")}
+                  >
+                    Categorías
+                  </button>
                   <button
                     type="button"
                     className={`ad-subnav-item ${
@@ -3755,6 +3766,14 @@ export const AdminDashboard: React.FC = () => {
                   >
                     Servicios
                   </button>
+                  <button
+                    type="button"
+                    className={`ad-subnav-item ${activeMenu === "catalogo_sugerencias" ? "active" : ""}`}
+                    onClick={() => setActiveMenu("catalogo_sugerencias")}
+                  >
+                    Sugerencias y palabras clave
+                  </button>
+                  </>
                   )}
                   {productsEnabled && (
                   <button
@@ -3913,7 +3932,7 @@ export const AdminDashboard: React.FC = () => {
             </svg>
             <input
               type="text"
-              placeholder="Buscar usuarios, servicios, publicaciones, PQR..."
+              placeholder="Buscar usuarios, categorías, servicios, PQR..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -9401,7 +9420,20 @@ export const AdminDashboard: React.FC = () => {
           {/* ═════════════════════════════════════════════════════════════════
               VISTAS DE MÓDULOS ADICIONALES (FALLAS, CONTRATACIONES, ETC.)
              ═════════════════════════════════════════════════════════════════ */}
+          {servicesEnabled && (activeMenu === "catalogo_categorias" || activeMenu === "publicaciones_servicios" || activeMenu === "catalogo_sugerencias") && (
+            <AdminCatalogManager
+              section={activeMenu === "catalogo_categorias" ? "categories" : activeMenu === "catalogo_sugerencias" ? "suggestions" : "services"}
+              onSectionChange={(section) => setActiveMenu(section === "categories" ? "catalogo_categorias" : section === "suggestions" ? "catalogo_sugerencias" : "publicaciones_servicios")}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onChanged={() => { void fetchLiveOverview(); }}
+            />
+          )}
+
           {activeMenu !== "inicio" &&
+            activeMenu !== "catalogo_categorias" &&
+            activeMenu !== "publicaciones_servicios" &&
+            activeMenu !== "catalogo_sugerencias" &&
             activeMenu !== "usuarios_clientes" &&
             activeMenu !== "usuarios_profesionales" &&
             activeMenu !== "pqr" &&
@@ -9411,7 +9443,6 @@ export const AdminDashboard: React.FC = () => {
             activeMenu !== "roles" &&
             activeMenu !== "reportes" &&
             activeMenu !== "configuracion" &&
-            activeMenu !== "publicaciones_servicios" &&
             activeMenu !== "publicaciones_productos" && (
               <div className="ad-card" style={{ padding: "32px", textAlign: "center" }}>
                 <div style={{ fontSize: "3rem", marginBottom: "12px" }}>📋</div>

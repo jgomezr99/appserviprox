@@ -1,6 +1,16 @@
 @echo off
 setlocal
+if /I "%~1"=="docker" (
+  cd /d "%~dp0.."
+  docker compose -f docker-compose.yml start db backend
+  exit /b
+)
+
 cd /d "%~dp0"
+
+set "DJANGO_DEBUG=true"
+set "SERVIPROX_DATABASE=sqlite"
+set "SERVIPROX_MEDIA_STORAGE=filesystem"
 
 echo ======================================================
 echo    SERVIPROX - INICIANDO BACKEND Y BASE DE DATOS
@@ -57,3 +67,5 @@ echo ======================================================
 echo.
 
 python manage.py runserver 0.0.0.0:8000
+
+endlocal

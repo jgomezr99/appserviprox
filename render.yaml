@@ -2,21 +2,45 @@ services:
   - type: web
     name: serviprox-backend
     runtime: python
-    buildCommand: "pip install -r backend/requirements.txt && python backend/manage.py migrate --no-input && python backend/seed_demo.py"
-    startCommand: "gunicorn --chdir backend config.wsgi:application --bind 0.0.0.0:$PORT --workers 2"
+    buildCommand: "pip install -r backend/requirements.txt && python backend/manage.py collectstatic --no-input"
+    startCommand: "python backend/manage.py migrate --no-input && gunicorn --chdir backend config.wsgi:application --bind 0.0.0.0:$PORT --workers 2"
     plan: free
     autoDeploy: true
+    healthCheckPath: /api/v1/health/
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
       - key: DJANGO_DEBUG
-        value: "True"
+        value: "False"
+      - key: DJANGO_SECURE_HSTS_SECONDS
+        value: "31536000"
       - key: DJANGO_SECRET_KEY
         generateValue: true
-      - key: DJANGO_ALLOWED_HOSTS
-        value: "*"
       - key: SERVIPROX_DATABASE
-        value: sqlite
+        value: postgres
+      - key: POSTGRES_DB
+        sync: false
+      - key: POSTGRES_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false
+      - key: POSTGRES_HOST
+        sync: false
+      - key: POSTGRES_SSLMODE
+        sync: false
+      - key: SERVIPROX_MEDIA_STORAGE
+        value: s3
+      - key: SERVIPROX_S3_BUCKET_NAME
+        sync: false
+      - key: SERVIPROX_S3_ACCESS_KEY_ID
+        sync: false
+      - key: SERVIPROX_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: SERVIPROX_S3_REGION_NAME
+        sync: false
+      - key: SERVIPROX_S3_ENDPOINT_URL
+        sync: false
       - key: CORS_ALLOWED_ORIGINS
         value: "https://serviproxweb.netlify.app,https://deploy-preview-2--serviproxweb.netlify.app"
-
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://serviproxweb.netlify.app,https://deploy-preview-2--serviproxweb.netlify.app"

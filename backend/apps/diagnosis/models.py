@@ -83,10 +83,19 @@ class DiagnosticSession(models.Model):
         blank=True,
         verbose_name=_("categoria sugerida"),
     )
+    suggested_service = models.ForeignKey(
+        "catalog.Service",
+        related_name="diagnostic_suggestions",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_("servicio sugerido"),
+    )
     confidence = models.FloatField(_("confianza"), default=0)
     rationale = models.CharField(_("motivo de la sugerencia"), max_length=300, blank=True)
     # Ranking completo del motor: [{"slug": ..., "name": ..., "score": ...}]
     ranking = models.JSONField(_("ranking de categorias"), default=list, blank=True)
+    service_ranking = models.JSONField(_("ranking de servicios"), default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -1,0 +1,21 @@
+FROM python:3.12-slim-bookworm
+ARG SERVIPROX_RELEASE=unversioned
+LABEL org.opencontainers.image.revision=$SERVIPROX_RELEASE
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt \
+    && groupadd --gid 10001 serviprox \
+    && useradd --uid 10001 --gid serviprox --no-create-home serviprox
+COPY --chown=serviprox:serviprox manage.py gunicorn.conf.py ./
+COPY --chown=serviprox:serviprox config ./config
+COPY --chown=serviprox:serviprox apps ./apps
+# Solo collectstatic; no conecta BD, migra ni carga datos.
+RUN DJANGO_DEBUG=True SERVIPROX_DATABASE=sqlite SERVIPROX_MEDIA_STORAGE=filesystem \
+    python manage.py collectstatic --noinput \
+    && mkdir -p /app/media \
+    && chown -R serviprox:serviprox /app/media /app/staticfiles
+USER serviprox
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "config.wsgi:application"]

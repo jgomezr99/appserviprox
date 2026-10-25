@@ -119,6 +119,24 @@ SERVICES = {
     "mantenimiento": [("Revisión general del hogar", 140000, 260000, 3)],
 }
 
+SERVICE_KEYWORDS = {
+    ("plomeria", "Reparacion de fuga"): ["fuga de agua", "grifo goteando", "tubería rota"],
+    ("plomeria", "Destape de desagüe"): ["desagüe tapado", "cañería obstruida", "drenaje lento"],
+    ("plomeria", "Cambio de sanitario"): ["cambiar inodoro", "sanitario roto", "fuga del tanque"],
+    ("electricidad", "Revisión de tablero"): ["breaker se dispara", "corto eléctrico", "tablero eléctrico"],
+    ("electricidad", "Instalación de tomacorriente"): ["instalar enchufe", "toma sin corriente", "nuevo tomacorriente"],
+    ("cerrajeria", "Apertura de puerta"): ["llaves dentro", "puerta bloqueada", "cerradura atascada"],
+    ("cerrajeria", "Cambio de cerradura"): ["cambiar chapa", "cerradura dañada", "instalar cerradura"],
+    ("impermeabilizacion", "Diagnóstico de humedad"): ["humedad en pared", "moho", "mancha de humedad"],
+    ("impermeabilizacion", "Sellado de terraza"): ["filtración en terraza", "impermeabilizar techo", "gotera en cubierta"],
+    ("impermeabilizacion", "Reparación de filtración en pared"): ["pared húmeda", "filtración en muro", "humedad interior"],
+    ("pintura", "Pintura de habitación"): ["pintar cuarto", "renovar pintura", "pared descascarada"],
+    ("pintura", "Estuco y resane"): ["resanar pared", "grieta en muro", "estuco desprendido"],
+    ("limpieza", "Limpieza profunda"): ["aseo profundo", "limpiar apartamento", "limpieza postobra"],
+    ("instalaciones", "Instalación de televisor"): ["montar televisor", "instalar tv en pared", "soporte para televisor"],
+    ("mantenimiento", "Revisión general del hogar"): ["mantenimiento preventivo", "revisión del hogar", "arreglos menores"],
+}
+
 QUESTIONS = [
     {
         "code": "ubicacion",
@@ -227,7 +245,7 @@ def seed_categories() -> dict[str, ServiceCategory]:
     for slug, services in SERVICES.items():
         category = categories[slug]
         for name, price_min, price_max, hours in services:
-            Service.objects.update_or_create(
+            service, created = Service.objects.update_or_create(
                 category=category,
                 name=name,
                 defaults={
@@ -236,6 +254,10 @@ def seed_categories() -> dict[str, ServiceCategory]:
                     "estimated_hours": hours,
                 },
             )
+            keywords = SERVICE_KEYWORDS.get((slug, name), [])
+            if keywords and (created or not service.keywords):
+                service.keywords = keywords
+                service.save(update_fields=["keywords"])
     return categories
 
 

@@ -13,6 +13,7 @@ import type {
   ServiceRequest,
   ServiceRequestPayload,
   ServiceRequestStatus,
+  DiagnosticSession,
   PqrReport,
   PqrMessage,
   AppProblemReport,
@@ -37,17 +38,28 @@ const buildQuery = (params: Record<string, string | number | boolean | null | un
   return queryString ? `?${queryString}` : "";
 };
 
+async function listCatalog<T>(path: string, params: { category?: number | string } = {}): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; page <= 1000; page += 1) {
+    // Mantener el JWT en la API configurada, sin seguir URLs absolutas de next.
+    const payload = await api.get<PaginatedResponse<T> | T[]>(`${path}${buildQuery({ ...params, page })}`);
+    if (Array.isArray(payload)) return payload;
+    items.push(...payload.results);
+    if (!payload.next) return items;
+  }
+  throw new Error("El catálogo es demasiado grande para cargarlo completo.");
+}
+
 export const catalogService = {
-  listCategories: async () =>
-    unwrapList(await api.get<PaginatedResponse<ServiceCategory> | ServiceCategory[]>("categories/")),
+  listCategories: () => listCatalog<ServiceCategory>("categories/"),
   getCategory: (slug: string) => api.get<ServiceCategory>(`categories/${slug}/`),
   getService: (id: number | string) => api.get<Service>(`services/${id}/`),
-  listServices: async (params: { category?: number | string } = {}) =>
-    unwrapList(
-      await api.get<PaginatedResponse<Service> | Service[]>(
-        `services/${buildQuery({ category: params.category })}`
-      )
-    ),
+  listServices: (params: { category?: number | string } = {}) => listCatalog<Service>("services/", params),
+};
+
+export const diagnosisService = {
+  create: (description: string) =>
+    api.post<DiagnosticSession>("diagnosis/sessions/", { description }),
 };
 
 export const householdService = {
@@ -186,4 +198,3 @@ export const appProblemService = {
         ...payload,
       } as AppProblemReport)),
 };
-

@@ -1,14 +1,4 @@
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$startup = [Environment]::GetFolderPath('Startup')
-$shortcutPath = Join-Path $startup 'Serviprox.lnk'
-$launcherPath = Join-Path $root 'iniciar_serviprox.bat'
-
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $launcherPath
-$shortcut.WorkingDirectory = $root
-$shortcut.Description = 'Iniciar Serviprox'
-$shortcut.Save()
-
-Write-Output "Acceso creado: $shortcutPath"
+Write-Output 'El inicio automatico de Serviprox esta deshabilitado.'
+Write-Output 'Inicia manualmente tus contenedores Docker y luego npm.cmd run dev.'
+Write-Output 'Este script no crea accesos en Inicio ni ejecuta Python.'

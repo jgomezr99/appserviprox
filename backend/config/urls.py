@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
@@ -16,22 +18,24 @@ def health_check(request):
         return JsonResponse({
             "status": "ok",
             "database": "connected",
-            "engine": connection.vendor
         })
-    except Exception as exc:
+    except Exception:
+        logger.exception("Health check failed to connect to the database.")
         return JsonResponse({
             "status": "error",
             "database": "disconnected",
-            "detail": str(exc)
         }, status=503)
 
 
 from apps.accounts.views import CustomTokenObtainPairView
 
+logger = logging.getLogger(__name__)
+
 api_v1 = [
     path("health/", health_check, name="api-health"),
     path("auth/token/", CustomTokenObtainPairView.as_view(), name="token-obtain"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
+    path("admin/catalog/", include("apps.catalog.admin_urls")),
     path("", include("apps.accounts.urls")),
     path("", include("apps.households.urls")),
     path("", include("apps.catalog.urls")),
@@ -57,3 +61,8 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+handler400 = "config.errors.bad_request"
+handler403 = "config.errors.permission_denied"
+handler404 = "config.errors.not_found"
+handler500 = "config.errors.server_error"

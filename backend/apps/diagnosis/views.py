@@ -27,7 +27,9 @@ class DiagnosticSessionViewSet(
     """Crea el diagnostico y expone la sugerencia; confirmarla es del cliente."""
 
     def get_queryset(self):
-        queryset = DiagnosticSession.objects.select_related("suggested_category")
+        queryset = DiagnosticSession.objects.select_related(
+            "suggested_category", "suggested_service", "suggested_service__category"
+        )
         if self.request.user.is_authenticated:
             return queryset.filter(user=self.request.user)
         return queryset.none()

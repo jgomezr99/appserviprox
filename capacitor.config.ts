@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'serviprox',
   webDir: 'dist',
   server: {
-    cleartext: true,
+    cleartext: process.env.CAPACITOR_ALLOW_CLEARTEXT === "true",
   },
 };
 

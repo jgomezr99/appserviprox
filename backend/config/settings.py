@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 import os
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,9 +28,20 @@ def env_int(name: str, default: int = 0) -> int:
         return default
 
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-inseguro-cambiar-en-produccion")
-DEBUG = env_bool("DJANGO_DEBUG", True)
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "*" if DEBUG else "localhost,127.0.0.1,0.0.0.0,backend,.onrender.com,.railway.app,.devtunnels.ms,.ngrok-free.app,.ngrok.io")
+DEBUG = env_bool("DJANGO_DEBUG", False)
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY",
+    "local-only-insecure-key-set-a-secret-for-deployment" if DEBUG else "",
+)
+if not SECRET_KEY:
+    raise ImproperlyConfigured("Configura DJANGO_SECRET_KEY en el entorno.")
+
+ALLOWED_HOSTS = env_list(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,backend"
+)
+render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+if render_hostname and render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_hostname)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -56,7 +68,13 @@ INSTALLED_APPS = [
 ]
 
 
-MEDIA_STORAGE = os.getenv("SERVIPROX_MEDIA_STORAGE", "filesystem").strip().lower()
+MEDIA_STORAGE = os.getenv(
+    "SERVIPROX_MEDIA_STORAGE", "filesystem" if DEBUG else ""
+).strip().lower()
+if MEDIA_STORAGE not in {"filesystem", "s3"}:
+    raise ImproperlyConfigured(
+        "SERVIPROX_MEDIA_STORAGE debe ser 'filesystem' o 's3'."
+    )
 if MEDIA_STORAGE == "s3":
     INSTALLED_APPS.append("storages")
 
@@ -93,7 +111,11 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASE_ENGINE = os.getenv("SERVIPROX_DATABASE", "sqlite").strip().lower()
+DATABASE_ENGINE = os.getenv(
+    "SERVIPROX_DATABASE", "sqlite" if DEBUG else ""
+).strip().lower()
+if not DATABASE_ENGINE:
+    raise ImproperlyConfigured("Configura SERVIPROX_DATABASE para el entorno.")
 
 # MongoDB opcional (chat, auditoría, notificaciones, PQR y fallas); vacío = desactivado.
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
@@ -108,6 +130,21 @@ WOMPI_INTEGRITY_SECRET = os.getenv("WOMPI_INTEGRITY_SECRET", "").strip()
 FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
 
 if DATABASE_ENGINE == "postgres":
+    postgres_credentials = {
+        "POSTGRES_DB": os.getenv("POSTGRES_DB"),
+        "POSTGRES_USER": os.getenv("POSTGRES_USER"),
+        "POSTGRES_PASSWORD": os.getenv("POSTGRES_PASSWORD"),
+        "POSTGRES_HOST": os.getenv("POSTGRES_HOST"),
+    }
+    missing_postgres_credentials = [
+        name for name, value in postgres_credentials.items() if not value
+    ]
+    if missing_postgres_credentials:
+        raise ImproperlyConfigured(
+            "Faltan variables de PostgreSQL: "
+            + ", ".join(missing_postgres_credentials)
+        )
+
     postgres_options = {}
     postgres_sslmode = os.getenv("POSTGRES_SSLMODE")
     if postgres_sslmode:
@@ -116,17 +153,17 @@ if DATABASE_ENGINE == "postgres":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("POSTGRES_DB", "serviprox"),
-            "USER": os.getenv("POSTGRES_USER", "serviprox"),
-            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "serviprox"),
-            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "NAME": postgres_credentials["POSTGRES_DB"],
+            "USER": postgres_credentials["POSTGRES_USER"],
+            "PASSWORD": postgres_credentials["POSTGRES_PASSWORD"],
+            "HOST": postgres_credentials["POSTGRES_HOST"],
             "PORT": os.getenv("POSTGRES_PORT", "5432"),
             "CONN_MAX_AGE": 60,
         }
     }
     if postgres_options:
         DATABASES["default"]["OPTIONS"] = postgres_options
-else:
+elif DATABASE_ENGINE == "sqlite":
     # SQLite es la base local fija para desarrollo sin Docker.
     DATABASES = {
         "default": {
@@ -137,6 +174,10 @@ else:
             },
         }
     }
+else:
+    raise ImproperlyConfigured(
+        "SERVIPROX_DATABASE debe ser 'sqlite' o 'postgres'."
+    )
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -162,6 +203,18 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 if MEDIA_STORAGE == "s3":
+    required_s3_settings = (
+        "SERVIPROX_S3_BUCKET_NAME",
+        "SERVIPROX_S3_ACCESS_KEY_ID",
+        "SERVIPROX_S3_SECRET_ACCESS_KEY",
+    )
+    missing_s3_settings = [
+        name for name in required_s3_settings if not os.getenv(name)
+    ]
+    if missing_s3_settings:
+        raise ImproperlyConfigured(
+            "Faltan variables de almacenamiento S3: " + ", ".join(missing_s3_settings)
+        )
     s3_options = {
         "bucket_name": os.getenv("SERVIPROX_S3_BUCKET_NAME"),
         "location": os.getenv("SERVIPROX_S3_LOCATION", "media"),
@@ -185,9 +238,11 @@ if MEDIA_STORAGE == "s3":
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
-SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", False)
-CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", False)
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
+CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = env_int("DJANGO_SECURE_HSTS_SECONDS", 0)
 
 REST_FRAMEWORK = {
@@ -234,24 +289,31 @@ SPECTACULAR_SETTINGS = {
 DEFAULT_CLIENT_ORIGINS = (
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8100,http://127.0.0.1:8100,https://localhost,capacitor://localhost,http://10.0.2.2:8000,http://10.0.2.2:8100"
 )
-CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", DEFAULT_CLIENT_ORIGINS)
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https://.*\.devtunnels\.ms$",
-    r"^https://.*\.netlify\.app$",
-    r"^https://.*\.ngrok-free\.app$",
-    r"^https://.*\.ngrok\.io$",
-    r"^https?://localhost(:\d+)?$",
-    r"^https?://127\.0\.0\.1(:\d+)?$",
-    r"^https?://192\.168\.\d+\.\d+(:\d+)?$",
-    r"^https?://10\.\d+\.\d+\.\d+(:\d+)?$",
-]
+CORS_ALLOWED_ORIGINS = env_list(
+    "CORS_ALLOWED_ORIGINS", DEFAULT_CLIENT_ORIGINS if DEBUG else ""
+)
+CORS_ALLOWED_ORIGIN_REGEXES = []
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^https://.*\.devtunnels\.ms$",
+        r"^https://.*\.ngrok-free\.app$",
+        r"^https://.*\.ngrok\.io$",
+        r"^https?://localhost(:\d+)?$",
+        r"^https?://127\.0\.0\.1(:\d+)?$",
+        r"^https?://192\.168\.\d+\.\d+(:\d+)?$",
+        r"^https?://10\.\d+\.\d+\.\d+(:\d+)?$",
+    ]
 
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
-    DEFAULT_CLIENT_ORIGINS + ",https://*.devtunnels.ms,https://*.netlify.app,https://*.ngrok-free.app,https://*.onrender.com,https://*.railway.app,http://192.168.*:8100,http://192.168.*:8000"
+    (
+        DEFAULT_CLIENT_ORIGINS
+        + ",https://*.devtunnels.ms,https://*.ngrok-free.app,https://*.ngrok.io,http://192.168.*:8100,http://192.168.*:8000"
+        if DEBUG
+        else ""
+    ),
 )
 
 

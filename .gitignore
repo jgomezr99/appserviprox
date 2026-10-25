@@ -35,3 +35,13 @@ backend/media/
 
 # Optional eslint cache
 .eslintcache
+
+.env.production
+.env.production.*
+!.env.production.example
+.venv/
+__pycache__/
+*.pyc
+backups/
+
+.venv-validation/

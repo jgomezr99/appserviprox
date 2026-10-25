@@ -27,8 +27,8 @@ class DiagnosticAnswerInline(admin.TabularInline):
 
 @admin.register(DiagnosticSession)
 class DiagnosticSessionAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "suggested_category", "confidence", "status", "created_at")
+    list_display = ("id", "user", "suggested_category", "suggested_service", "confidence", "status", "created_at")
     list_filter = ("status", "suggested_category")
     search_fields = ("description", "user__email")
-    readonly_fields = ("ranking", "rationale", "confidence")
+    readonly_fields = ("ranking", "service_ranking", "rationale", "confidence")
     inlines = [DiagnosticAnswerInline]

@@ -4,6 +4,12 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+import mimetypes
+
+from django.http import FileResponse
+
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -128,6 +134,18 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({"detail": "La foto es obligatoria."}, status=400)
         WorkEvidence.objects.create(order=order, image=request.FILES["image"], caption=request.data.get("caption", ""))
         return Response(OrderSerializer(order, context=self.get_serializer_context()).data, status=201)
+
+    @extend_schema(parameters=[OpenApiParameter("evidence_id", int, location=OpenApiParameter.PATH)])
+    @action(detail=True, methods=["get"], url_path=r"evidence/(?P<evidence_id>[^/.]+)")
+    def evidence_image(self, request, pk=None, evidence_id=None):
+        order = self.get_object()
+        evidence = order.work_evidence.filter(pk=evidence_id).first()
+        if evidence is None:
+            return Response({"detail": "Imagen no encontrada."}, status=404)
+        content_type = mimetypes.guess_type(evidence.image.name)[0] or "application/octet-stream"
+        response = FileResponse(evidence.image.open("rb"), content_type=content_type)
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 
 class ReviewViewSet(

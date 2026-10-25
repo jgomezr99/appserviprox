@@ -5,6 +5,7 @@ from .models import Service, ServiceCategory
 
 class ServiceInline(admin.TabularInline):
     model = Service
+    fields = ("name", "slug", "keywords", "is_active")
     extra = 0
 
 
