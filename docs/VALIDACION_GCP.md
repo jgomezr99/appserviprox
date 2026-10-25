@@ -163,3 +163,29 @@ La dependencia instalada permanece al reiniciar ESTE contenedor; al recrearlo
 desde su imagen antigua se perderia. Pillow ya esta declarado en requirements.txt
 para las futuras construcciones autorizadas. La validacion de la imagen
 productiva Django 5.2/PostgreSQL y de GCP/Netlify continua pendiente.
+
+## Validacion del 24 de octubre de 2026
+
+El backend local ya utiliza PostgreSQL en Docker, en la base `serviprox_app`.
+La base PostgreSQL previa se conserva por separado. SQLite queda como respaldo
+y como formato de importacion explicita, sin fallback automatico al iniciar.
+
+- Se importaron 496 registros conservando IDs, relaciones y hashes de contrasenas.
+- Se compararon todos los campos serializados y se comprobaron 31 secuencias.
+- La base de destino con datos rechaza una reimportacion que pudiera sobrescribirlos.
+- Pasaron 67 pruebas en PostgreSQL y otras 67 en la imagen de produccion.
+- La imagen se construyo con `backend/Dockerfile.prod`, incluyendo collectstatic.
+- Paso `check --deploy --tag security --fail-level WARNING` con un entorno generado.
+- Gunicorn funciono con UID 10001, permisos restringidos y PostgreSQL aislado.
+- Se verificaron salud HTTP 200, estaticos, medios privados, permisos y CORS del
+  frontend confirmado `https://serviproxweb.netlify.app`.
+- El generador de entorno produjo secretos independientes y permisos 600 y rechazo
+  sobrescribir un archivo ya existente.
+- El dump para GCP se restauro en otra base vacia y sus 496 registros coincidieron
+  completamente con la copia original.
+- Las etiquetas de PostgreSQL y Caddy de `compose.prod.yml` estan disponibles.
+
+Los respaldos y entornos privados quedan en `backend/backups/`, fuera de Git.
+Para la VM siguen siendo necesarios el dominio real de la API, correo del operador,
+DNS y HTTPS reales. La guia [POSTGRESQL_Y_GCP.md](POSTGRESQL_Y_GCP.md) contiene los
+pasos para clonar `develop`, generar `.env.production` y restaurar datos y media.

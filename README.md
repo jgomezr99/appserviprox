@@ -30,13 +30,16 @@ Compose informa el error en lugar de construirla o descargarla.
 Si los contenedores ya estan ejecutandose, basta con `npm.cmd run dev`.
 Si existen pero estan detenidos, tambien puedes usar
 `docker compose -f docker-compose.yml start db backend`.
-El Compose contiene Django y PostgreSQL. El backend usa PostgreSQL por defecto; para conservar una base SQLite existente, configura SERVIPROX_DATABASE=sqlite en .env. Vite ejecuta solo el frontend.
+El backend usa PostgreSQL en Docker y Vite ejecuta el frontend. `.env` debe tener
+`SERVIPROX_DATABASE=postgres`, `POSTGRES_HOST=db` y las credenciales de la base.
+Cambiar de motor no copia datos: el procedimiento para importar SQLite y llevar
+los datos a GCP esta en [la guia de PostgreSQL](docs/POSTGRESQL_Y_GCP.md).
 
 5. Lanzadores manuales con Docker
 
-`iniciar_serviprox.bat docker` inicia los contenedores existentes y el frontend.
-`backend/start_local.bat docker` inicia solo los contenedores existentes.
-Sin el argumento docker, los lanzadores usan Python local y SQLite; el backend local prepara dependencias y aplica migraciones.
+`iniciar_serviprox.bat` inicia PostgreSQL, el backend, aplica migraciones y abre el frontend.
+`backend/start_local.bat` inicia PostgreSQL y el backend y aplica migraciones.
+Los lanzadores ya no fuerzan SQLite ni cargan usuarios de demostracion.
 Los scripts de inicio automatico quedaron deshabilitados.
 
 6. Configuracion historica de Render (no usar para el despliegue nuevo)
@@ -83,6 +86,10 @@ Recuperacion de contrasena:
 <img width="2056" height="765" alt="image" src="https://github.com/user-attachments/assets/4915fc92-bb99-4232-870f-7c424c0b6d6e" />
 
 ## Produccion definitiva: Netlify + Google Cloud
+
+Clonar la rama integrada: `git clone --branch develop https://github.com/jgomezr99/appserviprox.git`.
+El frontend confirmado es https://serviproxweb.netlify.app. Ver
+[entorno, transferencia de datos y primer arranque](docs/POSTGRESQL_Y_GCP.md).
 
 El frontend permanece en Netlify. Django, PostgreSQL privado y Caddy se ejecutan
 con Docker Compose en Ubuntu 24.04 Compute Engine. No se ha desplegado infraestructura.

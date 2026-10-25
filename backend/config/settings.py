@@ -111,9 +111,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASE_ENGINE = os.getenv(
-    "SERVIPROX_DATABASE", "sqlite" if DEBUG else ""
-).strip().lower()
+DATABASE_ENGINE = os.getenv("SERVIPROX_DATABASE", "postgres").strip().lower()
 if not DATABASE_ENGINE:
     raise ImproperlyConfigured("Configura SERVIPROX_DATABASE para el entorno.")
 
@@ -164,7 +162,7 @@ if DATABASE_ENGINE == "postgres":
     if postgres_options:
         DATABASES["default"]["OPTIONS"] = postgres_options
 elif DATABASE_ENGINE == "sqlite":
-    # SQLite es la base local fija para desarrollo sin Docker.
+    # Solo para importacion, pruebas o un entorno configurado explicitamente.
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",

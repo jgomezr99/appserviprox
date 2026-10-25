@@ -124,20 +124,18 @@ es no publicar backend/DB y limitar GCP. Solo Caddy publica 80/443.
 
 ```bash
 sudo install -d -m 0750 -o "$USER" -g "$USER" /srv/serviprox
-git clone REPOSITORIO_GIT /srv/serviprox/app
+git clone --branch develop https://github.com/jgomezr99/appserviprox.git /srv/serviprox/app
 cd /srv/serviprox/app
-git checkout COMMIT_REVISADO
 umask 077
-cp .env.production.example .env.production
-chmod 600 .env.production
 git rev-parse HEAD
-openssl rand -hex 32
-openssl rand -hex 32
+python3 deploy/configure_env.py --api-domain DOMINIO_REAL_API --email CORREO_OPERADOR
 nano .env.production
 ```
 
-Generar dos valores distintos: DJANGO_SECRET_KEY y POSTGRES_PASSWORD. Pegarlos
-solo en el archivo protegido; no pegarlos en Git, chat, argumentos CLI ni VITE_*.
+El generador crea DJANGO_SECRET_KEY y POSTGRES_PASSWORD independientes, fija el
+commit clonado y el origen Netlify confirmado, y usa permisos 600. Reemplazar los
+argumentos por el dominio real de la API y el correo del operador. No sobrescribe
+un entorno existente. No copiar los secretos a Git, chat, argumentos CLI ni VITE_*.
 Guardar copia del entorno en gestor de secretos/caja cifrada fuera de la VM.
 No ejecutar source .env.production: es un env file de Compose, no un script.
 
@@ -147,7 +145,7 @@ Completar:
 - DJANGO_SECRET_KEY: aleatoria >=50 caracteres, no reutilizar clave de desarrollo.
 - DJANGO_ALLOWED_HOSTS=DOMINIO_API,127.0.0.1 (127.0.0.1 es health interno).
 - CORS_ALLOWED_ORIGINS: origen EXACTO Netlify y dominios propios usados realmente.
-  El sitio encontrado es https://serviproxweb.netlify.app: confirmar su vigencia.
+  El frontend confirmado es https://serviproxweb.netlify.app.
   Mantener https://localhost Android y capacitor://localhost iOS si corresponden.
   Sin barras finales, comodines ni previews globales; previews solo si se aprueban.
 - CSRF_TRUSTED_ORIGINS=https://DOMINIO_API para Admin; agregar origen HTTPS del
