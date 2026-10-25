@@ -2,6 +2,10 @@
   publish = "dist"
   command = "npm run build"
 
+# URL publica del backend (servicio "serviprox-backend" de render.yaml). Se incrusta en el bundle al compilar.
+[build.environment]
+  VITE_API_URL = "https://serviprox-backend.onrender.com/api/v1"
+
 # Regla para Single Page Application (SPA): permite recargar cualquier ruta (/login, /register, etc.) sin error 404 en Netlify
 [[redirects]]
   from = "/*"
