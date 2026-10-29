@@ -62,6 +62,8 @@ ion-app.theme-client,
 	/* Interfaz donde era blanco ahora es rojo color claro */
 	--sp-bg: #FFF1F2;
 	--sp-background: #FFF1F2;
+	/* Fondo de pantalla: mezcla de rojo y blanco */
+	--sp-page-gradient: linear-gradient(180deg, #FCA5A5 0%, #FECACA 18%, #FEE2E2 42%, #FFF5F5 72%, #FFFFFF 100%);
 	--sp-surface: #FFF5F6;
 	--sp-surface-glass: rgba(255, 241, 242, 0.92);
 	--sp-text: #1E0709;
@@ -146,12 +148,22 @@ ion-app.theme-professional,
    ======================================================== */
 
 /* Contenidos y páginas (excluyendo el menú lateral) */
-.theme-client ion-content:not(ion-menu ion-content):not(.menu-content),
-[data-theme="client"] ion-content:not(ion-menu ion-content):not(.menu-content),
+.theme-client ion-content:not(ion-menu ion-content):not(ion-modal ion-content):not(.menu-content),
+[data-theme="client"] ion-content:not(ion-menu ion-content):not(ion-modal ion-content):not(.menu-content) {
+	--background: transparent !important;
+	background: transparent !important;
+}
+
+/* En modales no hay ion-page detras: el contenido lleva el degradado */
+.theme-client ion-modal ion-content,
+[data-theme="client"] ion-modal ion-content {
+	--background: var(--sp-page-gradient) !important;
+	background: var(--sp-page-gradient) !important;
+}
+
 .theme-client ion-page,
 [data-theme="client"] ion-page {
-	--background: #FFF1F2 !important;
-	background: #FFF1F2 !important;
+	background: var(--sp-page-gradient) !important;
 }
 
 .theme-professional ion-content:not(ion-menu ion-content):not(.menu-content),
@@ -227,7 +239,7 @@ ion-menu,
 /* Barras de navegación superiores (Toolbars) */
 .theme-client ion-toolbar,
 [data-theme="client"] ion-toolbar {
-	--background: #FFF1F2 !important;
+	--background: transparent !important;
 	--color: #1E0709 !important;
 	border-bottom: 1px solid rgba(220, 38, 38, 0.12);
 }
