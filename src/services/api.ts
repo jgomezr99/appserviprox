@@ -37,7 +37,9 @@ export const getSavedCustomHost = (): string => {
 
 const resolveApiBaseUrl = (): string => {
   if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "";
+    return import.meta.env.VITE_API_URL
+      ? normalizeApiUrl(import.meta.env.VITE_API_URL)
+      : "/api/v1";
   }
   // 1. Configuración explícita en variable de entorno
   if (import.meta.env.VITE_API_URL) {
@@ -506,7 +508,7 @@ export const checkBackendHealth = async (
     return {
       ok: false,
       database: "disconnected",
-      error: "No hay servidores backend configurados. En Netlify debes configurar VITE_API_URL o la URL del backend.",
+      error: "No hay servidores backend configurados. Configura VITE_API_URL o publica el backend bajo /api/v1.",
     };
   }
 
