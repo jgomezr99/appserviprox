@@ -1,5 +1,7 @@
 Hecho por JUAN PALO GOMEZ ROBLES
-PROYECTO DE LA UNIVERSIDAD 
+PROYECTO DE LA UNIVERSIDAD
+
+abrir el proyecto  git clone -b base https://github.com/jgomezr99/appserviprox.git appserviprox && cd appserviprox && code .
 1. Clonar el repositorio
 git clone https://github.com/jgomezr99/appserviprox
 cd appserviprox
