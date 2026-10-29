@@ -1,5 +1,7 @@
 Hecho por JUAN PALO GOMEZ ROBLES
-PROYECTO DE LA UNIVERSIDAD 
+PROYECTO DE LA UNIVERSIDAD
+
+abrir el proyecto  git clone -b base https://github.com/jgomezr99/appserviprox.git appserviprox && cd appserviprox && code .
 1. Clonar el repositorio
 git clone https://github.com/jgomezr99/appserviprox
 cd appserviprox
@@ -70,6 +72,11 @@ cuenta de despliegue.
 Credenciales demo:
 - Cliente: camila@demo.serviprox.co / serviprox2026
 - Profesional: andres.ruiz@demo.serviprox.co / serviprox2026
+
+_______________________________________________________________________________________________
+admin  login 
+  email: adimin@serviprox.com
+ clave:  serviprox2026
 
 Recuperacion de contrasena:
 - En desarrollo, sin configurar correo, el codigo de 6 digitos aparece en la consola del backend.
