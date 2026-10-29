@@ -12,9 +12,7 @@ export default defineConfig({
       configResolved(config) {
         if (config.command !== "build" || config.mode !== "production") return;
         if (!config.env.VITE_API_URL) {
-          // Sin URL el cliente no envia peticiones a ningun host (ver resolveApiBaseUrl).
-          console.warn("[serviprox] VITE_API_URL no esta definida: el sitio se publica sin backend.");
-          return;
+          throw new Error("VITE_API_URL es obligatoria para compilar clientes de produccion (https://DOMINIO_API/api/v1).");
         }
         let url: URL;
         try { url = new URL(config.env.VITE_API_URL); } catch { throw new Error("VITE_API_URL no es una URL valida (https://DOMINIO_API/api/v1)."); }

@@ -252,6 +252,11 @@ CORS permite origenes WebView predeterminados indicados arriba; comprobar el
 Origin real en dispositivos. cleartext queda desactivado por defecto.
 Solo para pruebas locales HTTP, CAPACITOR_ALLOW_CLEARTEXT=true al ejecutar cap
 sync y build --mode development; nunca usar ese ajuste en una release publicada.
+
+Web y movil se conectan al mismo backend HTTPS; nunca deben conectarse directamente
+a PostgreSQL. Django reutiliza conexiones por 60 segundos y verifica su salud antes
+de reusarlas, renovando una conexion cerrada. La API y Compose tienen health checks,
+pero una VM unica no garantiza alta disponibilidad si la VM o PostgreSQL se detienen.
 No se requiere cambiar appId ni server.url. Probar permisos de ubicacion y archivos
 en dispositivo real: el build web no los certifica.
 

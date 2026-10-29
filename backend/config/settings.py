@@ -159,6 +159,7 @@ if DATABASE_ENGINE == "postgres":
             "HOST": postgres_credentials["POSTGRES_HOST"],
             "PORT": os.getenv("POSTGRES_PORT", "5432"),
             "CONN_MAX_AGE": 60,
+            "CONN_HEALTH_CHECKS": True,
         }
     }
     if postgres_options:
