@@ -93,8 +93,8 @@ export let API_BASE_URL = activeBaseUrl;
 export const getApiBaseUrl = (): string => activeBaseUrl;
 
 export const getCandidateBaseUrls = (): string[] => {
-  // Un solo destino productivo; nunca enviar JWT a hosts guardados o locales.
-  if (import.meta.env.PROD) {
+  // Un solo destino cuando VITE_API_URL esta definida: web y movil comparten servidor.
+  if (import.meta.env.PROD || import.meta.env.VITE_API_URL) {
     const configured = resolveApiBaseUrl();
     return configured ? [configured] : [];
   }
