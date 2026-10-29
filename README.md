@@ -71,6 +71,11 @@ Credenciales demo:
 - Cliente: camila@demo.serviprox.co / serviprox2026
 - Profesional: andres.ruiz@demo.serviprox.co / serviprox2026
 
+_______________________________________________________________________________________________
+admin  login 
+  email: adimin@serviprox.com
+ clave:  serviprox2026
+
 Recuperacion de contrasena:
 - En desarrollo, sin configurar correo, el codigo de 6 digitos aparece en la consola del backend.
 - Para enviarlo por correo real, copia las variables `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`,
