@@ -12,7 +12,6 @@ npm install --legacy-peer-deps
 npm install -g @ionic/cli
 Verifica la instalación:
 ionic --version
-<<<<<<< HEAD
 4. Probar con las imagenes Docker existentes
 
 Con Docker Desktop abierto, desde la raiz del proyecto:
@@ -98,11 +97,3 @@ VITE_API_URL=https://DOMINIO_API/api/v1 se fija al compilar en Netlify/apps; nun
 contiene secretos. El build productivo exige una API HTTPS publica configurada.
 Para builds locales HTTP usar --mode development y, solo para Capacitor local,
 CAPACITOR_ALLOW_CLEARTEXT=true. No ejecutar seeds demo en produccion.
-=======
-4. Ejecutar la aplicación en el navegador
-ionic serve
-Tu app se abrirá en:
-👉 http://localhost:8100/
-<img width="819" height="304" alt="image-removebg-preview" src="https://github.com/user-attachments/assets/feeea22d-489d-4e8c-b609-b7f142db7d37" />
-<img width="2056" height="765" alt="image" src="https://github.com/user-attachments/assets/4915fc92-bb99-4232-870f-7c424c0b6d6e" />
->>>>>>> origin/main

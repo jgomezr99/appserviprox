@@ -50,7 +50,6 @@ const getLoginErrorMessage = (error: unknown) => {
     error instanceof ApiError ||
     (typeof error === "object" && error !== null && "status" in error);
 
-<<<<<<< HEAD
   if (isApi) {
     const apiErr = error as ApiError;
     if (apiErr.status === 401) {
@@ -77,20 +76,6 @@ const getLoginErrorMessage = (error: unknown) => {
       return apiErr.message;
     }
   }
-=======
-const PAISES_SURAMERICA = [
-  { value: 'CO', label: 'Colombia' },
-  { value: 'AR', label: 'Argentina' },
-  { value: 'CL', label: 'Chile' },
-  { value: 'PE', label: 'Perú' },
-  { value: 'BR', label: 'Brasil' },
-  { value: 'EC', label: 'Ecuador' },
-  { value: 'UY', label: 'Uruguay' },
-  { value: 'PY', label: 'Paraguay' },
-  //{ value: 'BO', label: 'Bolivia' },
-  { value: 'VE', label: 'Venezuela' }
-];
->>>>>>> origin/main
 
   if (error instanceof TypeError) {
     return "No pudimos conectar con Serviprox. Revisa tu conexión o que el backend esté disponible.";
