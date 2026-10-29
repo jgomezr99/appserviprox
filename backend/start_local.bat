@@ -2,7 +2,7 @@
 setlocal
 if /I "%~1"=="docker" (
   cd /d "%~dp0.."
-  docker compose -f docker-compose.yml start db backend
+  docker compose -f docker-compose.yml up -d db backend
   exit /b
 )
 
