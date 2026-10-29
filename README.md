@@ -38,7 +38,12 @@ El Compose actual contiene Django y PostgreSQL; Vite ejecuta solo el frontend y 
 `iniciar_serviprox.bat` inicia tus contenedores existentes y el frontend.
 `backend/start_local.bat` inicia solo los contenedores existentes.
 Los lanzadores no crean .venv, instalan dependencias, aplican migraciones ni cargan seeds.
-Los scripts de inicio automatico quedaron deshabilitados.
+`activar_inicio_automatico.bat` registra la tarea programada "Serviprox API" (sin permisos
+de administrador): al iniciar sesion ejecuta `servidor_api.ps1`, que mantiene Django con
+SQLite activo en el puerto 8000 y lo reinicia si se detiene. Aplica migraciones pendientes
+al arrancar, escribe su registro en `%LOCALAPPDATA%\Serviprox\api.log` y desactiva accesos
+de Inicio que apunten a otra copia del proyecto. Para quitarla:
+`Unregister-ScheduledTask -TaskName "Serviprox API" -Confirm:$false`.
 
 6. Configuracion historica de Render (no usar para el despliegue nuevo)
 
