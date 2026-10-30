@@ -50,6 +50,11 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    host: true,
+    port: 8100,
+    cors: true,
+  },
   build: {
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
