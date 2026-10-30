@@ -150,16 +150,69 @@ ion-item.selected ion-label { color: var(--menu-selected-fg) !important; }
   --inner-padding-end: 8px;
 }
 
+/* ===== Perfil de usuario y botón de cerrar sesión a la derecha ===== */
+.profile-item {
+  --color: #ffffff !important;
+  color: #ffffff !important;
+}
+
+.profile-item ion-icon[slot="start"] {
+  color: #ffffff !important;
+  font-size: 24px !important;
+}
+
+.profile-item ion-label {
+  font-weight: 600 !important;
+  color: #ffffff !important;
+  font-size: 15px !important;
+}
+
+.profile-logout-btn {
+  --color: #ffffff !important;
+  color: #ffffff !important;
+  --background: transparent !important;
+  --background-hover: rgba(255, 255, 255, 0.18) !important;
+  --background-focused: rgba(255, 255, 255, 0.18) !important;
+  --border-radius: 50% !important;
+  margin: 0 0 0 auto !important;
+  --padding-start: 6px !important;
+  --padding-end: 6px !important;
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.profile-logout-btn:hover {
+  transform: scale(1.1);
+}
+
+.profile-logout-btn ion-icon {
+  font-size: 24px !important;
+  color: #ffffff !important;
+}
+
 .menu-footer .role-switch-item ion-label {
   white-space: nowrap;
 }
 
 .menu-footer .role-switch-item ion-button {
+  --color: #ffffff !important;
+  color: #ffffff !important;
   margin-left: 8px;
   --padding-start: 8px;
   --padding-end: 8px;
   font-size: 0.82rem;
   text-transform: none;
+}
+
+.menu-footer .role-switch-item ion-button ion-icon {
+  color: #ffffff !important;
 }
 .login-item { margin: 0 8px; }
 .login-item ion-icon { color: #ffffff; }

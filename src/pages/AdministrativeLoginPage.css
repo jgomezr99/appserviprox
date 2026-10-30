@@ -7,18 +7,19 @@
 }
 
 .admin-login-page .admin-login-content {
-  --background: linear-gradient(180deg, #d7192f 0%, #e76672 46%, #fffdf2 100%);
+  --background: linear-gradient(180deg, #ffffff 0%, #ffffff 16%, #dc2626 40%, #b91024 60%, #ffffff 84%, #ffffff 100%) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 16%, #dc2626 40%, #b91024 60%, #ffffff 84%, #ffffff 100%) !important;
 }
 
 .admin-login-page .admin-login-layout {
   min-height: 100%;
-  width: min(1120px, 100%);
+  width: min(520px, 100%);
   margin: 0 auto;
-  padding: 46px 28px;
+  padding: 46px 20px;
   box-sizing: border-box;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 520px);
-  gap: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
 }
 
@@ -43,16 +44,19 @@
 }
 
 .admin-login-page .admin-login-card {
+  width: 100%;
+  max-width: 500px;
   padding: 32px 28px;
   border-radius: 28px;
-  background: linear-gradient(145deg, #bd1026, #f04b5b);
-  box-shadow: 0 24px 55px rgba(143, 18, 35, 0.28);
-  color: #ffffff;
+  background: #ffffff !important;
+  box-shadow: 0 24px 55px rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #0f172a !important;
 }
 
 .admin-login-page .admin-login-back {
   margin: -8px 0 14px -10px;
-  --color: #ffffff;
+  --color: #d7192f;
   text-transform: none;
   font-size: 0.9rem;
   font-weight: 700;
@@ -62,12 +66,12 @@
   font-size: 0.75rem;
   font-weight: 850;
   letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.85);
+  color: #d7192f;
 }
 
 .admin-login-page .admin-login-card h1 {
   margin: 6px 0 6px;
-  color: #ffffff;
+  color: #0f172a;
   font-size: 2.1rem;
   line-height: 1.1;
   font-weight: 800;
@@ -75,7 +79,7 @@
 
 .admin-login-page .admin-login-subtitle {
   margin: 0 0 24px;
-  color: rgba(255, 255, 255, 0.88);
+  color: #64748b;
   font-size: 0.95rem;
 }
 
@@ -87,7 +91,7 @@
 .admin-login-page .admin-login-form label {
   display: grid;
   gap: 8px;
-  color: #ffffff;
+  color: #334155;
   font-size: 0.88rem;
   font-weight: 700;
 }
@@ -98,26 +102,27 @@
   align-items: center;
   gap: 10px;
   padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.42);
+  border: 1px solid #cbd5e1;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.14);
+  background: #f8fafc;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .admin-login-page .admin-login-input:focus-within {
-  border-color: #ffffff;
-  background: rgba(255, 255, 255, 0.2);
+  border-color: #d7192f;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(215, 25, 47, 0.12);
 }
 
 .admin-login-page .admin-login-input > ion-icon {
   flex: 0 0 auto;
   font-size: 20px;
-  color: #ffffff;
+  color: #d7192f;
 }
 
 .admin-login-page .admin-login-input ion-input {
-  --color: #ffffff;
-  --placeholder-color: rgba(255, 255, 255, 0.72);
+  --color: #0f172a;
+  --placeholder-color: #94a3b8;
   --padding-start: 0;
   --padding-end: 0;
   font-size: 0.95rem;
@@ -125,20 +130,21 @@
 
 .admin-login-page .admin-login-input ion-button {
   margin: 0;
-  --color: #ffffff;
+  --color: #64748b;
 }
 
 .admin-login-page .admin-login-submit {
   min-height: 52px;
   margin-top: 6px;
-  --background: #f01313;
-  --background-hover: #e2190b;
-  --background-activated: #bd1026;
+  --background: #d7192f;
+  --background-hover: #b91024;
+  --background-activated: #991b1b;
   --border-radius: 16px;
   text-transform: none;
   font-weight: 800;
   font-size: 1rem;
-  --box-shadow: 0 8px 20px rgba(189, 16, 38, 0.4);
+  --box-shadow: 0 8px 20px rgba(189, 16, 38, 0.35);
+  color: #ffffff;
 }
 
 .admin-login-page .admin-login-error {
@@ -146,8 +152,9 @@
   text-decoration: none;
   padding: 10px 14px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.25);
-  color: #ffe4e6;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
   font-size: 0.86rem;
   font-weight: 700;
 }
@@ -157,7 +164,7 @@
   padding: 6px;
   text-decoration: none;
   background: transparent;
-  color: #ffffff;
+  color: #d7192f;
   font-size: 0.86rem;
   font-weight: 700;
   cursor: pointer;

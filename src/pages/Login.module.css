@@ -1,13 +1,12 @@
 .authPage {
-  --background: var(--sp-background);
+  --background: #ffffff;
+  background: #ffffff;
   color: var(--sp-text);
 }
 
 .authContent {
-  --background:
-    radial-gradient(circle at 16% 12%, rgba(11, 47, 107, 0.18), transparent 26rem),
-    radial-gradient(circle at 92% 8%, rgba(217, 54, 74, 0.12), transparent 24rem),
-    linear-gradient(180deg, #ce0909 0%, var(--sp-background) 62%, #ffffff 100%);
+  --background: linear-gradient(180deg, #be5454 0, 3%, #dc2626 10%, #dc2626 9%, #ffffff 84%, #ffffff 100%) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 16%, #dc2626 40%, #b91024 60%, #ffffff 84%, #ffffff 100%) !important;
 }
 
 .authShell {
@@ -28,18 +27,17 @@
 }
 
 .loginShell .brandPanel {
-  min-height: 390px;
+  min-height: 280px;
   box-sizing: border-box;
-  padding: 34px 22px 92px;
+  padding: 34px 22px 64px;
   align-content: start;
-  background: linear-gradient(180deg, #d90d20 0%, #dc5264 35%, #f2dfe3 82%, #f6f8fc 100%);
+  background: transparent;
 }
 
 .loginShell .brandMark {
   width: 70px;
   height: 70px;
   border-radius: 18px;
-  
 }
 
 .loginShell .brandMark ion-img {
@@ -49,37 +47,91 @@
 
 .loginShell .brandPanel h1 {
   max-width: 390px;
-  color: var(--sp-primary-dark);
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   font-size: clamp(2rem, 8vw, 3.1rem);
   line-height: 1.02;
 }
 
 .loginShell .brandCopy {
   max-width: 380px;
-  color: #000000;
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   font-size: .98rem;
   line-height: 1.6;
 }
 
-.loginShell .kicker { color: #070505; }
+.loginShell .kicker {
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  font-weight: 800;
+}
 
 .loginShell .authCard {
   position: relative;
   z-index: 1;
-  margin: -48px 18px 0;
+  margin: -36px 18px 0;
   width: auto;
   max-width: none;
-  padding: 24px 20px;
+  padding: 28px 22px;
   border-radius: 28px;
-  background: rgba(221, 15, 15, 0.92);
-  box-shadow: 0 18px 42px rgba(16, 24, 40, .12);
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.16);
 }
+
+.loginShell .authCard h2 {
+  color: #0f172a !important;
+}
+
+.loginShell .authCard p {
+  color: #64748b !important;
+}
+
+.loginShell .authCard label {
+  color: #334155 !important;
+}
+
+.loginShell .authCard .cardEyebrow {
+  color: #d7192f !important;
+}
+
+.loginShell .authCard .backButton {
+  --color: #d7192f !important;
+}
+
+.loginShell .authCard .inputShell {
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.loginShell .authCard .inputShell:focus-within {
+  background: #ffffff !important;
+  border-color: #d7192f !important;
+  box-shadow: 0 0 0 4px rgba(215, 25, 47, 0.12) !important;
+}
+
+.loginShell .authCard .inputShell ion-icon {
+  color: #d7192f !important;
+}
+
+.loginShell .authCard .inputShell ion-input {
+  --color: #0f172a !important;
+  --placeholder-color: #94a3b8 !important;
+}
+
+.loginShell .authCard .recoverButton {
+  --color: #d7192f !important;
+}
+
 /* color customization for primary button */
 .loginShell .primaryButton {
   --background: #d90d20;
   --background-hover: #c20019;
   --background-activated: #c20019;
-  --box-shadow: none;
+  --box-shadow: 0 10px 24px rgba(217, 13, 32, 0.3);
+  color: #ffffff;
 }
 
 
@@ -408,14 +460,12 @@
 .authCard {
   width: 100%;
   max-width: 520px;
-  
-  padding: 24px;
+  padding: 28px 24px;
   border-radius: var(--sp-radius-xl);
-  background: var(--sp-surface-glass);
-  border: 1px solid var(--sp-border);
-  box-shadow: 0 24px 70px rgba(7, 30, 69, 0.14);
-  backdrop-filter: blur(var(--sp-blur));
-  -webkit-backdrop-filter: blur(var(--sp-blur));
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.14);
 }
 
 .formHeader {

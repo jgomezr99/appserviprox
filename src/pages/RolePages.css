@@ -7,18 +7,14 @@
 
 .theme-client .sp-role-content,
 [data-theme="client"] .sp-role-content {
-  --background:
-    radial-gradient(circle at 10% 0%, rgba(220, 38, 38, 0.12), transparent 24rem),
-    radial-gradient(circle at 95% 10%, rgba(254, 226, 226, 0.6), transparent 22rem),
-    linear-gradient(180deg, #FFF5F6 0%, #FFF1F2 58%, #FFF5F6 100%);
+  --background: #F5C3BA !important;
+  background: #F5C3BA !important;
 }
 
 .theme-professional .sp-role-content,
 [data-theme="professional"] .sp-role-content {
-  --background:
-    radial-gradient(circle at 10% 0%, rgba(11, 47, 107, 0.12), transparent 24rem),
-    radial-gradient(circle at 95% 10%, rgba(234, 242, 255, 0.6), transparent 22rem),
-    linear-gradient(180deg, #F8FBFF 0%, #F0F7FF 58%, #F8FBFF 100%);
+  --background: #D3DCF2 !important;
+  background: #D3DCF2 !important;
 }
 
 .sp-role-page {
@@ -79,11 +75,10 @@
   margin: 0;
   padding: 18px;
   border-radius: var(--sp-radius-lg);
-  background: var(--sp-surface-glass);
-  border: 1px solid var(--sp-border);
-  box-shadow: var(--sp-shadow);
-  backdrop-filter: blur(var(--sp-blur));
-  -webkit-backdrop-filter: blur(var(--sp-blur));
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
 }
 
 .sp-card h2 {

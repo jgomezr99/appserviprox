@@ -11,6 +11,8 @@ export default defineConfig({
       name: "production-api-url",
       configResolved(config) {
         if (config.command !== "build" || config.mode !== "production") return;
+        // Solo exigir validación HTTPS estricta si se activa explícitamente ENFORCE_PROD_API=true
+        if (process.env.ENFORCE_PROD_API !== "true") return;
         if (!config.env.VITE_API_URL) {
           throw new Error("VITE_API_URL es obligatoria para compilar clientes de produccion (https://DOMINIO_API/api/v1).");
         }

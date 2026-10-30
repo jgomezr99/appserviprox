@@ -312,9 +312,9 @@ const Menu: React.FC = () => {
       </IonContent>
   {/* Footer del menú */}
       <IonFooter className="menu-footer">
-        <IonMenuToggle autoHide={false}>
-          {/* Mostrar LOGIN solo si NO hay sesión y NO estoy en /login o /ingresar */}
-          {!isAuthenticated && !isLoading && !isPublicPage ? (
+        {/* Mostrar LOGIN solo si NO hay sesión y NO estoy en /login o /ingresar */}
+        {!isAuthenticated && !isLoading && !isPublicPage ? (
+          <IonMenuToggle autoHide={false}>
             <IonItem
               routerLink="/login"
               routerDirection="none"
@@ -325,81 +325,90 @@ const Menu: React.FC = () => {
               <IonIcon slot="start" ios={arrowForwardOutline} md={arrowForwardSharp} />
               <IonLabel>Ingresar / Crear Cuenta</IonLabel>
             </IonItem>
-          ) : null}
+          </IonMenuToggle>
+        ) : null}
 
-          {/* Si hay sesión, muestra perfil/acciones y oculta el login */}
-          {isAuthenticated ? (
-            <IonItem lines="none" className="profile-item" detail={false}>
-              <IonIcon slot="start" icon={ischat ? shieldCheckmarkOutline : personCircleOutline} />
-              <IonLabel>{ischat ? 'Administrador Serviprox' : (user?.first_name || user?.email || 'Mi cuenta')}</IonLabel>
-              <IonMenuToggle autoHide={false}>
-                <IonButton slot="end" fill="clear" onClick={onLogout} aria-label="Cerrar sesión / Salir" title="Cerrar sesión / Salir">
-                  <IonIcon slot="icon-only" icon={logOutOutline} />
-                </IonButton>
-              </IonMenuToggle>
-            </IonItem>
-          ) : null}
-          {!ischat && user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (
-            <IonItem lines="none" detail={false} className="role-switch-item">
-              <IonIcon slot="start" icon={briefcaseOutline} />
-              <IonLabel>Ofrecer servicios</IonLabel>
-              <IonButton
-                slot="end"
-                fill="clear"
-                disabled={roleChanging}
-                aria-label="Ser profesional"
-                title="Ser profesional"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void onBecomeProfessional();
-                }}
-              >
-                <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
-              </IonButton>
-            </IonItem>
-          ) : null}
-          {!ischat && user?.role === 'professional' ? (
-            <IonItem lines="none" detail={false} className="role-switch-item">
-              <IonIcon slot="start" icon={homeOutline} />
-              <IonLabel>Usar como cliente</IonLabel>
-              <IonButton
-                slot="end"
-                fill="clear"
-                disabled={roleChanging}
-                aria-label="Usar como cliente"
-                title="Usar como cliente"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void onBecomeClient();
-                }}
-              >
-                <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
-              </IonButton>
-            </IonItem>
-          ) : null}
+        {/* Si hay sesión, muestra perfil con icono de cerrar sesión a la derecha */}
+        {isAuthenticated ? (
+          <IonItem lines="none" className="profile-item" detail={false}>
+            <IonIcon slot="start" icon={ischat ? shieldCheckmarkOutline : personCircleOutline} />
+            <IonLabel>{ischat ? 'Administrador Serviprox' : (user?.first_name || user?.email || 'Mi cuenta')}</IonLabel>
+            <IonButton
+              slot="end"
+              fill="clear"
+              className="profile-logout-btn"
+              onClick={(event) => {
+                event.stopPropagation();
+                void onLogout();
+              }}
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <IonIcon slot="icon-only" icon={logOutOutline} />
+            </IonButton>
+          </IonItem>
+        ) : null}
 
+        {!ischat && user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (
+          <IonItem lines="none" detail={false} className="role-switch-item">
+            <IonIcon slot="start" icon={briefcaseOutline} />
+            <IonLabel>Ofrecer servicios</IonLabel>
+            <IonButton
+              slot="end"
+              fill="clear"
+              disabled={roleChanging}
+              aria-label="Ser profesional"
+              title="Ser profesional"
+              onClick={(event) => {
+                event.stopPropagation();
+                void onBecomeProfessional();
+              }}
+            >
+              <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
+            </IonButton>
+          </IonItem>
+        ) : null}
 
-          {ischat ? (
-            <IonItem lines="none" detail={false} className="role-switch-item">
-              <IonIcon slot="start" icon={homeOutline} />
-              <IonLabel>Vista cliente</IonLabel>
-              <IonButton
-                slot="end"
-                fill="clear"
-                aria-label="Cambiar a cliente"
-                title="Cambiar a cliente"
-                onClick={async (event) => {
-                  event.stopPropagation();
-                  await becomeClient();
-                  try { await menuController.close('main-menu'); } catch {}
-                  router.push('/cliente/inicio');
-                }}
-              >
-                <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
-              </IonButton>
-            </IonItem>
-          ) : null}
-        </IonMenuToggle>
+        {!ischat && user?.role === 'professional' ? (
+          <IonItem lines="none" detail={false} className="role-switch-item">
+            <IonIcon slot="start" icon={homeOutline} />
+            <IonLabel>Usar como cliente</IonLabel>
+            <IonButton
+              slot="end"
+              fill="clear"
+              disabled={roleChanging}
+              aria-label="Usar como cliente"
+              title="Usar como cliente"
+              onClick={(event) => {
+                event.stopPropagation();
+                void onBecomeClient();
+              }}
+            >
+              <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
+            </IonButton>
+          </IonItem>
+        ) : null}
+
+        {ischat ? (
+          <IonItem lines="none" detail={false} className="role-switch-item">
+            <IonIcon slot="start" icon={homeOutline} />
+            <IonLabel>Vista cliente</IonLabel>
+            <IonButton
+              slot="end"
+              fill="clear"
+              aria-label="Cambiar a cliente"
+              title="Cambiar a cliente"
+              onClick={async (event) => {
+                event.stopPropagation();
+                await becomeClient();
+                try { await menuController.close('main-menu'); } catch {}
+                router.push('/cliente/inicio');
+              }}
+            >
+              <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
+            </IonButton>
+          </IonItem>
+        ) : null}
       </IonFooter>
       <IonToast
         isOpen={!!roleChangeError}
