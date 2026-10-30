@@ -12,7 +12,10 @@ export default defineConfig({
       configResolved(config) {
         if (config.command !== "build" || config.mode !== "production") return;
         if (!config.env.VITE_API_URL) {
-          throw new Error("VITE_API_URL es obligatoria para compilar clientes de produccion (https://DOMINIO_API/api/v1).");
+          config.logger.warn(
+            "VITE_API_URL no esta configurada; se usara /api/v1. Configura la URL publica HTTPS del backend para habilitar el login."
+          );
+          return;
         }
         let url: URL;
         try { url = new URL(config.env.VITE_API_URL); } catch { throw new Error("VITE_API_URL no es una URL valida (https://DOMINIO_API/api/v1)."); }

@@ -37,7 +37,7 @@ export const getSavedCustomHost = (): string => {
 
 const resolveApiBaseUrl = (): string => {
   if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "";
+    return import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "/api/v1";
   }
   // 1. Configuración explícita en variable de entorno
   if (import.meta.env.VITE_API_URL) {

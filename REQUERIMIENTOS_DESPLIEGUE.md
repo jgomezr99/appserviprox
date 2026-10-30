@@ -111,6 +111,8 @@ No subas el archivo real a Git ni guardes contraseñas en este documento.
 - [ ] Completar `DEFAULT_FROM_EMAIL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`,
   `EMAIL_HOST_PASSWORD` y `EMAIL_USE_TLS` para el correo real.
 - [ ] Configurar `VITE_API_URL` en el build de Netlify y generar una nueva publicación.
+  Sin esta variable la interfaz puede compilar usando `/api/v1`, pero el login no
+  funcionará en Netlify hasta publicar y conectar el backend HTTPS.
 - [ ] Guardar copia segura del entorno fuera de la VM, separada del backup de datos.
 
 Los volúmenes `postgres_data`, `media_data`, `caddy_data` y `caddy_config` deben
