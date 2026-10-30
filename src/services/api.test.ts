@@ -23,6 +23,21 @@ describe("API de produccion", () => {
     expect(client.getApiBaseUrl()).toBe(BASE);
   });
 
+  it("usa /api/v1 cuando no se configura VITE_API_URL", async () => {
+    vi.stubEnv("VITE_API_URL", "");
+    const fetchMock = vi.fn().mockResolvedValue(json({ id: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { api, getApiBaseUrl, getCandidateBaseUrls } = await import("./api");
+
+    expect(getApiBaseUrl()).toBe("/api/v1");
+    expect(getCandidateBaseUrls()).toEqual(["/api/v1"]);
+    await api.get("professionals/");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/professionals/",
+      expect.any(Object)
+    );
+  });
+
   it("construye URL y Authorization sin enviar cookies", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ id: 1 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -33,6 +48,15 @@ describe("API de produccion", () => {
     expect(url).toBe(BASE + "/professionals/?lat=4.6&lng=-74&service=7");
     expect(init.headers.get("Authorization")).toBe("Bearer access-test");
     expect(init.credentials).toBeUndefined();
+  });
+
+  it("rechaza URLs absolutas cuando se usa el fallback same-origin", async () => {
+    vi.stubEnv("VITE_API_URL", "");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { api } = await import("./api");
+    await expect(api.blob("https://otro.example.com/api/v1/photo/")).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("rechaza URLs absolutas ajenas antes de transmitir un JWT", async () => {

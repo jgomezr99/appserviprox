@@ -237,7 +237,9 @@ VITE_API_URL=https://DOMINIO_API/api/v1
 No poner secretos en VITE_*. Conservar comando npm run build y directorio dist,
 ya definidos en netlify.toml. Desencadenar una NUEVA compilacion/deploy; cambiar
 una variable no modifica archivos ya compilados. Si fuera necesario, limpiar
-cache de build. El build rechaza URL ausente, HTTP, localhost o rutas incorrectas.
+cache de build. Si la variable se omite, el frontend usa `/api/v1` en su mismo
+origen; el build rechaza solo valores configurados con HTTP, localhost o rutas
+incorrectas.
 Los hosts guardados del prototipo se ignoran en produccion. El fallback de sesion
 demo solo funciona en desarrollo. No hay cambios de pantallas.
 

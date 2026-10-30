@@ -68,9 +68,10 @@ npm run typecheck
 npm run build
 ```
 
-Antes del build productivo debes configurar
-`VITE_API_URL=https://DOMINIO_API/api/v1`. El build exige una API HTTPS pública;
-las variables `VITE_*` se incorporan al bundle y nunca deben contener secretos.
+Para un backend en otro dominio, configura
+`VITE_API_URL=https://DOMINIO_API/api/v1`. Si el backend se publica bajo
+`/api/v1` en el mismo origen, la variable es opcional. Las variables `VITE_*`
+se incorporan al bundle y nunca deben contener secretos.
 No necesitas añadir Redis, Celery ni PostGIS para esta arquitectura.
 
 ## 4. Archivos que debes conservar para producción
