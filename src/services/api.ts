@@ -85,6 +85,10 @@ export const getApiBaseUrl = (): string => activeBaseUrl;
 
 export const getCandidateBaseUrls = (): string[] => {
   if (import.meta.env.PROD) {
+    const saved = getSavedCustomHost();
+    if (typeof window !== "undefined" && window.location.hostname.includes("netlify.app") && !saved) {
+      return [];
+    }
     const configured = resolveApiBaseUrl();
     return configured ? [configured] : [];
   }
