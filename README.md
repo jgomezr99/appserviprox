@@ -105,14 +105,18 @@ con Docker Compose en Ubuntu 24.04 Compute Engine. No se ha desplegado infraestr
 Produccion usa compose.prod.yml y .env.production (no versionado). El Compose local
 se conserva. render.yaml es historico, no forma parte del procedimiento nuevo.
 VITE_API_URL=https://DOMINIO_API/api/v1 se fija al compilar en Netlify/apps; nunca
-contiene secretos. El build productivo exige una API HTTPS publica configurada.
+contiene secretos. Si no se define, el frontend usa `/api/v1` en su mismo origen.
+`netlify.toml` usa actualmente el servicio `serviprox-backend` de Render para
+evitar publicar un cliente sin API. Antes de desplegar el backend de GCP (u otro
+proveedor), sustituye ese valor por su URL HTTPS real terminada en `/api/v1`.
 Para builds locales HTTP usar --mode development y, solo para Capacitor local,
 CAPACITOR_ALLOW_CLEARTEXT=true. No ejecutar seeds demo en produccion.
 
-Web y Capacitor usan la misma `VITE_API_URL`; ninguno se conecta directamente a
-PostgreSQL. Django conserva conexiones PostgreSQL y comprueba su estado antes de
-reutilizarlas. La compilacion de produccion se detiene si falta una URL HTTPS valida,
-para evitar publicar clientes sin backend.
+Cuando se define, web y Capacitor usan la misma `VITE_API_URL`; ninguno se conecta
+directamente a PostgreSQL. Django conserva conexiones PostgreSQL y comprueba su
+estado antes de reutilizarlas. Las aplicaciones moviles y los frontends con backend
+en otro dominio deben definir una URL HTTPS valida; el build valida cualquier valor
+configurado.
 
 ### Publicar el frontend en Vercel
 
@@ -120,8 +124,9 @@ para evitar publicar clientes sin backend.
 internas funcionen al abrirlas o recargarlas directamente. En Vercel, configura
 `VITE_API_URL` en Production y Preview con la URL HTTPS publica del backend,
 terminada en `/api/v1`, y vuelve a desplegar. Vercel solo sirve el frontend; Django
-y PostgreSQL siguen ejecutandose en el servidor backend. La compilacion falla si
-falta esta variable o apunta a una URL local/no HTTPS.
+y PostgreSQL siguen ejecutandose en el servidor backend. Si `/api/v1` se enruta
+al backend desde el mismo origen, la variable puede omitirse; el build solo rechaza
+valores configurados que apunten a una URL local/no HTTPS.
 
 Agrega el origen HTTPS exacto del proyecto Vercel a `CORS_ALLOWED_ORIGINS` en el
 backend; no habilites comodines para previews. Para una release movil, compila con

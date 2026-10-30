@@ -11,9 +11,7 @@ export default defineConfig({
       name: "production-api-url",
       configResolved(config) {
         if (config.command !== "build" || config.mode !== "production") return;
-        if (!config.env.VITE_API_URL) {
-          throw new Error("VITE_API_URL es obligatoria para compilar clientes de produccion (https://DOMINIO_API/api/v1).");
-        }
+        if (!config.env.VITE_API_URL) return;
         let url: URL;
         try { url = new URL(config.env.VITE_API_URL); } catch { throw new Error("VITE_API_URL no es una URL valida (https://DOMINIO_API/api/v1)."); }
         if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash ||

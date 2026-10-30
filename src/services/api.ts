@@ -37,7 +37,9 @@ export const getSavedCustomHost = (): string => {
 
 const resolveApiBaseUrl = (): string => {
   if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "";
+    return import.meta.env.VITE_API_URL
+      ? normalizeApiUrl(import.meta.env.VITE_API_URL)
+      : "/api/v1";
   }
   // 1. Configuración explícita en variable de entorno
   if (import.meta.env.VITE_API_URL) {
@@ -93,7 +95,7 @@ export let API_BASE_URL = activeBaseUrl;
 export const getApiBaseUrl = (): string => activeBaseUrl;
 
 export const getCandidateBaseUrls = (): string[] => {
-  // Un solo destino cuando VITE_API_URL esta definida: web y movil comparten servidor.
+  // En produccion solo se usa la API configurada o el proxy same-origin.
   if (import.meta.env.PROD || import.meta.env.VITE_API_URL) {
     const configured = resolveApiBaseUrl();
     return configured ? [configured] : [];
@@ -200,6 +202,9 @@ const buildUrlForBase = (
   params?: Record<string, string | number | boolean | undefined | null>
 ) => {
   if (import.meta.env.PROD && /^https?:\/\//i.test(path)) {
+    if (!/^https?:\/\//i.test(baseUrl)) {
+      throw new ApiError(400, "La URL solicitada no pertenece a la API configurada.", null);
+    }
     const target = new URL(path);
     const configured = new URL(baseUrl);
     if (target.origin !== configured.origin || !target.pathname.startsWith(configured.pathname + "/")) {
@@ -506,7 +511,7 @@ export const checkBackendHealth = async (
     return {
       ok: false,
       database: "disconnected",
-      error: "No hay servidores backend configurados. En Netlify debes configurar VITE_API_URL o la URL del backend.",
+      error: "No hay servidores backend configurados.",
     };
   }
 
@@ -558,7 +563,7 @@ export const saveCustomApiHost = async (
 
   const normalized = normalizeApiUrl(host);
   if (import.meta.env.PROD && normalized !== resolveApiBaseUrl()) {
-    return { ok: false, message: "La API productiva se configura en VITE_API_URL durante la compilacion." };
+    return { ok: false, message: "La API productiva se configura durante la compilacion o bajo /api/v1 en el mismo dominio." };
   }
   const health = await checkBackendHealth(normalized);
   if (health.ok) {
