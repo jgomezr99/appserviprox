@@ -115,11 +115,10 @@ para evitar publicar clientes sin backend.
 ### Publicar el frontend en Vercel
 
 `vercel.json` configura el build Vite, `dist` y el fallback SPA para que las rutas
-internas funcionen al abrirlas o recargarlas directamente. En Vercel, configura
-`VITE_API_URL` en Production y Preview con la URL HTTPS publica del backend,
-terminada en `/api/v1`, y vuelve a desplegar. Vercel solo sirve el frontend; Django
-y PostgreSQL siguen ejecutandose en el servidor backend. La compilacion falla si
-falta esta variable o apunta a una URL local/no HTTPS.
+internas funcionen al abrirlas o recargarlas directamente. Usa la URL del backend
+de Render como valor predeterminado y permite sustituirla con `VITE_API_URL` en
+Production y Preview. Vercel solo sirve el frontend; Django y PostgreSQL siguen
+ejecutandose en el servidor backend.
 
 Agrega el origen HTTPS exacto del proyecto Vercel a `CORS_ALLOWED_ORIGINS` en el
 backend; no habilites comodines para previews. Para una release movil, compila con
