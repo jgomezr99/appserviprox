@@ -8,7 +8,6 @@ const json = (value: unknown, status = 200) =>
 beforeEach(() => {
   vi.resetModules();
   vi.stubEnv("PROD", "true");
-  vi.stubEnv("VITE_API_URL", BASE);
   localStorage.clear();
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });

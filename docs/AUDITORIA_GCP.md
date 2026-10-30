@@ -28,7 +28,7 @@ Categoria, servicio y presupuesto son filtros, no metodos nuevos. No cambiar est
   impedir correo con codigos en consola y errores JSON genericos.
 - Health revela motor. Fotos de solicitudes tienen endpoint autenticado;
   evidencias usan archivos directos sin servidor media productivo.
-- api.ts prioriza host guardado sobre VITE_API_URL, tiene fallbacks HTTP/locales,
+- api.ts prioriza el host guardado y tiene fallbacks HTTP/locales,
   reintentos POST y refresh concurrente que pueden duplicar operaciones.
 - AuthContext permite sesion demo si falla backend; limitar a desarrollo.
 - No hay script typecheck. README recomienda Render; render.yaml migra al arrancar.

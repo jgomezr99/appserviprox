@@ -54,7 +54,7 @@ Para verificar la compilación con configuración local:
 npm.cmd run build -- --mode development
 ```
 
-Para la compilación de producción usa `npm.cmd run build` con `VITE_API_URL` configurada a la API pública HTTPS. El comando local anterior no reemplaza esa validación.
+Para la compilación de producción usa `npm.cmd run build`. La API se configura desde la pantalla de conexión del frontend.
 
 En el Compose de desarrollo actual, `./backend` está montado en `/app` y Django usa recarga automática; estos cambios de código no requieren reconstruir la imagen. El frontend en Vite también recarga el código. Si una página ya estaba abierta, recárgala.
 

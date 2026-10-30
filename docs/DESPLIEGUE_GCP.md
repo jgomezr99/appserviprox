@@ -227,27 +227,19 @@ No hay enlaces publicos directos /media/. Limite Caddy: 25 MB por solicitud.
 
 ## 6. Conectar Netlify, Android e iOS
 
-En el proyecto existente Netlify: Project configuration -> Environment variables,
-crear VITE_API_URL con alcance Builds/contexto Production:
-
-```dotenv
-VITE_API_URL=https://DOMINIO_API/api/v1
-```
-
-No poner secretos en VITE_*. Conservar comando npm run build y directorio dist,
-ya definidos en netlify.toml. Desencadenar una NUEVA compilacion/deploy; cambiar
-una variable no modifica archivos ya compilados. Si fuera necesario, limpiar
-cache de build. El build rechaza URL ausente, HTTP, localhost o rutas incorrectas.
-Los hosts guardados del prototipo se ignoran en produccion. El fallback de sesion
-demo solo funciona en desarrollo. No hay cambios de pantallas.
+Conservar comando `npm run build` y directorio `dist`, ya definidos en
+`netlify.toml`. La aplicación usa `/api/v1` y permite introducir la URL HTTPS
+del backend desde la pantalla de conexión. El fallback de sesión demo solo
+funciona en desarrollo.
 
 Desde el sitio Netlify, DevTools/Network debe mostrar peticiones HTTPS a API real
 y respuestas JSON (nunca index.html SPA). Comprobar Authorization Bearer, login/
 recarga/perfil/refresh y todos los flujos de la tabla del apartado 9.
 No se envian cookies del frontend; Admin usa sus cookies de mismo origen.
 
-Capacitor reutiliza el mismo VITE_API_URL al compilar y despues npx cap sync
-android o ios. Empaquetar/republicar la app; .env en la VM no actualiza bundles.
+Capacitor reutiliza la configuración de conexión al compilar y después ejecuta
+`npx cap sync android` o `ios`. Empaquetar/republicar la app; `.env` en la VM no
+actualiza bundles.
 CORS permite origenes WebView predeterminados indicados arriba; comprobar el
 Origin real en dispositivos. cleartext queda desactivado por defecto.
 Solo para pruebas locales HTTP, CAPACITOR_ALLOW_CLEARTEXT=true al ejecutar cap

@@ -54,7 +54,6 @@ DJANGO_ALLOWED_HOSTS, CORS_ALLOWED_ORIGINS, CSRF_TRUSTED_ORIGINS,
 POSTGRES_DB/USER/PASSWORD/HOST/PORT/SSLMODE, SERVIPROX_DATABASE,
 SERVIPROX_MEDIA_STORAGE, DJANGO_DEBUG y DJANGO_SETTINGS_MODULE.
 Ademas: HSTS, workers, radio, zona horaria y SMTP para recuperar contrasenas.
-VITE_API_URL=https://DOMINIO_API/api/v1 se fija en build Netlify/apps, sin secretos.
 
 ## Resultados reales
 
@@ -65,7 +64,7 @@ VITE_API_URL=https://DOMINIO_API/api/v1 se fija en build Netlify/apps, sin secre
 | check --deploy con config.settings_production | Exit 0, **14 avisos OpenAPI preexistentes** drf_spectacular W001/W002 (anotaciones/serializadores faltantes). No se ocultan. Configuracion PostgreSQL sin conectar una BD real. |
 | check --deploy --tag security --fail-level WARNING | **Pasa sin incidencias**, con Django 5.0.6 y variables de prueba. |
 | npm run typecheck | **Pasa**. |
-| npm run build | **Pasa**, con VITE_API_URL=https://api.example.com/api/v1 solo como placeholder de validacion. No verifica API publica. Avisos de bundles >500 kB y datos Browserslist antiguos. |
+| npm run build | **Pasa** sin variables de API; usa `/api/v1` y permite configurar el backend desde la interfaz. Avisos de bundles >500 kB y datos Browserslist antiguos. |
 | npm run test.unit -- --run | **7/7 pasan**: montaje App y 6 pruebas de destino API/JWT/refresh/errores. |
 | docker compose config --quiet (prod) | **Pasa**, usando ejemplo y password ficticio temporal; no inicia contenedores. CLI avisa que config Docker del usuario no es legible en sandbox. |
 | bash -n de compose.sh, deploy.sh y backup.sh | **Pasa** con Git Bash, no equivale a ejecutar despliegue/backups en Ubuntu. |
