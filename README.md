@@ -45,34 +45,31 @@ al arrancar, escribe su registro en `%LOCALAPPDATA%\Serviprox\api.log` y desacti
 de Inicio que apunten a otra copia del proyecto. Para quitarla:
 `Unregister-ScheduledTask -TaskName "Serviprox API" -Confirm:$false`.
 
-6. Configuracion historica de Render (no usar para el despliegue nuevo)
+6. Despliegue rápido: Netlify + Render
 
-El blueprint `render.yaml` configura Django con `DEBUG=False`, una clave secreta
-generada, PostgreSQL, almacenamiento S3 y migraciones al iniciar el servicio.
-Antes del primer despliegue:
+El blueprint `render.yaml` crea el servicio Django `serviprox-backend` y la base
+PostgreSQL `serviprox-db`. Render inyecta la cadena privada en `DATABASE_URL`;
+no copies esa cadena al repositorio ni a una variable `VITE_*`.
 
-1. Crea una base PostgreSQL persistente y un bucket S3 (o compatible) fuera del
-   disco efímero del servicio web.
-2. Al aplicar el blueprint, completa `POSTGRES_DB`, `POSTGRES_USER`,
-   `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `SERVIPROX_S3_BUCKET_NAME`,
-   `SERVIPROX_S3_ACCESS_KEY_ID`, `SERVIPROX_S3_SECRET_ACCESS_KEY` y
-   `SERVIPROX_S3_REGION_NAME`. Configura `POSTGRES_SSLMODE` y
-   `SERVIPROX_S3_ENDPOINT_URL` solo si el proveedor los requiere.
-3. Revisa `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS` para incluir los
-   dominios reales del frontend. El host de Render se agrega desde
-   `RENDER_EXTERNAL_HOSTNAME`; agrega manualmente cualquier dominio propio.
-4. En el despliegue del frontend, configura `VITE_API_URL` con la URL HTTPS del
-   backend seguida de `/api/v1`.
-5. Crea un usuario de administración y carga el catálogo real. No ejecutes
-   `backend/seed_demo.py` en producción: crea usuarios y datos de demostración.
-   Las palabras clave de búsqueda se mantienen como listas JSON en cada
-   categoría y servicio desde Django Admin. Crea el usuario desde la consola del
-   servicio con `cd backend && python manage.py createsuperuser`.
+1. En Render, crea un **Blueprint** desde este repositorio y acepta ambos
+   recursos. Espera a que la comprobación
+   `https://serviprox-backend.onrender.com/api/v1/health/` responda
+   `{"status":"ok","database":"connected"}`.
+2. `netlify.toml` ya fija `VITE_API_URL` en
+   `https://serviprox-backend.onrender.com/api/v1`, por lo que Netlify puede
+   compilar el frontend. Si Render asigna otro hostname, actualiza esa variable
+   en **Netlify > Site configuration > Environment variables** y vuelve a
+   desplegar.
+3. Si el sitio Netlify productivo no es `https://serviproxweb.netlify.app`,
+   actualiza `CORS_ALLOWED_ORIGINS` en Render con su origen HTTPS exacto y
+   vuelve a desplegar el backend. No uses comodines.
+4. Crea un usuario de administración y carga el catálogo real desde la consola
+   de Render con `cd backend && python manage.py createsuperuser`. No ejecutes
+   `backend/seed_demo.py` en producción.
 
-El inicio del backend aplica las migraciones antes de levantar Gunicorn. No se
-incluyen credenciales ni se crea infraestructura de pago automáticamente; el
-proveedor, la región y los permisos de PostgreSQL/S3 deben configurarse para la
-cuenta de despliegue.
+El plan gratuito usa almacenamiento local efímero para fotos y evidencias: los
+archivos pueden perderse al reiniciar o redesplegar. Configura almacenamiento
+persistente antes de usarlo con datos reales.
 
 Credenciales demo:
 - Cliente: camila@demo.serviprox.co / serviprox2026
@@ -103,9 +100,10 @@ con Docker Compose en Ubuntu 24.04 Compute Engine. No se ha desplegado infraestr
 - [Resultados y validaciones pendientes](docs/VALIDACION_GCP.md)
 
 Produccion usa compose.prod.yml y .env.production (no versionado). El Compose local
-se conserva. render.yaml es historico, no forma parte del procedimiento nuevo.
-VITE_API_URL=https://DOMINIO_API/api/v1 se fija al compilar en Netlify/apps; nunca
-contiene secretos. El build productivo exige una API HTTPS publica configurada.
+se conserva. La ruta Render anterior permite validar la aplicación rápidamente;
+para datos reales, mantén la arquitectura de VM, volúmenes y copias indicada en
+esta sección. VITE_API_URL=https://DOMINIO_API/api/v1 se fija al compilar en
+Netlify/apps; nunca contiene secretos. El build productivo exige una API HTTPS publica configurada.
 Para builds locales HTTP usar --mode development y, solo para Capacitor local,
 CAPACITOR_ALLOW_CLEARTEXT=true. No ejecutar seeds demo en produccion.
 
