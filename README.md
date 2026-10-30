@@ -55,11 +55,11 @@ no copies esa cadena al repositorio ni a una variable `VITE_*`.
    recursos. Espera a que la comprobación
    `https://serviprox-backend.onrender.com/api/v1/health/` responda
    `{"status":"ok","database":"connected"}`.
-2. `netlify.toml` ya fija `VITE_API_URL` en
-   `https://serviprox-backend.onrender.com/api/v1`, por lo que Netlify puede
-   compilar el frontend. Si Render asigna otro hostname, actualiza esa variable
-   en **Netlify > Site configuration > Environment variables** y vuelve a
-   desplegar.
+2. `npm run build` y `netlify.toml` usan
+   `https://serviprox-backend.onrender.com/api/v1` por defecto, por lo que
+   Netlify, Vercel y Cloudflare pueden compilar el frontend. Si Render asigna
+   otro hostname, configura `VITE_API_URL` con la URL correcta en el proveedor
+   y vuelve a desplegar.
 3. Si el sitio Netlify productivo no es `https://serviproxweb.netlify.app`,
    actualiza `CORS_ALLOWED_ORIGINS` en Render con su origen HTTPS exacto y
    vuelve a desplegar el backend. No uses comodines.
