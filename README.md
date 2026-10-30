@@ -106,6 +106,9 @@ Produccion usa compose.prod.yml y .env.production (no versionado). El Compose lo
 se conserva. render.yaml es historico, no forma parte del procedimiento nuevo.
 VITE_API_URL=https://DOMINIO_API/api/v1 se fija al compilar en Netlify/apps; nunca
 contiene secretos. El build productivo exige una API HTTPS publica configurada.
+`netlify.toml` usa actualmente el servicio `serviprox-backend` de Render para
+evitar publicar un cliente sin API. Antes de desplegar el backend de GCP (u otro
+proveedor), sustituye ese valor por su URL HTTPS real terminada en `/api/v1`.
 Para builds locales HTTP usar --mode development y, solo para Capacitor local,
 CAPACITOR_ALLOW_CLEARTEXT=true. No ejecutar seeds demo en produccion.
 

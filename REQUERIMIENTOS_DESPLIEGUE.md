@@ -110,7 +110,8 @@ No subas el archivo real a Git ni guardes contraseñas en este documento.
 - [ ] Revisar HSTS, workers, zona horaria y radio de búsqueda del ejemplo.
 - [ ] Completar `DEFAULT_FROM_EMAIL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`,
   `EMAIL_HOST_PASSWORD` y `EMAIL_USE_TLS` para el correo real.
-- [ ] Configurar `VITE_API_URL` en el build de Netlify y generar una nueva publicación.
+- [ ] Sustituir `VITE_API_URL` en `netlify.toml` por
+  `https://DOMINIO_API/api/v1` y generar una nueva publicación en Netlify.
 - [ ] Guardar copia segura del entorno fuera de la VM, separada del backup de datos.
 
 Los volúmenes `postgres_data`, `media_data`, `caddy_data` y `caddy_config` deben
