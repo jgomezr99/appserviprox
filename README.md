@@ -61,8 +61,8 @@ Antes del primer despliegue:
 3. Revisa `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS` para incluir los
    dominios reales del frontend. El host de Render se agrega desde
    `RENDER_EXTERNAL_HOSTNAME`; agrega manualmente cualquier dominio propio.
-4. En el despliegue del frontend, configura `VITE_API_URL` con la URL HTTPS del
-   backend seguida de `/api/v1`.
+4. Publica el backend HTTPS y configura su URL desde la pantalla de conexión del
+   frontend.
 5. Crea un usuario de administración y carga el catálogo real. No ejecutes
    `backend/seed_demo.py` en producción: crea usuarios y datos de demostración.
    Las palabras clave de búsqueda se mantienen como listas JSON en cada
@@ -104,25 +104,24 @@ con Docker Compose en Ubuntu 24.04 Compute Engine. No se ha desplegado infraestr
 
 Produccion usa compose.prod.yml y .env.production (no versionado). El Compose local
 se conserva. render.yaml es historico, no forma parte del procedimiento nuevo.
-VITE_API_URL=https://DOMINIO_API/api/v1 se fija al compilar en Netlify/apps; nunca
-contiene secretos. El build productivo exige una API HTTPS publica configurada.
+La API web usa `/api/v1` en el mismo origen y la URL del backend se configura
+desde la pantalla de conexión; nunca se incorporan secretos al bundle.
 Para builds locales HTTP usar --mode development y, solo para Capacitor local,
 CAPACITOR_ALLOW_CLEARTEXT=true. No ejecutar seeds demo en produccion.
 
-Web y Capacitor usan la misma `VITE_API_URL`; ninguno se conecta directamente a
-PostgreSQL. Django conserva conexiones PostgreSQL y comprueba su estado antes de
-reutilizarlas. La compilacion de produccion se detiene si falta una URL HTTPS valida,
-para evitar publicar clientes sin backend.
+Web y Capacitor comparten la configuración de conexión; ninguno se conecta
+directamente a PostgreSQL. Django conserva conexiones PostgreSQL y comprueba su
+estado antes de reutilizarlas.
 
 ### Publicar el frontend en Vercel
 
 `vercel.json` configura el build Vite, `dist` y el fallback SPA para que las rutas
 internas funcionen al abrirlas o recargarlas directamente. En Vercel, configura
-`VITE_API_URL` en Production y Preview con la URL HTTPS publica del backend,
-terminada en `/api/v1`, y vuelve a desplegar. Vercel solo sirve el frontend; Django
+La URL pública del backend se configura desde la pantalla de conexión en
+Production y Preview, y vuelve a desplegar. Vercel solo sirve el frontend; Django
 y PostgreSQL siguen ejecutandose en el servidor backend. La compilacion falla si
 falta esta variable o apunta a una URL local/no HTTPS.
 
 Agrega el origen HTTPS exacto del proyecto Vercel a `CORS_ALLOWED_ORIGINS` en el
 backend; no habilites comodines para previews. Para una release movil, compila con
-el mismo `VITE_API_URL` y despues ejecuta `npx cap sync android` o `npx cap sync ios`.
+la misma configuración y despues ejecuta `npx cap sync android` o `npx cap sync ios`.

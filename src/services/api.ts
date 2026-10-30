@@ -28,7 +28,6 @@ export const normalizeApiUrl = (url: string): string => {
 };
 
 export const getSavedCustomHost = (): string => {
-  if (import.meta.env.PROD) return "";
   if (typeof window !== "undefined") {
     return localStorage.getItem("serviprox_api_host") || "";
   }
@@ -36,21 +35,13 @@ export const getSavedCustomHost = (): string => {
 };
 
 const resolveApiBaseUrl = (): string => {
-  if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "";
-  }
-  // 1. Configuración explícita en variable de entorno
-  if (import.meta.env.VITE_API_URL) {
-    return normalizeApiUrl(import.meta.env.VITE_API_URL);
-  }
-
-  // 2. Anulación manual en localStorage si se requiere conectar a un servidor específico
+  // Anulación manual en localStorage si se requiere conectar a un servidor específico
   const customHost = getSavedCustomHost();
   if (customHost) {
     return normalizeApiUrl(customHost);
   }
 
-  // 2.5. Última URL funcional comprobada en la sesión actual o anterior
+  // Última URL funcional comprobada en la sesión actual o anterior
   if (typeof window !== "undefined") {
     try {
       const working =
@@ -64,13 +55,13 @@ const resolveApiBaseUrl = (): string => {
     }
   }
 
-  // 3. Dispositivo nativo compilado con Capacitor (Emulador o App instalada)
+  // Dispositivo nativo compilado con Capacitor (Emulador o App instalada)
   if (Capacitor.isNativePlatform()) {
     // Celular físico conectado por Wi-Fi usa la IP local del servidor (192.168.0.6)
     return "http://192.168.0.6:8000/api/v1";
   }
 
-  // 4. Navegador Web y Móvil (DevTunnels, Red Local, Localhost)
+  // Navegador Web y Móvil (DevTunnels, Red Local, Localhost)
   if (typeof window !== "undefined" && window.location?.origin) {
     // En Netlify estático, window.location.origin no ejecuta Python
     if (window.location.hostname.includes("netlify.app")) {
@@ -93,11 +84,11 @@ export let API_BASE_URL = activeBaseUrl;
 export const getApiBaseUrl = (): string => activeBaseUrl;
 
 export const getCandidateBaseUrls = (): string[] => {
-  // Un solo destino cuando VITE_API_URL esta definida: web y movil comparten servidor.
-  if (import.meta.env.PROD || import.meta.env.VITE_API_URL) {
+  if (import.meta.env.PROD) {
     const configured = resolveApiBaseUrl();
     return configured ? [configured] : [];
   }
+
   const candidates: string[] = [];
 
   // 1. Si ya se verificó un host exitoso en esta sesión o guardado, darle máxima prioridad absoluta
@@ -117,10 +108,6 @@ export const getCandidateBaseUrls = (): string[] => {
   const saved = getSavedCustomHost();
   if (saved) {
     candidates.push(normalizeApiUrl(saved));
-  }
-
-  if (import.meta.env.VITE_API_URL) {
-    candidates.push(normalizeApiUrl(import.meta.env.VITE_API_URL));
   }
 
   if (typeof window !== "undefined" && window.location) {
@@ -157,7 +144,6 @@ export const getCandidateBaseUrls = (): string[] => {
 
 export const setWorkingBaseUrl = (url: string) => {
   const normalized = normalizeApiUrl(url);
-  if (import.meta.env.PROD && normalized !== resolveApiBaseUrl()) return;
   activeBaseUrl = normalized;
   API_BASE_URL = activeBaseUrl;
   if (typeof window !== "undefined") {
@@ -506,7 +492,7 @@ export const checkBackendHealth = async (
     return {
       ok: false,
       database: "disconnected",
-      error: "No hay servidores backend configurados. En Netlify debes configurar VITE_API_URL o la URL del backend.",
+      error: "No hay servidores backend configurados. Introduce la URL pública del backend.",
     };
   }
 
@@ -557,9 +543,6 @@ export const saveCustomApiHost = async (
   }
 
   const normalized = normalizeApiUrl(host);
-  if (import.meta.env.PROD && normalized !== resolveApiBaseUrl()) {
-    return { ok: false, message: "La API productiva se configura en VITE_API_URL durante la compilacion." };
-  }
   const health = await checkBackendHealth(normalized);
   if (health.ok) {
     if (typeof window !== "undefined") {

@@ -68,9 +68,9 @@ npm run typecheck
 npm run build
 ```
 
-Antes del build productivo debes configurar
-`VITE_API_URL=https://DOMINIO_API/api/v1`. El build exige una API HTTPS pública;
-las variables `VITE_*` se incorporan al bundle y nunca deben contener secretos.
+El frontend usa `/api/v1` en el mismo origen y permite configurar la URL pública
+del backend desde la pantalla de conexión. La URL del backend no se incorpora al
+bundle ni se guardan secretos en el frontend.
 No necesitas añadir Redis, Celery ni PostGIS para esta arquitectura.
 
 ## 4. Archivos que debes conservar para producción
@@ -110,7 +110,8 @@ No subas el archivo real a Git ni guardes contraseñas en este documento.
 - [ ] Revisar HSTS, workers, zona horaria y radio de búsqueda del ejemplo.
 - [ ] Completar `DEFAULT_FROM_EMAIL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`,
   `EMAIL_HOST_PASSWORD` y `EMAIL_USE_TLS` para el correo real.
-- [ ] Configurar `VITE_API_URL` en el build de Netlify y generar una nueva publicación.
+- [ ] Publicar el backend HTTPS y configurar su URL desde la pantalla de conexión
+  del frontend antes de usar el login en Netlify.
 - [ ] Guardar copia segura del entorno fuera de la VM, separada del backup de datos.
 
 Los volúmenes `postgres_data`, `media_data`, `caddy_data` y `caddy_config` deben
