@@ -137,6 +137,12 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
     return () => window.removeEventListener("serviprox:connection-status", handleStatus);
   }, [error]);
 
+  useEffect(() => {
+    const openServerConfiguration = () => setServerModalOpen(true);
+    window.addEventListener("serviprox:configure-server", openServerConfiguration);
+    return () => window.removeEventListener("serviprox:configure-server", openServerConfiguration);
+  }, []);
+
   const handleRetryConnection = async () => {
     setCheckingConnection(true);
     setConnectionSuccess("");
@@ -508,7 +514,19 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                           "🔄 Reintentar"
                         )}
                       </IonButton>
-                     
+                      <IonButton
+                        fill="outline"
+                        size="small"
+                        style={{
+                          flex: 1,
+                          "--border-radius": "12px",
+                          textTransform: "none",
+                          fontWeight: 800,
+                        }}
+                        onClick={() => setServerModalOpen(true)}
+                      >
+                        Configurar backend
+                      </IonButton>
                     </div>
                   )}
                 </div>

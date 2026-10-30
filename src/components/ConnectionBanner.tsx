@@ -104,29 +104,46 @@ export const ConnectionBanner: React.FC = () => {
       </span>
 
       {isDisconnected && !justReconnected && (
-        <IonButton
-          fill="clear"
-          size="small"
-          onClick={testConnection}
-          disabled={isReconnecting}
-          style={{
-            "--color": "#ffffff",
-            margin: 0,
-            textDecoration: "underline",
-            textTransform: "none",
-            fontWeight: 800,
-            fontSize: "0.82rem",
-          }}
-        >
-          {isReconnecting ? (
-            <>
-              <IonSpinner name="crescent" style={{ width: "14px", height: "14px", marginRight: "4px" }} />
-              Conectando...
-            </>
-          ) : (
-            "Reintentar ahora"
-          )}
-        </IonButton>
+        <>
+          <IonButton
+            fill="clear"
+            size="small"
+            onClick={testConnection}
+            disabled={isReconnecting}
+            style={{
+              "--color": "#ffffff",
+              margin: 0,
+              textDecoration: "underline",
+              textTransform: "none",
+              fontWeight: 800,
+              fontSize: "0.82rem",
+            }}
+          >
+            {isReconnecting ? (
+              <>
+                <IonSpinner name="crescent" style={{ width: "14px", height: "14px", marginRight: "4px" }} />
+                Conectando...
+              </>
+            ) : (
+              "Reintentar ahora"
+            )}
+          </IonButton>
+          <IonButton
+            fill="clear"
+            size="small"
+            onClick={() => window.dispatchEvent(new CustomEvent("serviprox:configure-server"))}
+            style={{
+              "--color": "#ffffff",
+              margin: 0,
+              textDecoration: "underline",
+              textTransform: "none",
+              fontWeight: 800,
+              fontSize: "0.82rem",
+            }}
+          >
+            Configurar backend
+          </IonButton>
+        </>
       )}
     </div>
   );
