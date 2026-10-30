@@ -90,33 +90,6 @@
   padding: 10px 4px;
 }
 
-.splashScreen {
-  position: fixed;
-  inset: 24px;
-  width: min(520px, calc(100% - 48px));
-  height: calc(100dvh - 48px);
-  min-height: 0;
-  z-index: 10;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 12px;
-  margin: auto;
-  padding: env(safe-area-inset-top) 18px env(safe-area-inset-bottom);
-  box-sizing: border-box;
-  background: #ffffff;
-  box-shadow: 0 16px 40px rgba(92, 15, 26, .14);
-  animation: splashReveal 700ms ease both;
-}
-
-.splashScreen ion-img { width: min(290px, 78vw); height: 100px; object-fit: contain; }
-.splashScreen p { margin: -4px 0 22px; color: var(--sp-text-muted); font-size: .95rem; }
-.splashProgress { width: 110px; height: 4px; overflow: hidden; border-radius: 4px; background: #e8eef7; }
-.splashProgress::after { content: ""; display: block; width: 45%; height: 100%; border-radius: inherit; background: var(--sp-accent); animation: splashLoading 8s linear forwards; }
-
-@keyframes splashReveal { from { opacity: 0; } to { opacity: 1; } }
-@keyframes splashLoading { from { transform: translateX(-100%); } to { transform: translateX(230%); } }
-
 .welcomePanel {
   grid-column: 1 / -1;
   width: min(720px, 100%);
@@ -828,12 +801,6 @@
   .welcomeBenefits > div { padding: 0 2px; }
   .welcomeBenefits strong { font-size: .68rem; }
   .welcomeBenefits small { font-size: .62rem; }
-  .splashScreen {
-    inset: 12px;
-    width: calc(100% - 24px);
-    height: calc(100dvh - 24px);
-    min-height: 0;
-  }
 }
 
 .profileSelector {

@@ -106,8 +106,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   const [recoveryMessage, setRecoveryMessage] = useState("");
   const [recoveryError, setRecoveryError] = useState("");
   const [recoverySubmitting, setRecoverySubmitting] = useState(false);
-  const [showLoginForm, setShowLoginForm] = useState(administrative);
-  const [isSplashVisible, setIsSplashVisible] = useState(!administrative);
+  const [showLoginForm, setShowLoginForm] = useState(true);
   const [activeSlide, setActiveSlide] = useState(0);
   const [isAdminLogin, setIsAdminLogin] = useState(administrative);
   const [serverModalOpen, setServerModalOpen] = useState(false);
@@ -121,25 +120,6 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
       setServerConnected(res.ok);
     });
   }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      setIsSplashVisible(false);
-      return;
-    }
-    const hasSeenSplash = sessionStorage.getItem("serviprox_splash_seen");
-    if (hasSeenSplash) {
-      setIsSplashVisible(false);
-      return;
-    }
-    const splashTimer = window.setTimeout(() => {
-      setIsSplashVisible(false);
-      try {
-        sessionStorage.setItem("serviprox_splash_seen", "1");
-      } catch {}
-    }, 350);
-    return () => window.clearTimeout(splashTimer);
-  }, [isAuthenticated]);
 
   useEffect(() => {
     const handleStatus = (e: Event) => {
@@ -332,19 +312,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
     <IonPage className={`${styles.authPage} ${pageClassName}`}>
       <IonContent fullscreen className={styles.authContent}>
         <main className={`${styles.authShell} ${showLoginForm ? styles.loginShell : ""} ${administrative ? `${styles.administrativeLogin} admin-login-shell` : ""}`}>
-          {isSplashVisible ? (
-            <section
-              className={styles.splashScreen}
-              aria-label="Cargando Serviprox"
-              onClick={() => setIsSplashVisible(false)}
-              style={{ cursor: "pointer" }}
-              title="Toca para continuar"
-            >
-              <IonImg src={logo} alt="Serviprox" />
-              <p>Servicios cerca de ti</p>
-              <div className={styles.splashProgress} aria-hidden="true" />
-            </section>
-          ) : !showLoginForm ? (
+          {!showLoginForm ? (
             <section className={`${styles.welcomePanel} ${activeSlide === 2 ? styles.welcomePanelTrust : ""}`} aria-labelledby="welcome-title">
               <div className={styles.welcomeBrand}>
                 <IonImg src={logo} alt="Serviprox" />
