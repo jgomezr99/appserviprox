@@ -60,7 +60,8 @@ no copies esa cadena al repositorio ni a una variable `VITE_*`.
    Netlify, Vercel y Cloudflare pueden compilar el frontend. Si Render asigna
    otro hostname, configura `VITE_API_URL` con la URL correcta en el proveedor
    y vuelve a desplegar.
-3. Si el sitio Netlify productivo no es `https://serviproxweb.netlify.app`,
+3. El blueprint permite `https://serviprouc.netlify.app` y el dominio histórico
+   `https://serviproxweb.netlify.app`. Si el sitio productivo usa otro origen,
    actualiza `CORS_ALLOWED_ORIGINS` en Render con su origen HTTPS exacto y
    vuelve a desplegar el backend. No uses comodines.
 4. Crea un usuario de administración y carga el catálogo real desde la consola

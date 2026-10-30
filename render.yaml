@@ -29,7 +29,7 @@ services:
       - key: SERVIPROX_MEDIA_STORAGE
         value: filesystem
       - key: CORS_ALLOWED_ORIGINS
-        value: https://serviproxweb.netlify.app
+        value: "https://serviprouc.netlify.app,https://serviproxweb.netlify.app"
       - key: CSRF_TRUSTED_ORIGINS
         value: https://serviprox-backend.onrender.com
 
