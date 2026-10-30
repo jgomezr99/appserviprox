@@ -2,9 +2,11 @@
   publish = "dist"
   command = "npm run build"
 
+[build.environment]
+  VITE_API_URL = "https://serviprox-backend.onrender.com/api/v1"
+
 # Regla para Single Page Application (SPA): permite recargar cualquier ruta (/login, /register, etc.) sin error 404 en Netlify
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-

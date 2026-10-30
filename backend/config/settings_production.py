@@ -1,4 +1,4 @@
-"""Perfil exclusivo de la VM."""
+"""Perfil estricto de producción para servicios HTTPS."""
 from urllib.parse import urlsplit
 from django.core.exceptions import ImproperlyConfigured
 from .settings import *  # noqa: F403
@@ -10,7 +10,7 @@ if len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5 or SECRET_KEY.startswith("dj
 if DATABASE_ENGINE != "postgres":
     raise ImproperlyConfigured("Produccion requiere SERVIPROX_DATABASE=postgres.")
 if MEDIA_STORAGE != "filesystem":
-    raise ImproperlyConfigured("La VM usa filesystem y volumen persistente.")
+    raise ImproperlyConfigured("Produccion requiere SERVIPROX_MEDIA_STORAGE=filesystem.")
 if not os.getenv("DJANGO_ALLOWED_HOSTS") or any(
     host == "*" or host.startswith(".") or "/" in host for host in ALLOWED_HOSTS
 ):
