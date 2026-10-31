@@ -171,7 +171,7 @@ setupIonicReact();
 
 const AppSplitPane: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
-    <IonSplitPane contentId="main" when="false">
+    <IonSplitPane contentId="main" when={false}>
       {children}
     </IonSplitPane>
   );

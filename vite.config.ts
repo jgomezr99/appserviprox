@@ -1,6 +1,5 @@
 /// <reference types="vitest" />
 
-import legacy from '@vitejs/plugin-legacy'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
@@ -26,7 +25,6 @@ export default defineConfig({
       },
     },
     react(),
-    legacy(),
   ],
   server: {
     host: true,
@@ -61,11 +59,14 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('@ionic') || id.includes('ionicons')) {
-              return 'vendor-ionic';
-            }
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'vendor-react';
+            if (
+              id.includes('@ionic') ||
+              id.includes('ionicons') ||
+              id.includes('react') ||
+              id.includes('react-dom') ||
+              id.includes('react-router')
+            ) {
+              return 'vendor-core';
             }
             if (id.includes('leaflet')) {
               return 'vendor-leaflet';
