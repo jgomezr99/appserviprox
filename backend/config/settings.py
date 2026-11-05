@@ -1,6 +1,7 @@
 """Configuracion de Django para el proyecto Serviprox."""
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlsplit
 import os
 
 from django.core.exceptions import ImproperlyConfigured
@@ -26,6 +27,29 @@ def env_int(name: str, default: int = 0) -> int:
         return int(os.getenv(name, str(default)))
     except (TypeError, ValueError):
         return default
+
+
+def parse_postgres_database_url(database_url: str) -> tuple[dict[str, str], str, str | None]:
+    """Extract PostgreSQL settings from a managed-service connection URL."""
+    parsed = urlsplit(database_url)
+    if parsed.scheme not in {"postgres", "postgresql"}:
+        raise ImproperlyConfigured(
+            "DATABASE_URL debe empezar por postgres:// o postgresql://."
+        )
+
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ImproperlyConfigured("DATABASE_URL contiene un puerto invalido.") from exc
+
+    credentials = {
+        "POSTGRES_DB": unquote(parsed.path.lstrip("/")),
+        "POSTGRES_USER": unquote(parsed.username or ""),
+        "POSTGRES_PASSWORD": unquote(parsed.password or ""),
+        "POSTGRES_HOST": parsed.hostname or "",
+    }
+    sslmode = parse_qs(parsed.query).get("sslmode", [None])[0]
+    return credentials, str(port or 5432), sslmode
 
 
 DEBUG = env_bool("DJANGO_DEBUG", False)
@@ -111,9 +135,12 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASE_ENGINE = os.getenv(
-    "SERVIPROX_DATABASE", "sqlite" if DEBUG else ""
-).strip().lower()
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+DATABASE_ENGINE = (
+    "postgres"
+    if DATABASE_URL
+    else os.getenv("SERVIPROX_DATABASE", "sqlite" if DEBUG else "").strip().lower()
+)
 if not DATABASE_ENGINE:
     raise ImproperlyConfigured("Configura SERVIPROX_DATABASE para el entorno.")
 
@@ -130,12 +157,20 @@ WOMPI_INTEGRITY_SECRET = os.getenv("WOMPI_INTEGRITY_SECRET", "").strip()
 FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
 
 if DATABASE_ENGINE == "postgres":
-    postgres_credentials = {
-        "POSTGRES_DB": os.getenv("POSTGRES_DB"),
-        "POSTGRES_USER": os.getenv("POSTGRES_USER"),
-        "POSTGRES_PASSWORD": os.getenv("POSTGRES_PASSWORD"),
-        "POSTGRES_HOST": os.getenv("POSTGRES_HOST"),
-    }
+    if DATABASE_URL:
+        postgres_credentials, postgres_port, postgres_sslmode = (
+            parse_postgres_database_url(DATABASE_URL)
+        )
+    else:
+        postgres_credentials = {
+            "POSTGRES_DB": os.getenv("POSTGRES_DB"),
+            "POSTGRES_USER": os.getenv("POSTGRES_USER"),
+            "POSTGRES_PASSWORD": os.getenv("POSTGRES_PASSWORD"),
+            "POSTGRES_HOST": os.getenv("POSTGRES_HOST"),
+        }
+        postgres_port = os.getenv("POSTGRES_PORT", "5432")
+        postgres_sslmode = os.getenv("POSTGRES_SSLMODE")
+
     missing_postgres_credentials = [
         name for name, value in postgres_credentials.items() if not value
     ]
@@ -144,9 +179,7 @@ if DATABASE_ENGINE == "postgres":
             "Faltan variables de PostgreSQL: "
             + ", ".join(missing_postgres_credentials)
         )
-
     postgres_options = {}
-    postgres_sslmode = os.getenv("POSTGRES_SSLMODE")
     if postgres_sslmode:
         postgres_options["sslmode"] = postgres_sslmode
 
@@ -157,7 +190,7 @@ if DATABASE_ENGINE == "postgres":
             "USER": postgres_credentials["POSTGRES_USER"],
             "PASSWORD": postgres_credentials["POSTGRES_PASSWORD"],
             "HOST": postgres_credentials["POSTGRES_HOST"],
-            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "PORT": postgres_port,
             "CONN_MAX_AGE": 60,
             "CONN_HEALTH_CHECKS": True,
         }
