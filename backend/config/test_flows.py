@@ -87,7 +87,7 @@ class DeploymentFlowTests(TestCase):
         profile = self.profiles[0]
         request = ServiceRequest.objects.create(client=self.client_user, household=self.household,
             selected_category=self.category, selected_service=self.service, professional=profile,
-            description="Fuga de agua")
+            description="Fuga de agua", status=ServiceRequest.Status.ACCEPTED)
         order = Order.objects.create(service_request=request, client=self.client_user, professional=profile,
             status=Order.Status.IN_PROGRESS)
         buffer = io.BytesIO()
@@ -96,6 +96,7 @@ class DeploymentFlowTests(TestCase):
         self.api.force_authenticate(user=profile.user)
         response = self.api.post(f"/api/v1/orders/{order.id}/evidence/", {"image": upload}, format="multipart")
         self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(len(response.data["work_evidence"]), 1, response.data)
         image_url = urlsplit(response.data["work_evidence"][0]["image_url"]).path
         self.assertTrue(image_url.startswith(f"/api/v1/orders/{order.id}/evidence/"))
         for user in [profile.user, self.client_user]:
@@ -121,3 +122,32 @@ class DeploymentFlowTests(TestCase):
         self.assertEqual(review.status_code, 201, review.data)
         profile.refresh_from_db()
         self.assertEqual(profile.rating_avg, 5)
+
+    def test_each_evidence_upload_returns_all_saved_photos_immediately(self):
+        profile = self.profiles[0]
+        request = ServiceRequest.objects.create(
+            client=self.client_user, household=self.household,
+            selected_category=self.category, selected_service=self.service,
+            professional=profile, status=ServiceRequest.Status.ACCEPTED,
+        )
+        order = Order.objects.create(
+            service_request=request, client=self.client_user,
+            professional=profile, status=Order.Status.IN_PROGRESS,
+        )
+        buffer = io.BytesIO()
+        Image.new("RGB", (2, 2)).save(buffer, format="PNG")
+        evidence_ids = set()
+        self.api.force_authenticate(user=profile.user)
+        for index in range(2):
+            upload = SimpleUploadedFile(f"evidence-{index}.png", buffer.getvalue(), content_type="image/png")
+            response = self.api.post(f"/api/v1/orders/{order.id}/evidence/", {"image": upload}, format="multipart")
+            self.assertEqual(response.status_code, 201, response.data)
+            returned_ids = {item["id"] for item in response.data["work_evidence"]}
+            self.assertEqual(len(returned_ids), index + 1, response.data)
+            self.assertTrue(evidence_ids.issubset(returned_ids))
+            evidence_ids = returned_ids
+        self.api.force_authenticate(user=self.client_user)
+        retrieved = self.api.get(f"/api/v1/orders/{order.id}/")
+        self.assertEqual(retrieved.status_code, 200, retrieved.data)
+        self.assertEqual({item["id"] for item in retrieved.data["work_evidence"]}, evidence_ids)
+        self.assertEqual(set(order.work_evidence.values_list("id", flat=True)), evidence_ids)

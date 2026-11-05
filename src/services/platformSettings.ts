@@ -309,14 +309,18 @@ export const platformSettingsService = {
       };
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(next));
-      } catch {}
+      } catch {
+        /* sin almacenamiento local disponible */
+      }
       window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: next }));
     } else if (action === "restore_backup") {
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(DEFAULT_SETTINGS));
         applyAppearance(DEFAULT_SETTINGS.appearance);
         window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: DEFAULT_SETTINGS }));
-      } catch {}
+      } catch {
+        /* sin almacenamiento local disponible */
+      }
     }
 
     try {
@@ -350,19 +354,41 @@ export const platformSettingsService = {
   },
 };
 
-/** Parámetros públicos de la plataforma; se refrescan al montar y cada 60 s. */
+let activeSubscribers = 0;
+let pollTimer: number | undefined;
+let inflight: Promise<unknown> | undefined;
+
+const loadShared = () => {
+  if (!inflight) {
+    inflight = platformSettingsService
+      .fetchPublic()
+      .catch(() => undefined)
+      .finally(() => {
+        inflight = undefined;
+      });
+  }
+  return inflight;
+};
+
+/** Parámetros públicos de la plataforma; una sola petición compartida al montar y cada 60 s. */
 export const usePlatformSettings = (): PlatformSettings => {
   const [settings, setSettings] = useState<PlatformSettings>(readCache);
 
   useEffect(() => {
     const onChange = (e: Event) => setSettings((e as CustomEvent).detail);
     window.addEventListener(CHANGE_EVENT, onChange);
-    const load = () => platformSettingsService.fetchPublic().catch(() => undefined);
-    load();
-    const timer = window.setInterval(load, 60000);
+    activeSubscribers += 1;
+    if (activeSubscribers === 1) {
+      void loadShared();
+      pollTimer = window.setInterval(() => void loadShared(), 60000);
+    }
     return () => {
       window.removeEventListener(CHANGE_EVENT, onChange);
-      window.clearInterval(timer);
+      activeSubscribers -= 1;
+      if (activeSubscribers === 0 && pollTimer !== undefined) {
+        window.clearInterval(pollTimer);
+        pollTimer = undefined;
+      }
     };
   }, []);
 
@@ -380,7 +406,6 @@ const GLOBAL_FEATURE: Record<HomeRole, Record<string, keyof PlatformFeatures>> =
     pqr: "pqr",
     store: "products",
     publish_store: "products",
-    benefits: "benefits",
   },
   professional: {
     requests: "hirings",
@@ -397,7 +422,7 @@ const GLOBAL_FEATURE: Record<HomeRole, Record<string, keyof PlatformFeatures>> =
 };
 
 const ROLE_KEYS: Record<HomeRole, string[]> = {
-  client: ["map", "services", "requests", "homes", "favorites", "pqr", "store", "publish_store", "benefits"],
+  client: ["map", "services", "requests", "homes", "favorites", "pqr", "store", "publish_store", "profile"],
   professional: [
     "profile_status",
     "profile",

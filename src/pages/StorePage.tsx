@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   IonButtons,
   IonButton,
@@ -18,12 +18,13 @@ import {
   searchOutline,
   alertCircleOutline,
   arrowBackOutline,
-  pricetagOutline,
   chatbubbleEllipsesOutline,
   closeOutline,
-  checkmarkCircleOutline,
+  imageOutline,
+  trashOutline,
 } from "ionicons/icons";
 import { useAuth } from "../context/AuthContext";
+import { api } from "../services/api";
 import { usePlatformSettings } from "../services/platformSettings";
 import { useHistory, useLocation } from "react-router-dom";
 import "./RolePages.css";
@@ -40,7 +41,85 @@ interface StoreProduct {
   city: string;
   image: string;
   date: string;
+  isOwner?: boolean;
 }
+
+interface ApiStoreProduct {
+  id: number;
+  title: string;
+  category: string;
+  price: number;
+  description: string;
+  seller_name: string;
+  seller_role: StoreProduct["sellerRole"];
+  phone: string;
+  city: string;
+  image_url: string;
+  is_owner: boolean;
+  created_at: string;
+}
+
+const PLACEHOLDER_IMAGE =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='400' height='240'><rect width='100%' height='100%' fill='#f1f5f9'/><text x='50%' y='50%' fill='#94a3b8' font-family='sans-serif' font-size='18' text-anchor='middle' dominant-baseline='middle'>Sin imagen</text></svg>"
+  );
+
+const fromApiProduct = (item: ApiStoreProduct): StoreProduct => ({
+  id: item.id,
+  title: item.title,
+  category: item.category,
+  price: item.price,
+  description: item.description,
+  sellerName: item.seller_name,
+  sellerRole: item.seller_role,
+  phone: item.phone,
+  city: item.city,
+  image: item.image_url || PLACEHOLDER_IMAGE,
+  date: new Date(item.created_at).toLocaleDateString("es-CO"),
+  isOwner: item.is_owner,
+});
+
+const PROFESSIONAL_CATEGORIES = ["Herramientas", "Seguridad y EPP", "Materiales", "Repuestos", "Equipos"];
+const CLIENT_CATEGORIES = ["Tecnología", "Muebles", "Ropa", "Electrodomésticos", "Hogar y decoración", "Otros"];
+
+const MAX_IMAGE_SIDE = 1280;
+
+// Reduce el tamaño de las fotos del celular antes de subirlas.
+const compressImage = (file: File): Promise<File> =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(file);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob || blob.size >= file.size) {
+            resolve(file);
+            return;
+          }
+          resolve(new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.85
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("invalid image"));
+    };
+    img.src = url;
+  });
 
 const INITIAL_STORE_PRODUCTS: StoreProduct[] = [
   {
@@ -103,21 +182,27 @@ export const StorePage: React.FC = () => {
   const platform = usePlatformSettings();
   const productsEnabled = platform.features.products;
 
-  const [products, setProducts] = useState<StoreProduct[]>(() => {
-    try {
-      const saved = localStorage.getItem("serviprox_store_products");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return INITIAL_STORE_PRODUCTS;
-  });
+  const [serverProducts, setServerProducts] = useState<StoreProduct[]>([]);
+  const products = [...serverProducts, ...INITIAL_STORE_PRODUCTS];
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todas");
   const [modalOpen, setModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [publishing, setPublishing] = useState(false);
+
+  const loadProducts = useCallback(async () => {
+    try {
+      const data = await api.get<ApiStoreProduct[]>("store/products/");
+      setServerProducts(data.map(fromApiProduct));
+    } catch {
+      setToastMessage("No pudimos cargar las publicaciones de la tienda. Verifica la conexión con el servidor.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadProducts();
+  }, [loadProducts]);
 
   const location = useLocation();
   useEffect(() => {
@@ -126,55 +211,99 @@ export const StorePage: React.FC = () => {
     }
   }, [location.search]);
 
+  // Clientes publican tecnología, muebles, ropa, etc.; profesionales solo herramientas y materiales de trabajo.
+  const publishCategories =
+    user?.role === "professional"
+      ? PROFESSIONAL_CATEGORIES
+      : user?.role === "staff"
+      ? [...PROFESSIONAL_CATEGORIES, ...CLIENT_CATEGORIES]
+      : CLIENT_CATEGORIES;
+
   // Formulario nuevo producto
   const [newTitle, setNewTitle] = useState("");
-  const [newCategory, setNewCategory] = useState("Herramientas");
+  const [newCategory, setNewCategory] = useState("");
+  const selectedPublishCategory = publishCategories.includes(newCategory) ? newCategory : publishCategories[0];
   const [newPrice, setNewPrice] = useState(150000);
   const [newDescription, setNewDescription] = useState("");
   const [newPhone, setNewPhone] = useState("+57 310 123 4567");
   const [newCity, setNewCity] = useState("Bogotá");
+  const [newImage, setNewImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!newImage) {
+      setImagePreview("");
+      return;
+    }
+    const url = URL.createObjectURL(newImage);
+    setImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [newImage]);
+
+  const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setToastMessage("Selecciona un archivo de imagen (JPG, PNG o WEBP).");
+      return;
+    }
+    try {
+      setNewImage(await compressImage(file));
+    } catch {
+      setToastMessage("No pudimos procesar esa imagen. Prueba con otra.");
+    }
+  };
+
+  const closePublishModal = () => {
+    setModalOpen(false);
+    setNewImage(null);
+  };
+
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (publishing) return;
     if (!newTitle.trim()) {
       setToastMessage("Por favor ingresa el título del producto.");
       return;
     }
+    if (!user) {
+      setToastMessage("Inicia sesión para publicar en la tienda.");
+      return;
+    }
 
-    const created: StoreProduct = {
-      id: `prod-${Date.now()}`,
-      title: newTitle.trim(),
-      category: newCategory,
-      price: Number(newPrice) || 10000,
-      description: newDescription.trim() || "Producto garantizado por el contratista.",
-      sellerName:
-        user?.role === "staff"
-          ? "Administrador Serviprox"
-          : user?.first_name
-          ? `${user.first_name} ${user.last_name || ""}`
-          : user?.email || "Contratista Serviprox",
-      sellerRole:
-        user?.role === "staff"
-          ? "Administrador"
-          : user?.role === "professional"
-          ? "Contratista"
-          : "Cliente",
-      phone: newPhone.trim(),
-      city: newCity.trim(),
-      image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&auto=format&fit=crop&q=80",
-      date: "Hoy",
-    };
+    const form = new FormData();
+    form.append("title", newTitle.trim());
+    form.append("category", selectedPublishCategory);
+    form.append("price", String(Math.round(Number(newPrice)) || 0));
+    form.append("description", newDescription.trim() || "Producto garantizado por el contratista.");
+    form.append("phone", newPhone.trim());
+    form.append("city", newCity.trim());
+    if (newImage) form.append("image", newImage);
 
-    const updated = [created, ...products];
-    setProducts(updated);
+    setPublishing(true);
     try {
-      localStorage.setItem("serviprox_store_products", JSON.stringify(updated));
-    } catch {}
+      const created = await api.post<ApiStoreProduct>("store/products/", form);
+      setServerProducts((current) => [fromApiProduct(created), ...current]);
+      closePublishModal();
+      setNewTitle("");
+      setNewDescription("");
+      setToastMessage("¡Producto publicado exitosamente en la tienda!");
+    } catch (err) {
+      setToastMessage(err instanceof Error && err.message ? err.message : "No pudimos publicar el producto.");
+    } finally {
+      setPublishing(false);
+    }
+  };
 
-    setModalOpen(false);
-    setNewTitle("");
-    setNewDescription("");
-    setToastMessage("¡Producto publicado exitosamente en la tienda!");
+  const handleDeleteProduct = async (product: StoreProduct) => {
+    try {
+      await api.delete(`store/products/${product.id}/`);
+      setServerProducts((current) => current.filter((item) => item.id !== product.id));
+      setToastMessage("Publicación eliminada.");
+    } catch {
+      setToastMessage("No pudimos eliminar la publicación.");
+    }
   };
 
   // Si la tienda está desactivada por el administrador, bloquear vista
@@ -238,9 +367,12 @@ export const StorePage: React.FC = () => {
     );
   }
 
-  const categories = ["Todas", "Herramientas", "Seguridad y EPP", "Materiales", "Repuestos", "Equipos"];
+  const isClientStore = user?.role !== "professional" && user?.role !== "staff";
+  const visibleCategories = publishCategories;
+  const categories = ["Todas", ...visibleCategories];
 
   const filtered = products.filter((p) => {
+    if (!visibleCategories.includes(p.category)) return false;
     const matchCat = selectedCategory === "Todas" || p.category === selectedCategory;
     const matchSearch =
       !search ||
@@ -257,7 +389,7 @@ export const StorePage: React.FC = () => {
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle>🛒 Tienda de Productos y Equipos</IonTitle>
+          <IonTitle>{isClientStore ? "🛒 Tienda de Productos" : "🛒 Tienda de Productos y Equipos"}</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -275,14 +407,37 @@ export const StorePage: React.FC = () => {
             }}
           >
             <div>
+              <button
+                type="button"
+                onClick={() => history.push(user?.role === "professional" ? "/profesional/inicio" : "/cliente/inicio")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "#ffffff",
+                  color: "#334155",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "10px",
+                  padding: "6px 12px",
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  cursor: "pointer",
+                  marginBottom: "10px",
+                }}
+              >
+                <IonIcon icon={arrowBackOutline} /> Volver
+              </button>
+              <br />
               <span className="sp-role-kicker" style={{ color: "#2563eb", fontWeight: 700 }}>
-                MERCADO DE HERRAMIENTAS Y SUMINISTROS
+                {isClientStore ? "MERCADO DE ARTÍCULOS PARA EL HOGAR Y MÁS" : "MERCADO DE HERRAMIENTAS Y SUMINISTROS"}
               </span>
               <h1 style={{ fontSize: "1.8rem", fontWeight: 800, color: "#0f172a", margin: "4px 0 6px" }}>
                 Tienda Oficial Serviprox
               </h1>
               <p style={{ color: "#64748b", margin: 0, fontSize: "0.95rem" }}>
-                Encuentra y publica herramientas, materiales y equipamiento para servicios y proyectos de obra.
+                {isClientStore
+                  ? "Compra y publica tecnología, muebles, ropa, electrodomésticos y más artículos."
+                  : "Encuentra y publica herramientas, materiales y equipamiento para servicios y proyectos de obra."}
               </p>
             </div>
 
@@ -326,7 +481,7 @@ export const StorePage: React.FC = () => {
             <IonIcon icon={searchOutline} style={{ color: "#94a3b8", fontSize: "1.2rem", marginRight: "10px" }} />
             <input
               type="text"
-              placeholder="Buscar taladros, escaleras, pintura, cables, EPP..."
+              placeholder={isClientStore ? "Buscar celulares, muebles, ropa, electrodomésticos..." : "Buscar taladros, escaleras, pintura, cables, EPP..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -505,6 +660,30 @@ export const StorePage: React.FC = () => {
                       >
                         <IonIcon icon={chatbubbleEllipsesOutline} /> Contactar Vendedor
                       </button>
+                      {p.isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteProduct(p)}
+                          style={{
+                            width: "100%",
+                            marginTop: "8px",
+                            padding: "8px",
+                            borderRadius: "10px",
+                            border: "1px solid #fecaca",
+                            background: "#fef2f2",
+                            color: "#dc2626",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <IonIcon icon={trashOutline} /> Eliminar mi publicación
+                        </button>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -514,7 +693,7 @@ export const StorePage: React.FC = () => {
         </main>
 
         {/* Modal: Publicar Producto */}
-        <IonModal isOpen={modalOpen} onDidDismiss={() => setModalOpen(false)}>
+        <IonModal isOpen={modalOpen} onDidDismiss={closePublishModal}>
           <div style={{ padding: "24px", maxWidth: "540px", margin: "0 auto", background: "#ffffff", height: "100%", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
               <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
@@ -522,7 +701,7 @@ export const StorePage: React.FC = () => {
               </h2>
               <button
                 type="button"
-                onClick={() => setModalOpen(false)}
+                onClick={closePublishModal}
                 style={{ background: "none", border: "none", fontSize: "1.4rem", color: "#64748b", cursor: "pointer" }}
               >
                 <IonIcon icon={closeOutline} />
@@ -550,15 +729,15 @@ export const StorePage: React.FC = () => {
                     Categoría
                   </label>
                   <select
-                    value={newCategory}
+                    value={selectedPublishCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
                     style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "#ffffff" }}
                   >
-                    <option value="Herramientas">Herramientas</option>
-                    <option value="Seguridad y EPP">Seguridad y EPP</option>
-                    <option value="Materiales">Materiales</option>
-                    <option value="Repuestos">Repuestos</option>
-                    <option value="Equipos">Equipos</option>
+                    {publishCategories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -614,8 +793,57 @@ export const StorePage: React.FC = () => {
                 </div>
               </div>
 
+              <div style={{ marginBottom: "20px" }}>
+                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
+                  Imagen del producto
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    minHeight: "140px",
+                    border: "2px dashed #cbd5e1",
+                    borderRadius: "12px",
+                    cursor: "pointer",
+                    color: "#64748b",
+                    fontSize: "0.85rem",
+                    overflow: "hidden",
+                    background: "#f8fafc",
+                  }}
+                >
+                  {imagePreview ? (
+                    <img src={imagePreview} alt="Vista previa" style={{ width: "100%", maxHeight: "220px", objectFit: "cover" }} />
+                  ) : (
+                    <>
+                      <IonIcon icon={imageOutline} style={{ fontSize: "2rem" }} />
+                      Toca para subir una foto (JPG, PNG o WEBP)
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    style={{ display: "none" }}
+                    aria-label="Subir imagen del producto"
+                  />
+                </label>
+                {newImage && (
+                  <button
+                    type="button"
+                    onClick={() => setNewImage(null)}
+                    style={{ marginTop: "6px", background: "none", border: "none", color: "#dc2626", fontWeight: 700, cursor: "pointer", fontSize: "0.8rem" }}
+                  >
+                    Quitar imagen
+                  </button>
+                )}
+              </div>
+
               <button
                 type="submit"
+                disabled={publishing}
                 style={{
                   width: "100%",
                   padding: "12px",
@@ -625,10 +853,29 @@ export const StorePage: React.FC = () => {
                   color: "#ffffff",
                   fontWeight: 800,
                   fontSize: "0.95rem",
+                  cursor: publishing ? "wait" : "pointer",
+                  opacity: publishing ? 0.7 : 1,
+                  marginBottom: "10px",
+                }}
+              >
+                {publishing ? "Publicando..." : "Publicar Producto Ahora"}
+              </button>
+              <button
+                type="button"
+                onClick={closePublishModal}
+                style={{
+                  width: "100%",
+                  padding: "11px",
+                  borderRadius: "12px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#334155",
+                  fontWeight: 700,
+                  fontSize: "0.9rem",
                   cursor: "pointer",
                 }}
               >
-                Publicar Producto Ahora
+                Cancelar
               </button>
             </form>
           </div>

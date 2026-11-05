@@ -168,6 +168,8 @@ class ServiceRequestCreateSerializer(serializers.ModelSerializer):
                 attrs["selected_category"] = selected_service.category
 
         if professional:
+            if professional.user_id == user.id:
+                raise serializers.ValidationError({"professional": "No puedes solicitar un servicio a tu propio perfil profesional."})
             if not selected_service:
                 raise serializers.ValidationError(
                     {"selected_service": "Selecciona el servicio concreto."}

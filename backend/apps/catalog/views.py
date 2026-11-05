@@ -1,11 +1,20 @@
-from django.db.models import Count, Prefetch, Q
-from rest_framework import viewsets
+import mimetypes
 
-from .models import Service, ServiceCategory
+from django.db.models import Count, Prefetch, Q
+from django.http import FileResponse, Http404
+from rest_framework import mixins, permissions, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+
+from apps.accounts.platform_guard import require_feature
+
+from .models import Service, ServiceCategory, StoreProduct
 from .serializers import (
     ServiceCategoryListSerializer,
     ServiceCategorySerializer,
     ServiceSerializer,
+    StoreProductSerializer,
 )
 
 
@@ -45,3 +54,55 @@ class ServiceViewSet(viewsets.ReadOnlyModelViewSet):
         .select_related("category")
         .order_by("category__sort_order", "name", "id")
     )
+
+
+class StoreProductViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Tienda: lectura publica; publicar requiere sesion; borrar solo el autor o staff."""
+
+    serializer_class = StoreProductSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    pagination_class = None
+    filterset_fields = ["category"]
+    search_fields = ["title", "description", "seller_name"]
+    queryset = StoreProduct.objects.filter(is_active=True)
+
+    def get_permissions(self):
+        if self.action in {"list", "retrieve", "image"}:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        require_feature("products", "La tienda de productos está deshabilitada temporalmente.")
+        user = self.request.user
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        role = getattr(user, "role", "")
+        seller_role = {"staff": "Administrador", "professional": "Contratista"}.get(role, "Cliente")
+        serializer.save(
+            owner=user,
+            seller_name="Administrador Serviprox" if role == "staff" else (full_name or user.email),
+            seller_role=seller_role,
+        )
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if instance.owner_id != user.id and getattr(user, "role", "") != "staff":
+            raise PermissionDenied("Solo el autor puede eliminar esta publicación.")
+        if instance.image:
+            instance.image.delete(save=False)
+        instance.delete()
+
+    @action(detail=True, methods=["get"], url_path="image")
+    def image(self, request, pk=None):
+        product = self.get_object()
+        if not product.image:
+            raise Http404
+        content_type = mimetypes.guess_type(product.image.name)[0] or "application/octet-stream"
+        response = FileResponse(product.image.open("rb"), content_type=content_type)
+        response["Cache-Control"] = "public, max-age=86400"
+        return response

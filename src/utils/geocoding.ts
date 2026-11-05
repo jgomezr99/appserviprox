@@ -259,7 +259,7 @@ export async function fetchRealRoute(
           ([lon, lat]: [number, number]) => [Number(lat), Number(lon)]
         );
         const distanceKm = Number((route.distance / 1000).toFixed(1));
-        const durationMinutes = Math.max(5, Math.round(route.duration / 60) + 3);
+        const durationMinutes = Math.max(0, Math.round(route.duration / 60));
         return {
           waypoints: coordinates,
           distanceKm,

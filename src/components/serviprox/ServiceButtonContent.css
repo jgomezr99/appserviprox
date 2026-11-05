@@ -1,0 +1,5 @@
+.sp-service-button-content { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; max-width: 100%; }
+.sp-service-button-symbol, .sp-service-button-symbol > span { display: inline-flex; align-items: center; flex-shrink: 0; }
+.sp-service-button-symbol > [hidden] { display: none; }
+.sp-service-button-symbol :is(ion-icon, ion-spinner) { width: 20px; height: 20px; color: inherit; }
+.sp-service-button-label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }

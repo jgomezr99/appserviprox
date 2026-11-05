@@ -17,10 +17,13 @@ import { useLocation } from "react-router-dom";
 import { cardOutline, checkmarkCircleOutline, refreshOutline } from "ionicons/icons";
 import { useAuth } from "../../context/AuthContext";
 import { orderService } from "../../services/serviprox";
+import { apiMessage } from "../../utils/workflow";
 import type { Order } from "../../types/serviprox";
 import "../../pages/RolePages.css";
 
 import "./historiadepago.css";
+import ServiceProgress from "../serviprox/ServiceProgress";
+import ServiceButtonContent from "../serviprox/ServiceButtonContent";
 
 const formatMoney = (value: string | null) => {
   if (!value) return "Monto por definir";
@@ -99,7 +102,7 @@ const PaymentPage: React.FC = () => {
       }
       window.location.href = checkout_url;
     } catch (err) {
-      setToast(err instanceof Error ? err.message : "No pudimos iniciar el pago.");
+      setToast(apiMessage(err, "No pudimos iniciar el pago."));
       setProcessing(false);
     }
   };
@@ -136,7 +139,7 @@ const PaymentPage: React.FC = () => {
       <div className="sp-request-meta">
         <span>
           <IonIcon icon={cardOutline} />
-          {formatMoney(order.final_price || order.estimate_max || order.estimate_min)}
+          {formatMoney(order.final_price)}
         </span>
         <span>
           <IonIcon icon={checkmarkCircleOutline} />
@@ -145,20 +148,19 @@ const PaymentPage: React.FC = () => {
       </div>
       {order.payment_status === "pending" ? (
         <div className="sp-payment-demo">
+          {!order.final_price && <p>El profesional debe registrar el valor acordado antes de iniciar el pago.</p>}
           <IonButton
             className="sp-primary-button"
             onClick={payWithWompi}
             disabled={
               processing ||
               selectedOrder?.id !== order.id ||
-              !(order.final_price || order.estimate_max || order.estimate_min)
+              !order.final_price
+              || ["requested", "cancelled"].includes(order.status)
             }
           >
-            {processing && selectedOrder?.id === order.id ? (
-              <IonSpinner name="crescent" />
-            ) : (
-              "Pagar con Wompi"
-            )}
+            <ServiceButtonContent busy={processing && selectedOrder?.id === order.id} icon={cardOutline}
+              label="Pagar con Wompi" busyLabel="Procesando..." />
           </IonButton>
           {import.meta.env.DEV && (
             <>
@@ -178,17 +180,18 @@ const PaymentPage: React.FC = () => {
           Referencia: {order.payment_reference || "Confirmación registrada"}
         </p>
       )}
+      <IonButton fill="outline" routerLink={`/seguimiento/${order.id}`}>Volver al seguimiento</IonButton>
     </article>
   );
 
   return (
-    <IonPage>
+    <IonPage className="sp-service-flow">
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle>Pago de orden</IonTitle>
+          <IonTitle>Pago del servicio</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -196,8 +199,8 @@ const PaymentPage: React.FC = () => {
         <main className="sp-role-page">
           <header className="sp-role-header">
             <span className="sp-role-kicker">CLIENTE</span>
-            <h1>Pago de orden</h1>
-            <p>El pago se registra sobre la orden aceptada, separado del estado de la solicitud.</p>
+            <h1>Pago del servicio</h1>
+            <p>Consulta el valor acordado con el profesional y el estado del pago de tu servicio.</p>
           </header>
 
           {user?.role !== "client" ? (
@@ -219,6 +222,7 @@ const PaymentPage: React.FC = () => {
             </section>
           ) : selectedOrder ? (
             <section className="sp-payment-list">
+              <ServiceProgress status={selectedOrder.status} />
               {orders.map(renderOrder)}
             </section>
           ) : (

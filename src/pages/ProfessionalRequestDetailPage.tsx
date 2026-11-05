@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   IonAlert,
   IonBadge,
@@ -24,8 +24,11 @@ import {
   personCircleOutline,
 } from "ionicons/icons";
 import { serviceRequestService } from "../services/serviprox";
+import { useLivePage } from "../hooks/useLivePage";
+import { apiMessage, isTerminal, trackingPath } from "../utils/workflow";
 import type { ServiceRequest, ServiceRequestStatus } from "../types/serviprox";
 import RequestImageGallery from "../components/serviprox/RequestImageGallery";
+import ServiceProgress from "../components/serviprox/ServiceProgress";
 import "./RolePages.css";
 import "../components/misreservas/misreserva.css";
 
@@ -63,8 +66,8 @@ const clientName = (request: ServiceRequest) =>
   "Cliente";
 
 const statusWithPayment = (request: ServiceRequest) => {
-  if (request.status !== "accepted" || !request.order) return request.status_label;
-  return `${request.status_label} · ${request.order.payment_status_label}`;
+  if (!request.order) return request.status_label;
+  return `${request.order.status_label} · ${request.order.payment_status_label}`;
 };
 
 const ProfessionalRequestDetailPage: React.FC = () => {
@@ -76,42 +79,55 @@ const ProfessionalRequestDetailPage: React.FC = () => {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const confirmationRef = useRef<PendingAction>(null);
+  const processingRef = useRef(false);
 
-  const loadRequest = async () => {
-    setLoading(true);
-    setError("");
+  const openConfirmation = (action: Exclude<PendingAction, null>) => {
+    if (processingRef.current) return;
+    confirmationRef.current = action;
+    setPendingAction(action);
+  };
+  const closeConfirmation = (action: Exclude<PendingAction, null>) => {
+    if (confirmationRef.current !== action) return;
+    confirmationRef.current = null;
+    setPendingAction(null);
+  };
+
+  const loadRequest = useCallback(async () => {
+    if (processing) return;
     try {
       setRequest(await serviceRequestService.get(id));
-    } catch {
-      setError("No pudimos cargar esta solicitud.");
+      setError("");
+    } catch (failure) {
+      setError(apiMessage(failure, "No pudimos cargar esta solicitud."));
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, processing]);
+  useLivePage(loadRequest, 15000);
 
-  useEffect(() => {
-    void loadRequest();
-  }, [id]);
+  const runAction = async (action: Exclude<PendingAction, null>) => {
+    if (confirmationRef.current !== action || processingRef.current) return;
 
-  const runAction = async () => {
-    if (!pendingAction || processing) return;
-
+    processingRef.current = true;
+    confirmationRef.current = null;
+    setPendingAction(null);
     setProcessing(true);
     setError("");
     try {
       const nextRequest =
-        pendingAction === "accept"
+        action === "accept"
           ? await serviceRequestService.accept(id)
           : await serviceRequestService.reject(id);
       setRequest(nextRequest);
-      setToast(pendingAction === "accept" ? "Solicitud aceptada" : "Solicitud rechazada");
-      if (pendingAction === "accept" && nextRequest.order) {
+      setToast(action === "accept" ? "Solicitud aceptada" : "Solicitud rechazada");
+      if (action === "accept" && nextRequest.order) {
         history.push(`/seguimiento/${nextRequest.order.id}`);
       }
-    } catch {
-      setError("No pudimos actualizar la solicitud. Vuelve a consultar el estado.");
-      await loadRequest();
+    } catch (failure) {
+      setToast(apiMessage(failure, "No pudimos actualizar la solicitud. Vuelve a consultar el estado."));
     } finally {
+      processingRef.current = false;
       setProcessing(false);
       setPendingAction(null);
     }
@@ -120,7 +136,7 @@ const ProfessionalRequestDetailPage: React.FC = () => {
   const canAnswer = request?.status === "open" && !processing;
 
   return (
-    <IonPage>
+    <IonPage className="sp-service-flow">
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
@@ -149,6 +165,8 @@ const ProfessionalRequestDetailPage: React.FC = () => {
                 <h1>{request.selected_service?.name || request.selected_category.name}</h1>
                 <p>{request.description}</p>
               </header>
+
+              <ServiceProgress status={request.order?.status || request.status} />
 
               <section className="sp-grid sp-grid--two">
                 <article className="sp-card">
@@ -211,15 +229,16 @@ const ProfessionalRequestDetailPage: React.FC = () => {
                 <div className="sp-card-title">
                   <h2>Respuesta</h2>
                   <p>
-                    Aceptar crea la orden asociada. Rechazar deja visible el estado para el cliente.
+                    Al aceptar confirmas tu disponibilidad y puedes continuar al seguimiento. El cliente verá tu respuesta.
                   </p>
                 </div>
                 {error ? <p className="sp-error">{error}</p> : null}
                 <div className="sp-actions sp-actions--spaced">
+                  {request.order && <IonButton routerLink={trackingPath(request)}>{isTerminal(request.order.status) ? "Ver resumen del servicio" : "Continuar seguimiento"}</IonButton>}
                   <IonButton
                     className="sp-primary-button"
                     disabled={!canAnswer}
-                    onClick={() => setPendingAction("accept")}
+                    onClick={() => openConfirmation("accept")}
                     aria-label="Aceptar solicitud"
                   >
                     <IonIcon slot="start" icon={checkmarkCircleOutline} />
@@ -229,7 +248,7 @@ const ProfessionalRequestDetailPage: React.FC = () => {
                     color="danger"
                     fill="outline"
                     disabled={!canAnswer}
-                    onClick={() => setPendingAction("reject")}
+                    onClick={() => openConfirmation("reject")}
                     aria-label="Rechazar solicitud"
                   >
                     <IonIcon slot="start" icon={closeCircleOutline} />
@@ -245,28 +264,28 @@ const ProfessionalRequestDetailPage: React.FC = () => {
         </main>
 
         <IonAlert
-          isOpen={!!pendingAction}
-          header={pendingAction === "accept" ? "Aceptar solicitud" : "Rechazar solicitud"}
-          message={
-            pendingAction === "accept"
-              ? "Se creará una orden aceptada para esta solicitud."
-              : "La solicitud quedará rechazada para el cliente."
-          }
+          cssClass="sp-service-flow sf-confirmation"
+          isOpen={pendingAction === "accept"}
+          header="Aceptar solicitud"
+          message="Se guardará tu aceptación y podrás continuar al seguimiento del servicio."
           buttons={[
-            { text: "Cancelar", role: "cancel", handler: () => setPendingAction(null) },
-            {
-              text: pendingAction === "accept" ? "Aceptar" : "Rechazar",
-              role: pendingAction === "reject" ? "destructive" : undefined,
-              handler: () => {
-                void runAction();
-              },
-            },
+            { text: "Volver", role: "cancel", handler: () => closeConfirmation("accept") },
+            { text: "Aceptar solicitud", handler: () => { void runAction("accept"); } },
           ]}
-          onDidDismiss={() => {
-            if (!processing) setPendingAction(null);
-          }}
+          onDidDismiss={() => closeConfirmation("accept")}
         />
-        <IonLoading isOpen={processing} message="Actualizando solicitud..." />
+        <IonAlert
+          cssClass="sp-service-flow sf-confirmation"
+          isOpen={pendingAction === "reject"}
+          header="Rechazar solicitud"
+          message="La solicitud quedará rechazada para el cliente."
+          buttons={[
+            { text: "Volver", role: "cancel", handler: () => closeConfirmation("reject") },
+            { text: "Rechazar solicitud", role: "destructive", handler: () => { void runAction("reject"); } },
+          ]}
+          onDidDismiss={() => closeConfirmation("reject")}
+        />
+        <IonLoading cssClass="sp-service-flow" isOpen={processing} message="Actualizando solicitud..." />
         <IonToast
           isOpen={!!toast}
           message={toast}

@@ -1,4 +1,5 @@
 import secrets
+import math
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
@@ -19,8 +20,8 @@ from apps.accounts.platform_views import IsPlatformStaff
 from apps.accounts.models import PlatformSettings
 
 from .models import Order, Payment, Review, WorkEvidence
-from .serializers import OrderCreateSerializer, OrderSerializer, ReviewSerializer
-from .services import InvalidTransition, confirm_development_payment, transition
+from .serializers import OrderCreateSerializer, OrderSerializer, ReviewSerializer, OrderTransitionSerializer, OrderPriceSerializer
+from .services import InvalidTransition, confirm_development_payment, transition, set_final_price, is_assigned_professional, is_order_client, validate_price_range, price_bounds
 from .wompi import build_checkout_url, verify_event, wompi_ready
 
 WOMPI_STATUS = {
@@ -35,17 +36,18 @@ class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.none()
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ["status"]
+    http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Order.objects.select_related("professional", "service_request").prefetch_related(
-            "events", "professional__services__service__category"
+        queryset = Order.objects.select_related("professional__user", "service_request__household", "review").prefetch_related(
+            "events", "work_evidence", "professional__services__service__category", "payments"
         )
         if getattr(user, "role", "") == "staff":
             return queryset
         if getattr(user, "is_professional", False):
-            return queryset.filter(professional__user=user)
-        return queryset.filter(client=user)
+            return queryset.filter(professional__user=user).exclude(client=user)
+        return queryset.filter(client=user).exclude(professional__user=user)
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -55,33 +57,52 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="transition")
     def change_status(self, request, pk=None):
         order = self.get_object()
-        new_status = request.data.get("status")
-        if new_status not in Order.Status.values:
-            return Response(
-                {"status": "Estado desconocido."}, status=status.HTTP_400_BAD_REQUEST
-            )
+        payload = OrderTransitionSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
         try:
-            order = transition(order, new_status, user=request.user, note=request.data.get("note", ""))
+            order = transition(order, data.pop("status"), user=request.user, **data)
         except InvalidTransition as exc:
             return Response({"status": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
 
+    @action(detail=True, methods=["post"], url_path="price")
+    def price(self, request, pk=None):
+        payload = OrderPriceSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        try:
+            order = set_final_price(self.get_object(), payload.validated_data["final_price"], request.user)
+        except InvalidTransition as exc:
+            return Response({"detail": str(exc)}, status=400)
+        return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
+
     @action(detail=True, methods=["post"], url_path="wompi-checkout")
+    @transaction.atomic
     def wompi_checkout(self, request, pk=None):
-        order = self.get_object()
-        if order.client_id != request.user.id:
+        order = Order.objects.select_for_update().get(pk=self.get_object().pk)
+        if not is_order_client(order, request.user):
             return Response({"detail": "Solo el cliente de la orden puede pagarla."}, status=status.HTTP_403_FORBIDDEN)
         if order.payment_status == Order.PaymentStatus.PAID:
             return Response({"detail": "La orden ya está pagada."}, status=status.HTTP_400_BAD_REQUEST)
+        if order.status in {Order.Status.REQUESTED, Order.Status.CANCELLED}:
+            return Response({"detail": "Esta orden no permite iniciar un pago."}, status=400)
         if not wompi_ready():
             return Response({"detail": "Wompi no está configurado en el servidor."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         payments_cfg = PlatformSettings.load()["sections"].get("payments", {})
         if all(payments_cfg.get(f"{m}_enabled") is False for m in ("pse", "card", "transfer", "wallet")):
             return Response({"detail": "Los pagos en línea están desactivados por el administrador."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        amount = order.final_price or order.estimate_max or order.estimate_min
+        amount = order.final_price
         if not amount:
-            return Response({"detail": "La orden aún no tiene un monto definido."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "El profesional debe registrar el valor final acordado antes de iniciar el pago."}, status=status.HTTP_400_BAD_REQUEST)
+        missing_bounds = order.estimate_min is None or order.estimate_max is None
+        order.estimate_min, order.estimate_max = price_bounds(order)
+        try:
+            validate_price_range(order, amount)
+        except InvalidTransition as exc:
+            return Response({"detail": str(exc)}, status=400)
+        if missing_bounds:
+            order.save(update_fields=["estimate_min", "estimate_max", "updated_at"])
         cents = int((Decimal(amount) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
         if cents < 150000:
             return Response({"detail": "El monto mínimo de pago es $1.500 COP."}, status=status.HTTP_400_BAD_REQUEST)
@@ -104,7 +125,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         if wompi_ready() and not settings.DEBUG:
             return Response({"detail": "El pago demo está deshabilitado."}, status=status.HTTP_403_FORBIDDEN)
         order = self.get_object()
-        if order.client_id != request.user.id:
+        if not is_order_client(order, request.user):
             return Response(
                 {"detail": "Solo el cliente de la orden puede confirmar el pago."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -115,24 +136,33 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="location")
     def update_location(self, request, pk=None):
         order = self.get_object()
-        if order.professional.user_id != request.user.id:
+        if not is_assigned_professional(order, request.user):
             return Response({"detail": "Solo el profesional puede actualizar su ubicacion."}, status=403)
+        if order.status != Order.Status.TRAVELING or order.service_request.status != "accepted":
+            return Response({"detail": "La ubicación solo se comparte durante el desplazamiento."}, status=400)
         try:
             order.professional_latitude = float(request.data["latitude"])
             order.professional_longitude = float(request.data["longitude"])
         except (KeyError, TypeError, ValueError):
             return Response({"detail": "latitude y longitude son obligatorios."}, status=400)
+        if not (math.isfinite(order.professional_latitude) and math.isfinite(order.professional_longitude)
+                and -90 <= order.professional_latitude <= 90 and -180 <= order.professional_longitude <= 180):
+            return Response({"detail": "Las coordenadas no son válidas."}, status=400)
         order.save(update_fields=["professional_latitude", "professional_longitude", "updated_at"])
         return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
 
     @action(detail=True, methods=["post"], url_path="evidence")
     def add_evidence(self, request, pk=None):
         order = self.get_object()
-        if order.professional.user_id != request.user.id:
+        if not is_assigned_professional(order, request.user):
             return Response({"detail": "Solo el profesional puede subir evidencia."}, status=403)
+        if order.status in {Order.Status.REQUESTED, Order.Status.COMPLETED, Order.Status.CANCELLED}:
+            return Response({"detail": "Esta orden no permite adjuntar evidencias."}, status=400)
         if not request.FILES.get("image"):
             return Response({"detail": "La foto es obligatoria."}, status=400)
         WorkEvidence.objects.create(order=order, image=request.FILES["image"], caption=request.data.get("caption", ""))
+        # El queryset precarga evidencias: descartar esa lista anterior a la subida.
+        getattr(order, "_prefetched_objects_cache", {}).pop("work_evidence", None)
         return Response(OrderSerializer(order, context=self.get_serializer_context()).data, status=201)
 
     @extend_schema(parameters=[OpenApiParameter("evidence_id", int, location=OpenApiParameter.PATH)])

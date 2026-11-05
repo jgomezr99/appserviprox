@@ -115,6 +115,11 @@ class AdminOverviewView(APIView):
             }
             display_status, status_cls = status_map.get(req.status, ("En revisión", "ad-status-revision"))
             client_name = req.client.get_full_name() or req.client.username
+            user_display = (
+                f"{req.client.first_name} {req.client.last_name[0]}."
+                if req.client.first_name and req.client.last_name
+                else client_name
+            )
             recent_items.append({
                 "id": f"srv-{req.id}",
                 "raw_id": req.id,
@@ -122,7 +127,7 @@ class AdminOverviewView(APIView):
                 "typeIcon": "🔧",
                 "typeColor": "#dbeafe",
                 "title": (req.selected_service.name if req.selected_service else req.description) or "Solicitud de servicio",
-                "userName": client_name,
+                "userName": user_display,
                 "userAvatar": req.client.avatar_url or f"https://ui-avatars.com/api/?name={client_name}&background=1e3a8a&color=fff",
                 "date": req.created_at.strftime("%d/%m/%Y"),
                 "status": display_status,

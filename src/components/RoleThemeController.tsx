@@ -15,6 +15,27 @@ export const RoleThemeController: React.FC = () => {
 
   useEffect(() => {
     const path = location.pathname.toLowerCase();
+    const docEl = document.documentElement;
+    const bodyEl = document.body;
+    const appEl = document.querySelector('ion-app');
+
+    // 0. Si está en Login normal o administrativo, usar tema auth neutro
+    if (
+      path.startsWith('/login') ||
+      path.startsWith('/ingresar')
+    ) {
+      docEl.classList.remove('theme-client', 'theme-professional');
+      bodyEl.classList.remove('theme-client', 'theme-professional');
+      if (appEl) {
+        appEl.classList.remove('theme-client', 'theme-professional');
+      }
+      docEl.setAttribute('data-theme', 'auth');
+      bodyEl.setAttribute('data-theme', 'auth');
+      if (appEl) {
+        appEl.setAttribute('data-theme', 'auth');
+      }
+      return;
+    }
 
     // 1. Determinar el rol activo
     let activeRole: 'client' | 'professional' = 'client';
@@ -37,10 +58,6 @@ export const RoleThemeController: React.FC = () => {
     } else if (user?.role === 'client') {
       activeRole = 'client';
     }
-
-    const docEl = document.documentElement;
-    const bodyEl = document.body;
-    const appEl = document.querySelector('ion-app');
 
     // Quitar clases anteriores
     docEl.classList.remove('theme-client', 'theme-professional');

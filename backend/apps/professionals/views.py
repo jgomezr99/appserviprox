@@ -93,6 +93,8 @@ class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
             .select_related("user")
             .prefetch_related("services__service__category", "availability", "portfolio")
         )
+        if self.action == "list" and self.request.user.is_authenticated:
+            queryset = queryset.exclude(user_id=self.request.user.id)
 
         category = params.get("category")
         service = params.get("service")

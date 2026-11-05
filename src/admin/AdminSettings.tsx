@@ -31,7 +31,7 @@ const ROLE_CARDS: Array<[string, string, FieldDef[]]> = [
       { key: "pqr", label: "PQRS y quejas", kind: T },
       { key: "store", label: "Tienda de productos", kind: T },
       { key: "publish_store", label: "Publicar en tienda", kind: T },
-      { key: "benefits", label: "Beneficios y puntos", kind: T },
+      { key: "profile", label: "Mi perfil de cliente", kind: T },
     ],
   ],
   [
@@ -412,7 +412,7 @@ export const AdminSettings: React.FC<{ onChanged?: () => void }> = ({ onChanged 
             {ROLE_CARDS.map(([role, title, fields]) => (
               <div className="as-card" key={role}>
                 <h3>{title}</h3>
-                <p className="as-muted">Secciones visibles en el home. También deben estar activas en Parámetros generales.</p>
+                <p className="as-muted">Secciones visibles en el home y en el menú. También deben estar activas en Parámetros generales.</p>
                 <FieldList
                   fields={fields}
                   values={{ ...SECTION_DEFAULTS.role_params[role], ...(form.sections?.role_params?.[role] || form.role_params?.[role] || {}) }}

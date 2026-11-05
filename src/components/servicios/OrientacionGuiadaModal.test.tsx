@@ -1,6 +1,6 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import OrientacionGuiadaModal from "./OrientacionGuiadaModal";
 import { catalogService, diagnosisService } from "../../services/serviprox";
 import type { DiagnosticSession, ServiceCategory } from "../../types/serviprox";
@@ -51,6 +51,28 @@ function search(description = "Tengo una fuga de agua") {
 }
 
 describe("Sugerencias en la vista de cliente", () => {
+  it("conserva el botón y su contenido al entrar y salir de carga en búsquedas consecutivas", async () => {
+    let finishSearch!: (result: DiagnosticSession) => void;
+    vi.mocked(diagnosisService.create).mockImplementation(() => new Promise<DiagnosticSession>((resolve) => { finishSearch = resolve; }));
+    mount();
+    const button = screen.getByRole("button", { name: "Buscar sugerencias" });
+    const content = button.querySelector(".sp-service-button-content");
+    expect(content).not.toBeNull();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      search(`Tengo una fuga de agua en la tubería ${attempt + 1}`);
+      expect(screen.getByRole("button", { name: "Buscando en el catálogo..." })).toBe(button);
+      expect(button).toBeDisabled();
+      expect(button.querySelector(".sp-service-button-content")).toBe(content);
+      expect(content).toHaveAttribute("aria-busy", "true");
+      await act(async () => { finishSearch(diagnosis); });
+      expect(screen.getByRole("button", { name: "Buscar sugerencias" })).toBe(button);
+      expect(button).not.toBeDisabled();
+      expect(button.querySelector(".sp-service-button-content")).toBe(content);
+      expect(content).toHaveAttribute("aria-busy", "false");
+      expect(screen.getByRole("region", { name: "Resultado de la búsqueda" })).toBeInTheDocument();
+    }
+  });
+
   it("muestra los servicios recibidos y transmite la selección y la sesión al continuar", async () => {
     const onTakeService = mount();
     search();
@@ -99,5 +121,39 @@ describe("Sugerencias en la vista de cliente", () => {
     search();
     expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos consultar las sugerencias");
     expect(screen.getByRole("button", { name: "Buscar sugerencias" })).not.toBeDisabled();
+  });
+
+  it.each([undefined, null])("recupera los servicios de la categoría si una API anterior omite el ranking (%s)", async (ranking) => {
+    vi.mocked(diagnosisService.create).mockResolvedValue({ ...diagnosis, service_ranking: ranking } as unknown as DiagnosticSession);
+    vi.mocked(catalogService.listServices).mockResolvedValue([diagnosis.suggested_service!]);
+    const onTakeService = mount();
+    search();
+    fireEvent.click(await screen.findByRole("button", { name: /Reparar fuga/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continuar con el servicio seleccionado" }));
+    expect(catalogService.listServices).toHaveBeenCalledWith({ category: category.id });
+    expect(onTakeService).toHaveBeenCalledWith(expect.objectContaining({ serviceId: 7, diagnosticSessionId: 31 }));
+  });
+
+  it("muestra sugerencias sin términos de coincidencia y descarta entradas incompletas sin romper el modal", async () => {
+    vi.mocked(diagnosisService.create).mockResolvedValue({
+      ...diagnosis,
+      service_ranking: [null, { id: 99, name: "Sin categoría", category: null }, { ...diagnosis.service_ranking[0], matched_terms: null }],
+    } as unknown as DiagnosticSession);
+    mount();
+    search();
+    expect(await screen.findByRole("button", { name: /Reparar fuga/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Coincidencias:/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Sin categoría")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it.each([null, { id: 31, service_ranking: {} }])("mantiene el formulario y permite reintentar una respuesta inválida (%s)", async (payload) => {
+    vi.mocked(diagnosisService.create).mockResolvedValueOnce(payload as unknown as DiagnosticSession).mockResolvedValueOnce(diagnosis);
+    mount();
+    search();
+    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos consultar las sugerencias");
+    expect(screen.queryByRole("region", { name: "Resultado de la búsqueda" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Buscar sugerencias" }));
+    expect(await screen.findByRole("button", { name: /Reparar fuga/ })).toBeInTheDocument();
   });
 });

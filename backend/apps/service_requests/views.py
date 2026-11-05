@@ -22,6 +22,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
     queryset = ServiceRequest.objects.none()
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
+    http_method_names = ["get", "post", "head", "options"]
     filterset_fields = ["status", "selected_category__slug"]
 
     def get_queryset(self):
@@ -79,39 +80,6 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                     image=image,
                     uploaded_by=request.user,
                 )
-            if service_request.professional:
-                from apps.orders.models import Order, OrderEvent
-                prof = service_request.professional
-                household = service_request.household
-
-                if household and (household.latitude is None or household.longitude is None):
-                    household.latitude = 4.6482
-                    household.longitude = -74.0886
-                    household.save(update_fields=["latitude", "longitude"])
-
-                if prof.latitude is None or prof.longitude is None:
-                    prof.latitude = 4.6720
-                    prof.longitude = -74.0550
-                    prof.save(update_fields=["latitude", "longitude"])
-
-                order, created = Order.objects.get_or_create(
-                    service_request=service_request,
-                    professional=prof,
-                    defaults={
-                        "client": request.user,
-                        "status": Order.Status.TRAVELING,
-                        "client_notes": service_request.description,
-                        "professional_latitude": prof.latitude,
-                        "professional_longitude": prof.longitude,
-                    },
-                )
-                if created:
-                    OrderEvent.objects.create(
-                        order=order,
-                        status=Order.Status.TRAVELING,
-                        note="Solicitud enviada al profesional. En camino a la ubicación del cliente.",
-                        created_by=request.user,
-                    )
         output = ServiceRequestSerializer(service_request, context=self.get_serializer_context())
         headers = self.get_success_headers(output.data)
         return Response(output.data, status=status.HTTP_201_CREATED, headers=headers)

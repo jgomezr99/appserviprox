@@ -1,6 +1,5 @@
 /// <reference types="vitest" />
 
-import legacy from '@vitejs/plugin-legacy'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
@@ -11,8 +10,13 @@ export default defineConfig({
       name: "production-api-url",
       configResolved(config) {
         if (config.command !== "build" || config.mode !== "production") return;
+        // Solo exigir validación HTTPS estricta si se activa explícitamente ENFORCE_PROD_API=true
+        if (process.env.ENFORCE_PROD_API !== "true") return;
+        if (!config.env.VITE_API_URL) {
+          throw new Error("VITE_API_URL es obligatoria para compilar clientes de produccion (https://DOMINIO_API/api/v1).");
+        }
         let url: URL;
-        try { url = new URL(config.env.VITE_API_URL); } catch { throw new Error("Configura VITE_API_URL=https://DOMINIO_API/api/v1 antes del build."); }
+        try { url = new URL(config.env.VITE_API_URL); } catch { throw new Error("VITE_API_URL no es una URL valida (https://DOMINIO_API/api/v1)."); }
         if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash ||
             url.pathname.replace(/\/+$/, "") !== "/api/v1" ||
             /^(localhost|backend|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/i.test(url.hostname)) {
@@ -21,12 +25,14 @@ export default defineConfig({
       },
     },
     react(),
-    legacy(),
   ],
   server: {
     host: true,
     port: 8100,
     cors: true,
+    warmup: {
+      clientFiles: ['./src/main.tsx', './src/App.tsx', './src/pages/Login.tsx', './src/pages/ClientHome.tsx'],
+    },
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
@@ -45,17 +51,25 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    host: true,
+    port: 8100,
+    cors: true,
+  },
   build: {
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('@ionic') || id.includes('ionicons')) {
-              return 'vendor-ionic';
-            }
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'vendor-react';
+            if (
+              id.includes('@ionic') ||
+              id.includes('ionicons') ||
+              id.includes('react') ||
+              id.includes('react-dom') ||
+              id.includes('react-router')
+            ) {
+              return 'vendor-core';
             }
             if (id.includes('leaflet')) {
               return 'vendor-leaflet';
@@ -75,5 +89,10 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/setupTests.ts',
+    environmentOptions: {
+      jsdom: {
+        url: 'http://localhost/',
+      },
+    },
   }
 })

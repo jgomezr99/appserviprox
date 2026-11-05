@@ -48,8 +48,8 @@ class ProfessionalServiceSerializer(serializers.ModelSerializer):
 
 class ProfessionalServiceInputSerializer(serializers.Serializer):
     service = serializers.IntegerField()
-    price_min = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
-    price_max = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    price_min = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True, min_value=1)
+    price_max = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True, min_value=1)
     observaciones = serializers.CharField(required=False, allow_blank=True)
     years_experience = serializers.IntegerField(required=False, min_value=0, max_value=80)
 
@@ -65,8 +65,8 @@ class CustomProfessionalServiceInputSerializer(serializers.Serializer):
     category = serializers.IntegerField()
     name = serializers.CharField(max_length=120)
     description = serializers.CharField(required=False, allow_blank=True)
-    price_min = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
-    price_max = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    price_min = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True, min_value=1)
+    price_max = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True, min_value=1)
     observaciones = serializers.CharField(required=False, allow_blank=True)
     years_experience = serializers.IntegerField(required=False, min_value=0, max_value=80)
 
@@ -82,6 +82,7 @@ class ProfessionalListSerializer(serializers.ModelSerializer):
     """Payload de la tarjeta y del pin en el mapa."""
 
     initials = serializers.CharField(read_only=True)
+    is_own_profile = serializers.SerializerMethodField()
     distance_km = serializers.FloatField(read_only=True, required=False)
     categories = serializers.SerializerMethodField()
     matching_service = serializers.SerializerMethodField()
@@ -96,6 +97,7 @@ class ProfessionalListSerializer(serializers.ModelSerializer):
             "slug",
             "display_name",
             "initials",
+            "is_own_profile",
             "headline",
             "company_name",
             "specialty_label",
@@ -117,6 +119,10 @@ class ProfessionalListSerializer(serializers.ModelSerializer):
             "matching_service",
             "availability_label",
         ]
+
+    def get_is_own_profile(self, obj):
+        request = self.context.get("request")
+        return bool(request and request.user.is_authenticated and obj.user_id == request.user.id)
 
     def get_categories(self, obj) -> list[str]:
         names = {service.service.category.name for service in obj.services.all()}

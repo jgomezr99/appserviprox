@@ -163,6 +163,7 @@ export interface ProfessionalService {
 }
 
 export interface Professional {
+  is_own_profile?: boolean;
   id: number;
   slug?: string;
   display_name: string;
@@ -294,11 +295,15 @@ export interface RequestOrder {
 export type OrderPaymentStatus = "pending" | "paid";
 
 export interface Order {
+  viewer_role?: "client" | "professional" | "staff" | "none";
+  price_bounds?: { min: string | null; max: string | null };
+  can_set_final_price?: boolean;
   id: number;
   service_request: number;
   professional: Professional;
   status: string;
   status_label: string;
+  available_transitions?: string[];
   payment_status: OrderPaymentStatus;
   payment_status_label: string;
   payment_confirmed_at: string | null;
@@ -331,6 +336,7 @@ export interface Order {
     created_at: string;
   }>;
   created_at: string;
+  review?: { id: number; order: number; rating: number; comment: string; created_at: string } | null;
 }
 
 export interface ServiceRequestImage {

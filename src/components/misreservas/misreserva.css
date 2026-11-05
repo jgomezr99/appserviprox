@@ -51,6 +51,8 @@
 
 .sp-reserva-top {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 12px;
@@ -82,6 +84,8 @@
 
 .sp-reserva-meta-item {
   display: flex;
+  min-width: 0;
+  overflow-wrap: anywhere;
   align-items: center;
   gap: 5px;
 }
@@ -119,4 +123,13 @@
   color: var(--sp-text-muted, #64748b);
   font-size: 0.92rem;
   margin: 0 0 20px;
+}
+
+.sp-reserva-top > div, .sp-reserva-meta-item span { min-width: 0; overflow-wrap: anywhere; }
+.sp-reserva-top ion-badge { max-width: 100%; white-space: normal; }
+.sp-reserva-actions ion-button { max-width: 100%; height: auto; min-height: 44px; white-space: normal; }
+.sp-reserva-actions ion-button::part(native) { white-space: normal; }
+@media (max-width: 540px) {
+  .sp-reservas-container { padding: 16px 10px; }
+  .sp-reserva-actions ion-button { flex: 1 1 100%; margin-inline: 0; }
 }

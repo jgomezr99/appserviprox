@@ -38,7 +38,7 @@ const buildQuery = (params: Record<string, string | number | boolean | null | un
   return queryString ? `?${queryString}` : "";
 };
 
-async function listCatalog<T>(path: string, params: { category?: number | string } = {}): Promise<T[]> {
+async function listAllPages<T>(path: string, params: Record<string, string | number | boolean | null | undefined> = {}): Promise<T[]> {
   const items: T[] = [];
   for (let page = 1; page <= 1000; page += 1) {
     // Mantener el JWT en la API configurada, sin seguir URLs absolutas de next.
@@ -47,14 +47,14 @@ async function listCatalog<T>(path: string, params: { category?: number | string
     items.push(...payload.results);
     if (!payload.next) return items;
   }
-  throw new Error("El catálogo es demasiado grande para cargarlo completo.");
+  throw new Error("La lista es demasiado grande para cargarla completa.");
 }
 
 export const catalogService = {
-  listCategories: () => listCatalog<ServiceCategory>("categories/"),
+  listCategories: () => listAllPages<ServiceCategory>("categories/"),
   getCategory: (slug: string) => api.get<ServiceCategory>(`categories/${slug}/`),
   getService: (id: number | string) => api.get<Service>(`services/${id}/`),
-  listServices: (params: { category?: number | string } = {}) => listCatalog<Service>("services/", params),
+  listServices: (params: { category?: number | string } = {}) => listAllPages<Service>("services/", params),
 };
 
 export const diagnosisService = {
@@ -101,12 +101,7 @@ export const professionalSearchService = {
 };
 
 export const serviceRequestService = {
-  list: async (params: { status?: ServiceRequestStatus } = {}) =>
-    unwrapList(
-      await api.get<PaginatedResponse<ServiceRequest> | ServiceRequest[]>(
-        `requests/${buildQuery(params)}`
-      )
-    ),
+  list: (params: { status?: ServiceRequestStatus } = {}) => listAllPages<ServiceRequest>("requests/", params),
   get: (id: number | string) => api.get<ServiceRequest>(`requests/${id}/`),
   create: (payload: ServiceRequestPayload, images: File[] = []) => {
     if (!images.length) return api.post<ServiceRequest>("requests/", payload);
@@ -124,10 +119,7 @@ export const serviceRequestService = {
 };
 
 export const orderService = {
-  list: async (params: { status?: string } = {}) =>
-    unwrapList(
-      await api.get<PaginatedResponse<Order> | Order[]>(`orders/${buildQuery(params)}`)
-    ),
+  list: (params: { status?: string } = {}) => listAllPages<Order>("orders/", params),
   get: (id: number | string) => api.get<Order>(`orders/${id}/`),
   confirmDemoPayment: (id: number | string) =>
     api.post<Order>(`orders/${id}/confirm-demo-payment/`),
@@ -135,8 +127,12 @@ export const orderService = {
     api.post<{ checkout_url: string; reference: string; amount_in_cents: number }>(
       `orders/${id}/wompi-checkout/`
     ),
-  transition: (id: number | string, status: string, note = "") =>
-    api.post<Order>(`orders/${id}/transition/`, { status, note }),
+  transition: (id: number | string, status: string, note = "", details: { scheduled_for?: string; arrival_code?: string } = {}) =>
+    api.post<Order>(`orders/${id}/transition/`, { status, note, ...details }),
+  setFinalPrice: (id: number | string, final_price: string) =>
+    api.post<Order>(`orders/${id}/price/`, { final_price }),
+  review: (id: number, rating: number, comment: string) =>
+    api.post<NonNullable<Order["review"]>>("reviews/", { order: id, rating, comment }),
   updateLocation: (id: number | string, latitude: number, longitude: number) =>
     api.post<Order>(`orders/${id}/location/`, { latitude, longitude }),
   addEvidence: (id: number | string, image: File, caption = "") => {

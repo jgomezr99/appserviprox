@@ -312,12 +312,13 @@ const ProfessionalDashboard: React.FC = () => {
                 <div className="sp-card-header">
                   <div className="sp-card-title">
                     <h2>Trabajos activos</h2>
-                    <p>Sin trabajos activos.</p>
+                    <p>Consulta tus servicios en curso y el historial de trabajos.</p>
                   </div>
                   <span className="sp-icon-tile">
                     <IonIcon icon={checkmarkCircleOutline} />
                   </span>
                 </div>
+                <IonButton routerLink="/profesional/trabajos" className="sp-primary-button">Ver mis trabajos</IonButton>
               </article>
               )}
 

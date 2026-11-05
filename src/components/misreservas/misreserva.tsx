@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   IonBadge,
   IonButton,
@@ -37,6 +37,8 @@ import { useAuth } from "../../context/AuthContext";
 import { orderService, serviceRequestService } from "../../services/serviprox";
 import type { Order, ServiceRequest } from "../../types/serviprox";
 import { MaintenanceNotice, useMaintenance } from "../MaintenanceNotice";
+import { useLivePage } from "../../hooks/useLivePage";
+import { apiMessage, isTerminal, trackingPath } from "../../utils/workflow";
 import "./misreserva.css";
 
 const statusColor = (status?: string | null): string => {
@@ -81,7 +83,7 @@ const formatDate = (iso?: string | null): string => {
 };
 
 export const MisReserva: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { active: maintenance } = useMaintenance();
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -90,37 +92,28 @@ export const MisReserva: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"todas" | "activas" | "finalizadas">("todas");
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!isAuthenticated) {
+      setRequests([]); setOrders([]);
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError("");
     try {
       const [reqList, ordList] = await Promise.all([
-        serviceRequestService.list().catch((err) => {
-          console.warn("Error cargando requests:", err);
-          return [] as ServiceRequest[];
-        }),
-        orderService.list().catch((err) => {
-          console.warn("Error cargando orders:", err);
-          return [] as Order[];
-        }),
+        serviceRequestService.list(),
+        orderService.list(),
       ]);
       setRequests(Array.isArray(reqList) ? reqList : []);
       setOrders(Array.isArray(ordList) ? ordList : []);
+      setError("");
     } catch (err) {
       console.error("Error global en solicitudes:", err);
-      setError("No se pudieron cargar tus solicitudes. Intenta de nuevo.");
+      setError(apiMessage(err, "No se pudieron cargar tus solicitudes. Intenta de nuevo."));
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    void loadData();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.id]);
+  useLivePage(loadData, 15000);
 
   const handleRefresh = async (event: CustomEvent) => {
     await loadData();
@@ -145,8 +138,8 @@ export const MisReserva: React.FC = () => {
           "Servicio de hogar";
 
         const category = req.selected_category?.name || "General";
-        const status = matchedOrder?.status_label || req.status_label || "Publicada";
-        const statusCode = String(matchedOrder?.status || req.status || "open").toLowerCase();
+        const status = matchedOrder?.status_label || req.order?.status_label || req.status_label || "Publicada";
+        const statusCode = String(matchedOrder?.status || req.order?.status || req.status || "open").toLowerCase();
         const date = matchedOrder?.scheduled_for || req.created_at;
         const address =
           req.household?.address_line || req.household?.label || "Dirección registrada";
@@ -159,6 +152,7 @@ export const MisReserva: React.FC = () => {
         const orderId = matchedOrder?.id || req.order?.id || null;
 
         return {
+          trackingUrl: trackingPath(req),
           request: req,
           order: matchedOrder,
           title,
@@ -185,18 +179,12 @@ export const MisReserva: React.FC = () => {
 
       if (activeTab === "activas") {
         return (
-          item.statusCode !== "completed" &&
-          item.statusCode !== "cancelled" &&
-          item.statusCode !== "rejected" &&
-          item.statusCode !== "closed"
+            !isTerminal(item.statusCode)
         );
       }
       if (activeTab === "finalizadas") {
         return (
-          item.statusCode === "completed" ||
-          item.statusCode === "cancelled" ||
-          item.statusCode === "rejected" ||
-          item.statusCode === "closed"
+            isTerminal(item.statusCode)
         );
       }
       return true;
@@ -204,7 +192,7 @@ export const MisReserva: React.FC = () => {
   }, [requests, orders, searchQuery, activeTab]);
 
   return (
-    <IonPage>
+    <IonPage className="sp-service-flow">
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
@@ -258,7 +246,7 @@ export const MisReserva: React.FC = () => {
               <IonLabel>Activas</IonLabel>
             </IonSegmentButton>
             <IonSegmentButton value="finalizadas">
-              <IonLabel>Completadas</IonLabel>
+              <IonLabel>Historial</IonLabel>
             </IonSegmentButton>
           </IonSegment>
 
@@ -349,9 +337,9 @@ export const MisReserva: React.FC = () => {
                     </div>
 
                     <div className="sp-reserva-actions">
-                      {item.orderId && (
+                      {(
                         <IonButton
-                          routerLink={`/seguimiento/${item.orderId}`}
+                          routerLink={item.trackingUrl}
                           fill="solid"
                           size="small"
                           style={{
@@ -361,15 +349,15 @@ export const MisReserva: React.FC = () => {
                           }}
                         >
                           <IonIcon slot="start" icon={navigateOutline} />
-                          Seguimiento en vivo
+                          {isTerminal(item.statusCode) ? "Ver resumen" : "Ver seguimiento"}
                         </IonButton>
                       )}
 
-                      {item.order && item.order.payment_status === "pending" && (
+                      {item.order && !["requested", "cancelled"].includes(item.statusCode) && item.order.payment_status === "pending" && (
                         <IonButton
                           routerLink={`/cliente/historialpago?order=${item.orderId}`}
                           fill="outline"
-                          color="success"
+                          color="primary"
                           size="small"
                           disabled={maintenance}
                           style={{

@@ -1,0 +1,341 @@
+/* Un lenguaje visual compartido por el proceso de servicio, en ambos perfiles. */
+.sp-service-flow {
+  color-scheme: light;
+  --sf-bg: #f4f6fa;
+  --sf-surface: #ffffff;
+  --sf-soft: #fff1f2;
+  --sf-ink: #292d35;
+  --sf-muted: #626772;
+  --sf-primary: #dc2626;
+  --sf-primary-rgb: 220, 38, 38;
+  --sf-primary-shade: #b91c1c;
+  --sf-primary-tint: #e33c3c;
+  --sf-soft-border: #f0cbd0;
+  --sf-selected: #fff5f6;
+  --sf-selected-border: #d66c77;
+  --sf-control-border: #e4c5ca;
+  --sf-focus: #efb0b7;
+  --sf-border: #dde5ef;
+  --sf-success: #247451;
+  --sf-radius: 20px;
+  --sf-shadow: 0 6px 24px rgb(25 45 72 / 4%);
+  --sp-workflow-background: var(--sf-bg);
+  --sp-workflow-toolbar: var(--sf-surface);
+  --sp-workflow-field: var(--sf-surface);
+  --sp-workflow-border: var(--sf-border);
+  --sp-workflow-ink: var(--sf-ink);
+  --sp-workflow-shadow: var(--sf-shadow);
+  --sp-bg: var(--sf-bg);
+  --sp-background: var(--sf-bg);
+  --sp-surface: var(--sf-surface);
+  --sp-surface-glass: var(--sf-surface);
+  --sp-text: var(--sf-ink);
+  --sp-text-muted: var(--sf-muted);
+  --sp-primary: var(--sf-primary);
+  --sp-primary-dark: var(--sf-primary-shade);
+  --sp-primary-soft: var(--sf-soft);
+  --sp-accent: var(--sf-primary);
+  --sp-accent-soft: var(--sf-soft);
+  --sp-border: var(--sf-border);
+  --sp-shadow: var(--sf-shadow);
+  --sp-radius-sm: 12px;
+  --sp-radius-md: 16px;
+  --sp-radius-lg: var(--sf-radius);
+  --sp-radius-xl: 24px;
+  --sp-blur: 0px;
+  --ion-color-primary: var(--sf-primary);
+  --ion-color-primary-rgb: var(--sf-primary-rgb);
+  --ion-color-primary-contrast: #fff;
+  --ion-color-primary-shade: var(--sf-primary-shade);
+  --ion-color-primary-tint: var(--sf-primary-tint);
+  --ion-color-danger: #b83242;
+  --ion-color-danger-rgb: 184, 50, 66;
+  --ion-color-danger-contrast: #fff;
+  --ion-color-danger-shade: #a22c3a;
+  --ion-color-danger-tint: #bf4755;
+  --ion-color-success: var(--sf-success);
+  --ion-color-success-rgb: 36, 116, 81;
+  --ion-color-success-contrast: #fff;
+  --ion-color-success-shade: #206647;
+  --ion-color-success-tint: #3a8262;
+  --ion-background-color: var(--sf-bg);
+  --ion-background-color-rgb: 244, 246, 250;
+  --ion-text-color: var(--sf-ink);
+  --ion-item-background: var(--sf-surface);
+  --ion-toolbar-background: var(--sf-surface);
+  --ion-card-background: var(--sf-surface);
+  color: var(--sf-ink);
+}
+
+/* El cliente conserva su identidad roja; el azul identifica solo al profesional.
+   El ámbito también alcanza los overlays de Ionic montados fuera de la página. */
+.theme-professional .sp-service-flow,
+[data-theme="professional"] .sp-service-flow {
+  --sf-primary: #193f70;
+  --sf-primary-rgb: 25, 63, 112;
+  --sf-primary-shade: #13335c;
+  --sf-primary-tint: #30527e;
+  --sf-soft: #eef3f9;
+  --sf-soft-border: #d7e2ef;
+  --sf-selected: #eef3fa;
+  --sf-selected-border: #527ba9;
+  --sf-control-border: #c6d3e4;
+  --sf-focus: #a9c5e8;
+  --sf-ink: #192d48;
+  --sf-muted: #596b82;
+}
+
+/* Navegación, ancho de lectura y jerarquía. */
+.sp-service-flow ion-header { box-shadow: none; border-bottom: 1px solid var(--sf-border); }
+.sp-service-flow ion-content { --background: var(--sf-bg); }
+.sp-service-flow ion-toolbar { --background: var(--sf-surface); --color: var(--sf-ink); --min-height: 64px; border-bottom: 0; }
+.sp-service-flow ion-title { font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
+.sp-service-flow ion-title h1 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+.sp-service-flow ion-header::after { display: none; }
+.sp-service-flow :is(.sp-role-page, .sp-reservas-container, .sp-request-page-wrapper, .tracking-page) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 32px 24px calc(48px + env(safe-area-inset-bottom));
+  color: var(--sf-ink);
+}
+.sp-service-flow :is(.sp-role-header, .sp-reservas-header) { gap: 10px; margin-bottom: 28px; }
+.sp-service-flow :is(.sp-role-header h1, .sp-reservas-header h1, .sp-pro-hero-name) {
+  margin: 0;
+  color: var(--sf-ink);
+  font-size: clamp(1.7rem, 3.2vw, 2.25rem);
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+}
+.sp-service-flow :is(.sp-role-header p, .sp-reservas-header p, .sp-pro-hero-headline) { color: var(--sf-muted); font-size: .97rem; line-height: 1.65; }
+.sp-service-flow :is(.sp-role-kicker, .sp-reserva-category) { color: var(--sf-primary); font-size: .72rem; font-weight: 750; letter-spacing: .09em; }
+.sp-service-flow :is(.sp-card h2, .tracking-card h2, .sp-modal-section-title, .sp-request-card-title h2) { color: var(--sf-ink); font-size: 1.08rem; font-weight: 700; line-height: 1.4; }
+
+/* Superficies: mismo borde, radio y sombra en solicitudes, visita y pago. */
+.sp-service-flow :is(.sp-card, .tracking-card, .sp-reserva-card, .sp-request-card, .sp-summary-ribbon, .sp-modal-section, .sp-diag-section-card, .sp-contractor-card) {
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  background: var(--sf-surface);
+  box-shadow: var(--sf-shadow);
+  color: var(--sf-ink);
+}
+.sp-service-flow :is(.sp-card, .tracking-card, .sp-request-card, .sp-modal-section, .sp-diag-section-card) { padding: 24px; }
+.sp-service-flow :is(.sp-reservas-list, .sp-request-list, .sp-payment-list) { gap: 18px; }
+.sp-service-flow .sp-request-list { display: grid; grid-template-columns: minmax(0, 1fr); }
+.sp-service-flow .sp-request-list > .sp-card { margin: 0; }
+.sp-service-flow .sp-role-page > :is(.sp-card, .sp-grid, .sp-actions) { margin-bottom: 20px; }
+.sp-service-flow .sp-card .sp-actions { margin-top: 20px; }
+.sp-service-flow .sp-reserva-card { margin: 0; }
+.sp-service-flow :is(.sp-reserva-title, .sp-contractor-name) { font-size: 1.18rem; color: var(--sf-ink); letter-spacing: -.02em; }
+.sp-service-flow :is(.sp-request-meta, .sp-reserva-meta) { color: var(--sf-muted); gap: 12px 20px; line-height: 1.5; }
+.sp-service-flow .sp-request-meta { display: flex; flex-wrap: wrap; margin-block: 16px; }
+.sp-service-flow .sp-request-meta > span { display: inline-flex; align-items: flex-start; gap: 8px; }
+.sp-service-flow .sp-request-meta ion-icon { flex-shrink: 0; margin-top: 3px; }
+.sp-service-flow :is(.sp-request-meta, .sp-reserva-meta) ion-icon { color: var(--sf-primary); }
+.sp-service-flow :is(.sp-reserva-actions, .sp-request-actions) { border-top: 1px solid var(--sf-border); padding-top: 18px; margin-top: 20px; }
+.sp-service-flow .sp-empty-reservas { background: var(--sf-surface); border-color: var(--sf-border); border-radius: var(--sf-radius); box-shadow: none; }
+
+/* Acciones con identidad por perfil, borde para secundarias y aviso al cancelar. */
+.sp-service-flow ion-button,
+.sp-service-flow .sp-actions ion-button,
+.sp-service-flow .sp-card ion-button {
+  --background: var(--sf-primary);
+  --background-hover: var(--sf-primary-shade);
+  --background-activated: var(--sf-primary-shade);
+  --color: #fff;
+  --border-radius: 12px;
+  --box-shadow: none;
+  min-height: 44px;
+  height: auto;
+  font-size: .9rem;
+  font-weight: 650;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: normal;
+}
+.sp-service-flow ion-button::part(native) { min-height: 44px; white-space: normal; }
+.sp-service-flow ion-button[fill="outline"] { --background: #fff; --color: var(--sf-primary); --border-color: var(--sf-control-border); --background-hover: var(--sf-soft); --background-activated: var(--sf-soft); }
+.sp-service-flow ion-button[fill="clear"] { --background: transparent; --color: var(--sf-primary); --background-hover: var(--sf-soft); --background-activated: var(--sf-soft); }
+.sp-service-flow ion-button[color="danger"] { --background: #b83242; --color: #fff; }
+.sp-service-flow ion-button[color="danger"][fill="outline"] { --background: #fff; --color: #a62c3b; --border-color: #e7bdc4; }
+.sp-service-flow ion-toolbar ion-buttons ion-button { --background: transparent; --color: var(--sf-primary); --background-hover: var(--sf-soft); --background-activated: var(--sf-soft); }
+.sp-service-flow :is(.tracking-form > button, .tracking-status-grid > button, .sp-btn-submit) { background: var(--sf-primary); border-color: var(--sf-primary); border-radius: 12px; color: #fff; box-shadow: none; min-height: 46px; }
+.sp-service-flow .tracking-status-grid > button { background: #fff; border-color: var(--sf-control-border); color: var(--sf-primary); }
+.sp-service-flow .tracking-status-grid > .tracking-action--primary { background: var(--sf-primary); border-color: var(--sf-primary); color: #fff; }
+.sp-service-flow .tracking-status-grid > .tracking-action--cancel { background: #fff; border-color: #e7bdc4; color: #a62c3b; }
+.sp-service-flow .sp-btn-submit:hover:not(:disabled) { box-shadow: none; transform: none; background: var(--sf-primary-shade); }
+.sp-service-flow .sp-btn-submit:disabled { background: #7d8ca0; cursor: not-allowed; }
+.sp-service-flow :is(button, input, textarea, select):focus-visible { outline: 3px solid var(--sf-focus); outline-offset: 3px; }
+.sp-service-flow ion-button:focus-visible { outline: 3px solid var(--sf-focus); outline-offset: 3px; border-radius: 12px; }
+.sp-service-flow :is(.sp-request-photo-picker, .tracking-form, .tracking-status-grid) button:focus-visible { outline-color: var(--sf-focus); }
+
+/* Campos, búsqueda y filtros. */
+.sp-service-flow :is(.sp-modal-field, .tracking-form, .sp-job-filters, .sp-form-group, .sp-diag-section-card) :is(input:not([type="file"]), textarea, select) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #cdd8e5;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--sf-ink);
+  font: inherit;
+  font-size: 16px;
+  padding: 12px 14px;
+  box-shadow: none;
+}
+.sp-service-flow :is(.sp-modal-field, .tracking-form, .sp-job-filters, .sp-form-group) :is(label, .sp-form-label) { color: #354b66; font-size: .88rem; font-weight: 650; }
+.sp-service-flow :is(input, textarea)::placeholder { color: #7d8ca0; opacity: 1; }
+.sp-service-flow .sp-modal-field :is(input, textarea, select):focus { border-color: var(--sf-primary); box-shadow: 0 0 0 3px var(--sf-soft); }
+.sp-service-flow ion-searchbar { --background: #fff; --color: var(--sf-ink); --placeholder-color: var(--sf-muted); --box-shadow: none; --border-radius: 12px; --icon-color: var(--sf-primary); padding-inline: 0; }
+.sp-service-flow ion-searchbar::part(container) { border: 1px solid var(--sf-border); }
+.sp-service-flow ion-segment { background: #e9eef5; border-radius: 14px; padding: 4px; margin-block: 16px 24px; }
+.sp-service-flow ion-segment-button { --color: var(--sf-muted); --color-checked: var(--sf-primary); --indicator-color: #fff; --indicator-box-shadow: 0 1px 5px rgb(25 45 72 / 8%); --border-radius: 10px; min-height: 44px; text-transform: none; font-weight: 650; letter-spacing: 0; }
+.sp-service-flow ion-badge { --padding-start: 10px; --padding-end: 10px; padding: 7px 11px; border-radius: 999px; font-weight: 650; font-size: .75rem; line-height: 1.35; white-space: normal; }
+/* Ionic deriva sus colores internos con !important: personalizar el token de cada badge. */
+.sp-service-flow ion-badge.ion-color-primary { --ion-color-primary: var(--sf-soft); --ion-color-primary-contrast: var(--sf-primary-shade); }
+.sp-service-flow ion-badge.ion-color-success { --ion-color-success: #e9f5ee; --ion-color-success-contrast: #246847; }
+.sp-service-flow ion-badge.ion-color-warning { --ion-color-warning: #fff4db; --ion-color-warning-contrast: #825615; }
+.sp-service-flow ion-badge.ion-color-danger { --ion-color-danger: #fbecef; --ion-color-danger-contrast: #a62c3b; }
+.sp-service-flow ion-badge.ion-color-medium { --ion-color-medium: #edf1f5; --ion-color-medium-contrast: #526278; }
+
+/* Indicador común de etapas. */
+.sp-service-flow .sf-journey { padding: 18px 22px; margin: 0 0 24px; background: #fff; border: 1px solid var(--sf-border); border-radius: 16px; }
+.sf-journey ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; list-style: none; padding: 0; margin: 0; }
+.sf-journey li { display: flex; align-items: center; gap: 10px; min-width: 0; position: relative; }
+.sf-step-number { flex: 0 0 32px; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #d7e0eb; background: #f5f7fa; color: #7a899b; border-radius: 50%; font-size: .8rem; font-weight: 700; }
+.sf-step-text { display: grid; gap: 3px; min-width: 0; }
+.sf-step-text strong { color: #6b7b90; font-size: .84rem; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.sf-step-text small { color: #6b7b90; font-size: .72rem; line-height: 1.4; }
+.sf-journey [data-state="current"] .sf-step-number { background: var(--sf-primary); border-color: var(--sf-primary); color: #fff; box-shadow: 0 0 0 4px var(--sf-soft); }
+.sf-journey [data-state="current"] strong { color: var(--sf-primary); }
+.sf-journey [data-state="done"] .sf-step-number { background: #e9f5ee; color: var(--sf-success); border-color: #d3e9dc; }
+.sf-journey [data-state="done"] strong { color: #3b5a4c; }
+.sf-journey-note { background: #edf1f5; color: #526278; padding: 14px 18px; border-radius: 12px; margin-bottom: 20px; font-size: .9rem; }
+
+/* Modales de solicitud y orientación. */
+ion-modal.sp-service-flow { --background: var(--sf-bg); --backdrop-opacity: .36; }
+.sp-service-flow :is(.sp-service-modal-body, .sp-diag-modal-body) { color: var(--sf-ink); }
+.sp-service-flow .sp-diag-modal-body, .sp-service-flow .sp-diag-modal-body * { box-sizing: border-box; min-width: 0; overflow-wrap: anywhere; }
+.sp-service-flow :is(.sp-modal-banner, .sp-diag-banner) { background: var(--sf-soft); border: 1px solid var(--sf-soft-border); border-radius: 16px; padding: 20px; box-shadow: none; }
+.sp-service-flow :is(.sp-modal-banner-icon, .sp-diag-banner-icon, .sp-request-header-icon) { background: var(--sf-primary); border-radius: 14px; color: #fff; }
+.sp-service-flow :is(.sp-modal-banner-text h3, .sp-diag-banner-text h3) { color: var(--sf-ink); font-size: 1.15rem; }
+.sp-service-flow :is(.sp-modal-banner-text p, .sp-diag-banner-text p) { color: var(--sf-muted); }
+.sp-service-flow :is(.sp-modal-service-pill, .sp-modal-pro-card-item, .sp-urgency-card, .sp-modal-urgency-card, .sp-diag-suggestion, .sp-diag-symptom-card) { border-radius: 12px; border-color: var(--sf-border); box-shadow: none; transition: border-color .15s, background-color .15s; }
+.sp-service-flow :is(.sp-modal-service-pill, .sp-modal-pro-card-item, .sp-urgency-card, .sp-modal-urgency-card, .sp-diag-suggestion, .sp-diag-symptom-card).selected { border-color: var(--sf-selected-border); background: var(--sf-selected); box-shadow: 0 0 0 1px var(--sf-selected-border); }
+.sp-service-flow :is(.sp-urgency-card, .sp-modal-urgency-card).urgent.selected { background: #fff7e7; border-color: #c59a4d; box-shadow: 0 0 0 1px #c59a4d; }
+.sp-service-flow :is(.sp-modal-pro-avatar, .sp-modal-service-pill.selected .sp-modal-service-icon, .sp-modal-pro-card-item.selected .sp-modal-pro-select-btn) { background: var(--sf-primary); }
+.sp-service-flow :is(.sp-home-pro-avatar, .sp-diag-result-badge, .sp-diag-pro-avatar) { background: var(--sf-primary); }
+.sp-service-flow :is(.sp-modal-section-title ion-icon, .sp-diag-section-title ion-icon, .sp-diag-suggestion ion-icon, .sp-modal-service-check, .sp-upload-icon-circle, .sp-home-pro-location ion-icon, .sp-card-action--map ion-icon) { color: var(--sf-primary); }
+.sp-service-flow .sp-modal-service-icon { color: var(--sf-primary); }
+.sp-service-flow .sp-urgency-card.selected .sp-urgency-icon-box { background: var(--sf-primary); }
+.sp-service-flow .sp-urgency-card.selected.urgent .sp-urgency-icon-box { background: #95691d; }
+.sp-service-flow .sp-diag-result-box { background: var(--sf-selected); border: 1px solid var(--sf-soft-border); border-radius: 16px; }
+.sp-service-flow :is(.sp-modal-quick-tag, .sp-quick-tag-btn) { background: #f3f6fa; color: #526781; border-color: #e1e7f0; border-radius: 8px; }
+.sp-service-flow :is(.sp-modal-quick-tag, .sp-quick-tag-btn):hover { background: var(--sf-soft); color: var(--sf-primary); }
+.sp-service-flow :is(.sp-modal-quick-tag, .sp-quick-tag-btn) { min-height: 36px; }
+.sp-service-flow :is(.sp-request-photo-picker, .sp-evidence-input, .sp-upload-dropzone) { padding: 16px; border: 1px dashed #bfcfe1; background: #f7f9fc; border-radius: 14px; }
+.sp-service-flow .sp-request-photo-picker button { border-color: var(--sf-control-border); background: #fff; color: var(--sf-primary); border-radius: 10px; font-size: .88rem; }
+.sp-service-flow .sp-request-photo-list li { border-color: var(--sf-border); border-radius: 12px; background: #fff; }
+.sp-service-flow .sp-upload-dropzone:hover { background: var(--sf-soft); border-color: var(--sf-selected-border); }
+.sp-service-flow .sf-professional-selection { margin-top: 12px; padding: 10px 14px; background: var(--sf-soft); border: 1px solid var(--sf-soft-border); border-radius: 10px; display: flex; align-items: center; gap: 10px; }
+.sp-service-flow .sf-professional-selection ion-icon { color: var(--sf-primary); font-size: 22px; flex-shrink: 0; }
+
+/* Solicitud directa: la ficha profesional usa la misma tarjeta que el resto. */
+.sp-service-flow .sp-detail-header-card { background: #fff; border: 1px solid var(--sf-border); border-radius: var(--sf-radius); box-shadow: var(--sf-shadow); padding: 24px; color: var(--sf-ink); }
+.sp-service-flow .sp-detail-header-card::after { display: none; }
+.sp-service-flow .sp-pro-avatar-container { background: var(--sf-soft); color: var(--sf-primary); border: 1px solid var(--sf-soft-border); box-shadow: none; border-radius: 18px; }
+.sp-service-flow .sp-pro-kicker-badge { background: var(--sf-selected); color: var(--sf-primary); border-radius: 8px; }
+.sp-service-flow .sp-pro-meta-pill { background: #f0f3f8; color: #526781; }
+.sp-service-flow .sp-pro-meta-pill.star { color: #825615; background: #fff6e1; }
+.sp-service-flow .sp-pro-meta-pill.verified { color: #246847; background: #e9f5ee; }
+.sp-service-flow .sp-summary-ribbon { padding: 22px; }
+.sp-service-flow .sp-form-label { display: flex; flex-wrap: wrap; gap: 8px; }
+.sp-service-flow .sf-address-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
+.sp-service-flow .sp-textarea-wrapper { border: 0; background: transparent; box-shadow: none; overflow: visible; }
+.sp-service-flow .sp-textarea-wrapper:focus-within { box-shadow: none; }
+.sp-service-flow :is(.sp-summary-price-tag, .sp-summary-icon.service-icon) { background: var(--sf-soft); color: var(--sf-primary); }
+
+/* Seguimiento, resumen final y pagos. */
+.sp-service-flow .tracking-header { background: #fff; color: var(--sf-ink); border: 1px solid var(--sf-border); border-left: 4px solid var(--sf-selected-border); border-radius: var(--sf-radius); padding: 26px; box-shadow: var(--sf-shadow); }
+.sp-service-flow .tracking-header > span { display: inline-block; color: var(--sf-muted); font-size: .78rem; font-weight: 650; }
+.sp-service-flow .tracking-header h1 { color: var(--sf-ink); font-size: clamp(1.65rem, 3.2vw, 2.15rem); letter-spacing: -.025em; margin-top: 12px; }
+.sp-service-flow .tracking-header h2 { color: var(--sf-muted); font-size: 1.05rem; font-weight: 600; }
+.sp-service-flow .tracking-header p { color: var(--sf-muted); max-width: 760px; line-height: 1.65; }
+.sp-service-flow .tracking-header:is([data-status="completed"], [data-status="closed"]) { border-left-color: #3e936b; }
+.sp-service-flow .tracking-header:is([data-status="cancelled"], [data-status="rejected"]) { border-left-color: #8491a3; }
+.sp-service-flow .tracking-header:is([data-status="break"], [data-status="lunch"], [data-status="other_service"]) { border-left-color: #c59a4d; }
+.sp-service-flow .tracking-summary-grid { gap: 22px; }
+.sp-service-flow .tracking-summary-grid span { color: var(--sf-muted); font-size: .8rem; }
+.sp-service-flow .tracking-summary-grid strong { color: var(--sf-ink); font-weight: 650; line-height: 1.5; }
+.sp-service-flow .tracking-card .tracking-form { border-top: 1px solid var(--sf-border); padding-top: 20px; margin-top: 22px; }
+.sp-service-flow .tracking-code-box { background: #f8fafd; border-color: var(--sf-soft-border); }
+.sp-service-flow .tracking-code { display: inline-block; padding: 12px 20px; border-radius: 12px; background: var(--sf-soft); color: var(--sf-primary); }
+.sp-service-flow .tracking-timeline { list-style: none; padding-left: 0; }
+.sp-service-flow .tracking-timeline li { position: relative; margin-left: 5px; border-left: 2px solid #e0e7f0; padding: 0 0 22px 24px; }
+.sp-service-flow .tracking-timeline li::before { content: ""; position: absolute; left: -6px; top: 3px; width: 10px; height: 10px; border-radius: 50%; background: var(--sf-selected-border); box-shadow: 0 0 0 4px #f3f6fb; }
+.sp-service-flow .tracking-timeline li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.sp-service-flow .tracking-timeline p { color: var(--sf-muted); font-size: .88rem; }
+.sp-service-flow :is(.sf-travel-origin, .sf-travel-route) { stroke: var(--sf-primary); }
+.sp-service-flow .sf-travel-origin { fill: var(--sf-primary); }
+.sp-service-flow .sp-payment-demo { background: #f2f6fb; border: 1px solid var(--sf-soft-border); border-radius: 14px; padding: 20px; }
+.sp-service-flow .sp-payment-demo p { color: var(--sf-muted); font-weight: 500; font-size: .92rem; line-height: 1.6; }
+.sp-service-flow .sp-payment-list > .sf-journey { margin-bottom: 0; }
+.sp-service-flow .tracking-error { border-left: 4px solid #b83242; background: #fffafb; }
+.sp-service-flow .sp-modal-error-box { background: #fff4f5; border: 1px solid #efd5da; border-radius: 12px; color: #a62c3b; }
+
+/* Entrada al proceso: catálogo y selección de profesional. */
+.sp-service-flow .sp-home { background: var(--sf-bg); }
+.sp-service-flow .sp-hero { padding-top: 36px; }
+.sp-service-flow .sp-hero h1 { color: var(--sf-ink); font-size: clamp(1.85rem, 3.5vw, 2.6rem); letter-spacing: -.04em; line-height: 1.15; }
+.sp-service-flow :is(.sp-hero__panel, .sp-glass-card, .sp-contractor-card, .sp-home-pro-card) { backdrop-filter: none; border-radius: var(--sf-radius); }
+.sp-service-flow .sp-home-pro-card { flex-basis: min(280px, 100%); border-color: var(--sf-border); box-shadow: var(--sf-shadow); }
+.sp-service-flow .sp-home-pro-card:hover { border-color: var(--sf-selected-border); box-shadow: var(--sf-shadow); }
+.sp-service-flow .sp-carousel-arrow-btn:hover { background: var(--sf-primary); border-color: var(--sf-primary); color: #fff; }
+.sp-service-flow :is(.sp-section, .sp-hero) { max-width: 1200px; margin-inline: auto; }
+.sp-service-flow .sp-section--soft { background: transparent; }
+.sp-service-flow :is(.sp-icon-badge--red, .sp-icon-badge, .sp-icon-tile) { background: var(--sf-soft); color: var(--sf-primary); }
+.sp-service-flow :is(.sp-card-action, .sp-chip-pill, .sp-toggle-pill, .sp-quick-action-btn) { border-radius: 10px; min-height: 44px; border-color: var(--sf-border); color: var(--sf-primary); box-shadow: none; }
+.sp-service-flow :is(.sp-chip-pill--orange-active, .sp-chip-pill--black-active, .sp-card-action--quote, .sp-quick-action-btn--primary, .sp-mobile-view-btn.is-active) { background: var(--sf-primary); border-color: var(--sf-primary); color: #fff; box-shadow: none; }
+.sp-service-flow :is(.sp-chip-pill--orange-active, .sp-chip-pill--black-active, .sp-card-action--quote, .sp-quick-action-btn--primary):hover { background: var(--sf-primary-shade); border-color: var(--sf-primary-shade); }
+.sp-service-flow .sp-toggle-pill.is-active { background: var(--sf-soft); border-color: var(--sf-control-border); color: var(--sf-primary); box-shadow: none; }
+.sp-service-flow .sp-toggle-pill--urgent.is-active { background: #fff7e7; border-color: #dac39a; color: #825615; }
+.sp-service-flow .sp-contractor-card.is-selected { border-color: var(--sf-selected-border); box-shadow: 0 0 0 1px var(--sf-selected-border); }
+.sp-service-flow .sp-contractor-avatar--fallback { background: var(--sf-soft); color: var(--sf-primary); }
+.sp-service-flow .sp-map-top-pill--radius.is-active { background: var(--sf-selected); border-color: var(--sf-control-border); color: var(--sf-primary); }
+.sp-service-flow :is(.sp-results-header, .sp-contractors-list) { background: var(--sf-bg); }
+.sp-service-flow .sp-card-action { white-space: normal; }
+.sp-service-flow .sp-card-action ion-icon { flex-shrink: 0; }
+.sp-service-flow .sp-quick-action-btn ion-icon { color: inherit; }
+.sp-service-flow .sp-technician-pin-svg > path { fill: var(--sf-primary); }
+.sp-service-flow .sp-tu-obra-capsule { background: var(--sf-primary); border-color: var(--sf-control-border); box-shadow: var(--sf-shadow); }
+.sp-service-flow .sp-popup-action-btn { background: var(--sf-soft); border-color: var(--sf-control-border); color: var(--sf-primary); }
+.sp-service-flow .sp-popup-action-btn:hover { background: var(--sf-selected); border-color: var(--sf-selected-border); }
+
+/* Diálogos se montan fuera de la página: llevan el mismo ámbito explícito. */
+.sf-confirmation { --background: #fff; --min-width: min(360px, calc(100vw - 32px)); --max-width: 440px; }
+.sf-confirmation .alert-wrapper { border-radius: 20px; box-shadow: 0 24px 80px rgb(25 45 72 / 20%); }
+.sf-confirmation .alert-title { color: var(--sf-ink); font-size: 1.2rem; }
+.sf-confirmation .alert-message { color: var(--sf-muted); line-height: 1.6; }
+.sf-confirmation .alert-button { color: var(--sf-primary); font-weight: 650; text-transform: none; }
+.sf-confirmation .alert-button-role-destructive { color: #a62c3b; }
+
+/* Los selectores de modo oscuro existentes no deben dejar texto blanco sobre estas superficies. */
+body.dark .sp-service-flow :is(.sp-role-content, ion-toolbar, ion-item) { background: var(--sf-surface); color: var(--sf-ink); }
+body.dark .sp-service-flow :is(.sp-role-header h1, .sp-card h2, .sp-card-title h2, .sp-card-title p, .sp-icon-tile, .sp-icon-tile ion-icon) { color: var(--sf-ink); }
+
+@media (max-width: 767px) {
+  .sp-service-flow :is(.sp-role-page, .sp-reservas-container, .sp-request-page-wrapper, .tracking-page) { padding: 22px 16px calc(32px + env(safe-area-inset-bottom)); }
+  .sp-service-flow :is(.sp-card, .tracking-card, .sp-request-card, .sp-modal-section, .sp-diag-section-card, .sp-detail-header-card) { padding: 18px; border-radius: 16px; }
+  .sp-service-flow .tracking-header { padding: 22px 18px; border-radius: 16px; }
+  .sp-service-flow .sf-journey { padding: 16px; }
+  .sf-journey ol { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+  .sf-step-text small { display: none; }
+  .sp-service-flow .sf-address-grid { grid-template-columns: 1fr; }
+  .sp-service-flow .sp-summary-ribbon { padding: 18px; }
+  .sp-service-flow .sp-reserva-actions ion-button { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-service-flow :is(.sp-modal-service-pill, .sp-modal-pro-card-item, .sp-urgency-card, .sp-modal-urgency-card, .sp-diag-suggestion) { transition: none; }
+}

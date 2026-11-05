@@ -1,8 +1,12 @@
+import io
+import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import TestCase, override_settings
+from PIL import Image
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -227,3 +231,78 @@ class AdminCatalogTests(TestCase):
         self.assertIsNone(response.data["suggested_category"])
         self.assertEqual(response.data["service_ranking"], [])
         self.assertFalse(DiagnosticSession.objects.exists())
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class StoreProductTests(TestCase):
+    url = "/api/v1/store/products/"
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="store-client", email="store-client@example.com", role=UserRole.CLIENT,
+            first_name="Ana", last_name="Pérez",
+        )
+        cls.other = User.objects.create_user(
+            username="store-other", email="store-other@example.com", role=UserRole.CLIENT,
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+        self.media = tempfile.TemporaryDirectory()
+        self.addCleanup(self.media.cleanup)
+        override = override_settings(MEDIA_ROOT=self.media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+
+    @staticmethod
+    def png():
+        buffer = io.BytesIO()
+        Image.new("RGB", (8, 8), "red").save(buffer, "PNG")
+        return SimpleUploadedFile("foto.png", buffer.getvalue(), content_type="image/png")
+
+    def payload(self, **extra):
+        return {"title": "Taladro", "category": "Tecnología", "price": 90000, **extra}
+
+    def test_publish_requires_login(self):
+        self.assertEqual(self.api.post(self.url, self.payload(), format="multipart").status_code, 401)
+
+    def test_publish_with_image_persists_and_is_public(self):
+        self.api.force_authenticate(self.user)
+        response = self.api.post(self.url, self.payload(image=self.png()), format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["seller_name"], "Ana Pérez")
+        self.assertTrue(response.data["is_owner"])
+
+        public = APIClient()
+        listing = public.get(self.url).json()
+        self.assertEqual(len(listing), 1)
+        self.assertFalse(listing[0]["is_owner"])
+        image = public.get(listing[0]["image_url"])
+        self.assertEqual(image.status_code, 200)
+        self.assertEqual(image["Content-Type"], "image/png")
+        image.close()
+
+    def test_rejects_non_image_file(self):
+        self.api.force_authenticate(self.user)
+        fake = SimpleUploadedFile("x.png", b"no soy una imagen", content_type="image/png")
+        self.assertEqual(self.api.post(self.url, self.payload(image=fake), format="multipart").status_code, 400)
+
+    def test_categories_depend_on_profile(self):
+        self.api.force_authenticate(self.user)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Herramientas"), format="multipart").status_code, 400)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Ropa"), format="multipart").status_code, 201)
+        pro = User.objects.create_user(
+            username="store-pro", email="store-pro@example.com", role=UserRole.PROFESSIONAL,
+        )
+        self.api.force_authenticate(pro)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Ropa"), format="multipart").status_code, 400)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Herramientas"), format="multipart").status_code, 201)
+
+    def test_only_owner_can_delete(self):
+        self.api.force_authenticate(self.user)
+        product_id = self.api.post(self.url, self.payload(), format="multipart").data["id"]
+        self.api.force_authenticate(self.other)
+        self.assertEqual(self.api.delete(f"{self.url}{product_id}/").status_code, 403)
+        self.api.force_authenticate(self.user)
+        self.assertEqual(self.api.delete(f"{self.url}{product_id}/").status_code, 204)

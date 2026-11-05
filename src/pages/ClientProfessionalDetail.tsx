@@ -31,6 +31,7 @@ import {
   timeOutline,
 } from "ionicons/icons";
 import { ApiError } from "../services/api";
+import { trackingPath } from "../utils/workflow";
 import {
   catalogService,
   householdService,
@@ -48,6 +49,8 @@ import { geocodeAddress, normalizeBogotaAddress } from "../utils/geocoding";
 import { useAuth } from "../context/AuthContext";
 import "./ClientProfessionalDetail.css";
 import "./RolePages.css";
+import ServiceProgress from "../components/serviprox/ServiceProgress";
+import ServiceButtonContent from "../components/serviprox/ServiceButtonContent";
 
 type RouteParams = {
   id: string;
@@ -145,7 +148,7 @@ const ClientProfessionalDetail: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [createdRequestId, setCreatedRequestId] = useState<number | null>(null);
-  const [createdOrderId, setCreatedOrderId] = useState<number | null>(null);
+  const [createdTrackingPath, setCreatedTrackingPath] = useState("");
   const [addressLine, setAddressLine] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
   const [loading, setLoading] = useState(true);
@@ -307,6 +310,7 @@ const ClientProfessionalDetail: React.FC = () => {
 
   const canSubmit =
     !!professional &&
+    !professional.is_own_profile &&
     !!service &&
     (!!household || !!user) &&
     !!selectedOffering &&
@@ -385,13 +389,11 @@ const ClientProfessionalDetail: React.FC = () => {
         },
         selectedImages.map((image) => image.file)
       );
-      const trackingTargetId = request.order?.id || request.id;
+      const targetPath = trackingPath(request);
       setCreatedRequestId(request.id);
-      setCreatedOrderId(trackingTargetId);
-      setToast(`¡Solicitud enviada a ${professional.display_name}! Redirigiendo a la ruta en vivo...`);
-      setTimeout(() => {
-        history.push(`/seguimiento/${trackingTargetId}`);
-      }, 1200);
+      setCreatedTrackingPath(targetPath);
+      setToast(`Solicitud enviada a ${professional.display_name}. Pendiente de aceptación.`);
+      history.push(targetPath);
     } catch (err: unknown) {
       console.error("Error al crear solicitud:", err);
       const isApi =
@@ -409,7 +411,7 @@ const ClientProfessionalDetail: React.FC = () => {
   };
 
   return (
-    <IonPage>
+    <IonPage className="sp-service-flow">
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
@@ -436,6 +438,8 @@ const ClientProfessionalDetail: React.FC = () => {
             </section>
           ) : professional ? (
             <>
+              <ServiceProgress />
+              {professional.is_own_profile && <section className="sp-request-card" role="alert">Este es tu perfil profesional. Elige otro profesional para solicitar el servicio.</section>}
               {/* Tarjeta Hero del Profesional */}
               <div className="sp-detail-header-card">
                 <div className="sp-pro-hero">
@@ -511,8 +515,8 @@ const ClientProfessionalDetail: React.FC = () => {
                     <IonIcon icon={timeOutline} />
                   </div>
                   <div className="sp-summary-text">
-                    <h3>Demora estimada: ~{calculatedTravel.travelMinutes} min</h3>
-                    <p>Llegada aproximada hacia las {calculatedTravel.arrivalTimeStr}</p>
+                    <h3>Traslado estimado: ~{calculatedTravel.travelMinutes} min</h3>
+                    <p>Referencia previa a la aceptación y agenda de la visita.</p>
                     <span style={{ fontSize: "0.78rem", color: "#ca8a04", fontWeight: "700" }}>
                       🚗 {calculatedTravel.roadDistKm} km de recorrido urbano
                     </span>
@@ -538,17 +542,16 @@ const ClientProfessionalDetail: React.FC = () => {
                     <h3>¡Solicitud enviada a {professional.display_name}!</h3>
                     <p>
                       Tu solicitud <strong>#{createdRequestId}</strong> ha sido registrada.
-                      El profesional ya tiene los datos del servicio y puedes seguir su ruta hacia tu ubicación en vivo.
+                      El profesional ya tiene los datos. Puedes consultar su respuesta y el seguimiento desde esta solicitud.
                     </p>
                     <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap", marginTop: "1rem" }}>
                       <IonButton
                         type="button"
-                        onClick={() => history.push(`/seguimiento/${createdOrderId || createdRequestId}`)}
+                        onClick={() => history.push(createdTrackingPath)}
                         className="sp-btn-submit"
-                        style={{ minWidth: "250px" }}
                       >
                         <IonIcon slot="start" icon={navigateOutline} />
-                        Ver ruta donde va {professional.display_name}
+                        Ver estado de la solicitud
                       </IonButton>
                       <IonButton
                         type="button"
@@ -629,7 +632,7 @@ const ClientProfessionalDetail: React.FC = () => {
                         <span>Ubicación de tu vivienda (dirección del servicio)</span>
                         <span className="sp-char-counter valid">📍 Destino del profesional</span>
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "10px" }}>
+                      <div className="sf-address-grid">
                         <input
                           type="text"
                           className="sp-address-field-custom"
@@ -717,17 +720,8 @@ const ClientProfessionalDetail: React.FC = () => {
                         className="sp-btn-submit"
                         disabled={!canSubmit}
                       >
-                        {sending ? (
-                          <>
-                            <IonSpinner name="crescent" style={{ width: "20px", height: "20px" }} />
-                            <span>Enviando solicitud...</span>
-                          </>
-                        ) : (
-                          <>
-                            <IonIcon icon={paperPlaneOutline} style={{ fontSize: "1.2rem" }} />
-                            <span>Enviar solicitud a {professional.display_name.split(" ")[0]}</span>
-                          </>
-                        )}
+                        <ServiceButtonContent busy={sending} icon={paperPlaneOutline}
+                          label={`Enviar solicitud a ${professional.display_name.split(" ")[0]}`} busyLabel="Enviando solicitud..." />
                       </button>
 
                       <a href="/cliente/servicios" className="sp-btn-cancel">

@@ -6,12 +6,13 @@ import {
   IonHeader,
   IonIcon,
   IonModal,
-  IonSpinner,
   IonTitle,
   IonToolbar,
 } from "@ionic/react";
 import { checkmarkCircle, closeOutline, constructOutline, searchOutline } from "ionicons/icons";
 import { catalogService, diagnosisService } from "../../services/serviprox";
+import { normalizeDiagnosticSession } from "../../utils/diagnosis";
+import ServiceButtonContent from "../serviprox/ServiceButtonContent";
 import type {
   DiagnosticSession,
   Service,
@@ -59,6 +60,7 @@ export const OrientacionGuiadaModal: React.FC<OrientacionGuiadaModalProps> = ({
     setSelectedServiceId(null);
     setLoading(false);
     setError("");
+    return () => { searchGeneration.current += 1; };
   }, [isOpen]);
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export const OrientacionGuiadaModal: React.FC<OrientacionGuiadaModalProps> = ({
     const generation = ++searchGeneration.current;
 
     try {
-      const result = await diagnosisService.create(query);
+      const result = normalizeDiagnosticSession(await diagnosisService.create(query), query);
       if (generation !== searchGeneration.current) return;
       setDiagnosis(result);
       if (!result.service_ranking.length && result.suggested_category) {
@@ -99,7 +101,7 @@ export const OrientacionGuiadaModal: React.FC<OrientacionGuiadaModalProps> = ({
       }
     } catch {
       if (generation === searchGeneration.current) {
-        setError("No pudimos consultar las sugerencias. Verifica tu conexión e inténtalo de nuevo.");
+        setError("No pudimos consultar las sugerencias. Intenta de nuevo o elige una categoría del catálogo.");
       }
     } finally {
       if (generation === searchGeneration.current) setLoading(false);
@@ -134,7 +136,7 @@ export const OrientacionGuiadaModal: React.FC<OrientacionGuiadaModalProps> = ({
     (diagnosis?.service_ranking.length || 0) > 0 || categoryServices.length > 0;
 
   return (
-    <IonModal isOpen={isOpen} onDidDismiss={onClose} className="sp-diag-modal">
+    <IonModal isOpen={isOpen} onDidDismiss={onClose} className="sp-diag-modal sp-service-flow">
       <IonHeader>
         <IonToolbar className="sp-diag-modal-header">
           <IonTitle>Encuentra el servicio adecuado</IonTitle>
@@ -192,22 +194,13 @@ export const OrientacionGuiadaModal: React.FC<OrientacionGuiadaModalProps> = ({
               }}
             />
             <IonButton
+              className="sp-guided-search-button"
               expand="block"
               onClick={handleSearch}
               disabled={loading || description.trim().length < 5}
               style={{ marginTop: "12px" }}
             >
-              {loading ? (
-                <>
-                  <IonSpinner name="crescent" style={{ marginRight: "8px" }} />
-                  Buscando en el catálogo...
-                </>
-              ) : (
-                <>
-                  <IonIcon slot="start" icon={searchOutline} />
-                  Buscar sugerencias
-                </>
-              )}
+              <ServiceButtonContent busy={loading} icon={searchOutline} label="Buscar sugerencias" busyLabel="Buscando en el catálogo..." />
             </IonButton>
             {error && (
               <p role="alert" style={{ color: "#b91c1c", marginBottom: 0 }}>

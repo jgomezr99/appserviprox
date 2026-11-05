@@ -358,7 +358,7 @@ class DirectedServiceRequestTests(TestCase):
         self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
         self.assertEqual(order.payment_reference, f"DEV-{order.id}")
 
-    def test_order_cannot_complete_without_confirmed_payment(self):
+    def test_order_can_complete_with_payment_still_pending(self):
         service_request = ServiceRequest.objects.create(
             client=self.client_user,
             household=self.household,
@@ -366,6 +366,7 @@ class DirectedServiceRequestTests(TestCase):
             selected_service=self.service,
             professional=self.profile,
             description="Sin pago",
+            status=ServiceRequest.Status.ACCEPTED,
         )
         order = Order.objects.create(
             service_request=service_request,
@@ -381,10 +382,13 @@ class DirectedServiceRequestTests(TestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
         order.refresh_from_db()
-        self.assertEqual(order.status, Order.Status.IN_PROGRESS)
-        self.assertFalse(OrderEvent.objects.filter(order=order, status=Order.Status.COMPLETED).exists())
+        self.assertEqual(order.status, Order.Status.COMPLETED)
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PENDING)
+        self.assertTrue(OrderEvent.objects.filter(order=order, status=Order.Status.COMPLETED).exists())
+        service_request.refresh_from_db()
+        self.assertEqual(service_request.status, ServiceRequest.Status.CLOSED)
 
     def test_order_can_complete_with_confirmed_payment(self):
         service_request = ServiceRequest.objects.create(
@@ -394,6 +398,7 @@ class DirectedServiceRequestTests(TestCase):
             selected_service=self.service,
             professional=self.profile,
             description="Con pago",
+            status=ServiceRequest.Status.ACCEPTED,
         )
         order = Order.objects.create(
             service_request=service_request,

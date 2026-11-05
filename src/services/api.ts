@@ -93,12 +93,17 @@ export let API_BASE_URL = activeBaseUrl;
 export const getApiBaseUrl = (): string => activeBaseUrl;
 
 export const getCandidateBaseUrls = (): string[] => {
-  // Un solo destino productivo; nunca enviar JWT a hosts guardados o locales.
+  // Un solo destino cuando VITE_API_URL esta definida: web y movil comparten servidor.
   if (import.meta.env.PROD) {
     const configured = resolveApiBaseUrl();
     return configured ? [configured] : [];
   }
   const candidates: string[] = [];
+  const isNative = Capacitor.isNativePlatform();
+  const isLocalBrowser =
+    !isNative &&
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
   // 1. Si ya se verificó un host exitoso en esta sesión o guardado, darle máxima prioridad absoluta
   if (typeof window !== "undefined") {
@@ -119,8 +124,11 @@ export const getCandidateBaseUrls = (): string[] => {
     candidates.push(normalizeApiUrl(saved));
   }
 
-  if (import.meta.env.VITE_API_URL) {
-    candidates.push(normalizeApiUrl(import.meta.env.VITE_API_URL));
+  // En el navegador local, el Django de esta misma PC va antes que una IP de red (VITE_API_URL)
+  // que puede haber cambiado; en el movil la URL configurada sigue teniendo prioridad.
+  const configuredUrl = import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "";
+  if (configuredUrl && !isLocalBrowser) {
+    candidates.push(configuredUrl);
   }
 
   if (typeof window !== "undefined" && window.location) {
@@ -131,6 +139,9 @@ export const getCandidateBaseUrls = (): string[] => {
       // Fallbacks directos a Django para saltarse posibles fallos o demoras del proxy de Vite
       candidates.push("http://127.0.0.1:8000/api/v1");
       candidates.push("http://localhost:8000/api/v1");
+      if (configuredUrl) {
+        candidates.push(configuredUrl);
+      }
     } else if (hostname && !hostname.includes("devtunnels.ms") && !isNetlify) {
       candidates.push(`http://${hostname}:8000/api/v1`);
     }
@@ -255,8 +266,6 @@ const getErrorMessage = (status: number, payload: unknown) => {
   }
   return `API request failed with status ${status}`;
 };
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isGatewayOrNetworkError = (status?: number): boolean => {
   return !status || status === 502 || status === 503 || status === 504;
@@ -514,7 +523,7 @@ export const checkBackendHealth = async (
     try {
       const url = `${base.replace(/\/$/, "")}/health/`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
       const res = await fetch(url, {
         method: "GET",
         headers: { Accept: "application/json" },

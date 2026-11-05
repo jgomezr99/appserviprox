@@ -794,7 +794,7 @@ const ContractorMapPage: React.FC = () => {
   };
 
   return (
-    <IonPage>
+    <IonPage className="sp-service-flow">
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">

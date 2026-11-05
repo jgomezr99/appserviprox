@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
@@ -77,3 +78,47 @@ class Service(models.Model):
         if not self.slug:
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
+
+
+class StoreProduct(models.Model):
+    """Producto publicado por un usuario en la tienda de herramientas y suministros."""
+
+    class Category(models.TextChoices):
+        TOOLS = "Herramientas", "Herramientas"
+        SAFETY = "Seguridad y EPP", "Seguridad y EPP"
+        MATERIALS = "Materiales", "Materiales"
+        PARTS = "Repuestos", "Repuestos"
+        EQUIPMENT = "Equipos", "Equipos"
+        TECHNOLOGY = "Tecnología", "Tecnología"
+        FURNITURE = "Muebles", "Muebles"
+        CLOTHING = "Ropa", "Ropa"
+        APPLIANCES = "Electrodomésticos", "Electrodomésticos"
+        HOME = "Hogar y decoración", "Hogar y decoración"
+        OTHER = "Otros", "Otros"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="store_products",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    title = models.CharField(_("titulo"), max_length=140)
+    category = models.CharField(_("categoria"), max_length=40, choices=Category.choices)
+    price = models.PositiveIntegerField(_("precio (COP)"))
+    description = models.TextField(_("descripcion"), blank=True)
+    seller_name = models.CharField(_("vendedor"), max_length=140)
+    seller_role = models.CharField(_("rol del vendedor"), max_length=40)
+    phone = models.CharField(_("telefono"), max_length=40, blank=True)
+    city = models.CharField(_("ciudad"), max_length=80, blank=True)
+    image = models.ImageField(_("imagen"), upload_to="store-products/%Y/%m/", blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("producto de tienda")
+        verbose_name_plural = _("productos de tienda")
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return self.title

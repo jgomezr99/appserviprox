@@ -1,11 +1,25 @@
 from rest_framework import serializers
+from django.db import transaction
 
 from apps.professionals.serializers import ProfessionalListSerializer
+from apps.professionals.models import ProfessionalService
+from apps.accounts.models import UserRole
 from apps.service_requests.models import ServiceRequest
 from apps.service_requests.services import professional_offers_service
 
 from .models import Order, OrderEvent, Review, WorkEvidence
-from .services import refresh_rating
+from .services import ALLOWED_TRANSITIONS, refresh_rating, is_assigned_professional, is_order_client, price_bounds, valid_price_bounds
+
+
+class OrderTransitionSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=Order.Status.choices)
+    note = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
+    scheduled_for = serializers.DateTimeField(required=False)
+    arrival_code = serializers.CharField(max_length=8, required=False, allow_blank=True, default="")
+
+
+class OrderPriceSerializer(serializers.Serializer):
+    final_price = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=1)
 
 
 class OrderEventSerializer(serializers.ModelSerializer):
@@ -23,7 +37,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at"]
 
     def validate_order(self, order):
-        if order.client_id != self.context["request"].user.id:
+        if not is_order_client(order, self.context["request"].user):
             raise serializers.ValidationError("Solo el cliente puede calificar la orden.")
         if order.status != Order.Status.COMPLETED:
             raise serializers.ValidationError("La orden aun no esta completada.")
@@ -49,6 +63,11 @@ class WorkEvidenceSerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
+    viewer_role = serializers.SerializerMethodField()
+    price_bounds = serializers.SerializerMethodField()
+    can_set_final_price = serializers.SerializerMethodField()
+    available_transitions = serializers.SerializerMethodField()
+    arrival_code = serializers.SerializerMethodField()
     professional = ProfessionalListSerializer(read_only=True)
     events = OrderEventSerializer(many=True, read_only=True)
     review = ReviewSerializer(read_only=True)
@@ -70,6 +89,10 @@ class OrderSerializer(serializers.ModelSerializer):
             "professional",
             "status",
             "status_label",
+            "available_transitions",
+            "viewer_role",
+            "price_bounds",
+            "can_set_final_price",
             "payment_status",
             "payment_status_label",
             "payment_confirmed_at",
@@ -95,6 +118,43 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    def get_arrival_code(self, obj):
+        request = self.context.get("request")
+        return obj.arrival_code if request and is_order_client(obj, request.user) else ""
+
+    def get_viewer_role(self, obj):
+        request = self.context.get("request")
+        if request and is_assigned_professional(obj, request.user):
+            return "professional"
+        if request and is_order_client(obj, request.user):
+            return "client"
+        return "staff" if request and request.user.role == UserRole.STAFF else "none"
+
+    def get_price_bounds(self, obj):
+        lower, upper = price_bounds(obj)
+        return {"min": str(lower) if lower is not None else None, "max": str(upper) if upper is not None else None}
+
+    def get_can_set_final_price(self, obj):
+        request = self.context.get("request")
+        return bool(request and is_assigned_professional(obj, request.user)
+                    and obj.status not in {Order.Status.REQUESTED, Order.Status.CANCELLED}
+                    and obj.payment_status != Order.PaymentStatus.PAID and valid_price_bounds(obj)
+                    and not any(payment.status == "pending" for payment in obj.payments.all()))
+
+    def get_available_transitions(self, obj):
+        request = self.context.get("request")
+        if request is None:
+            return []
+        user = request.user
+        allowed = ALLOWED_TRANSITIONS.get(obj.status, set()) - {Order.Status.ACCEPTED}
+        if obj.service_request.status != ServiceRequest.Status.ACCEPTED:
+            allowed = allowed & {Order.Status.CANCELLED}
+        if is_assigned_professional(obj, user) or getattr(user, "role", "") == "staff":
+            return sorted(allowed)
+        if is_order_client(obj, user) and obj.status in {Order.Status.REQUESTED, Order.Status.ACCEPTED, Order.Status.SCHEDULED}:
+            return sorted(allowed & {Order.Status.CANCELLED})
+        return []
+
 
 class OrderCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -107,6 +167,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             "estimate_max",
             "client_notes",
         ]
+        read_only_fields = ["estimate_min", "estimate_max"]
 
     def validate_service_request(self, service_request):
         if service_request.client_id != self.context["request"].user.id:
@@ -118,6 +179,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         service_request = attrs["service_request"]
         professional = attrs["professional"]
+        if self.context["request"].user.role != UserRole.CLIENT:
+            raise serializers.ValidationError("Solo el cliente puede solicitar una orden.")
+        if professional.user_id == service_request.client_id:
+            raise serializers.ValidationError({"professional": "No puedes contratar tu propio perfil profesional."})
 
         if service_request.selected_service_id and not professional_offers_service(
             professional, service_request.selected_service_id
@@ -131,17 +196,28 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Ya existe una orden para esta solicitud.")
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
-        order = Order.objects.create(client=self.context["request"].user, **validated_data)
+        service_request = ServiceRequest.objects.select_for_update().get(pk=validated_data["service_request"].pk)
+        if service_request.status not in {ServiceRequest.Status.OPEN, ServiceRequest.Status.MATCHED}:
+            raise serializers.ValidationError("La solicitud ya no permite crear una orden.")
+        if service_request.professional_id not in {None, validated_data["professional"].id}:
+            raise serializers.ValidationError("La solicitud ya está dirigida a otro profesional.")
+        if service_request.orders.exists():
+            raise serializers.ValidationError("Ya existe una orden para esta solicitud.")
+        offering = ProfessionalService.objects.filter(profile=validated_data["professional"], service_id=service_request.selected_service_id).first()
+        order = Order.objects.create(client=self.context["request"].user,
+                                     estimate_min=offering.price_min if offering else None,
+                                     estimate_max=offering.price_max if offering else None, **validated_data)
         OrderEvent.objects.create(
             order=order,
             status=order.status,
             note="Visita solicitada desde la app.",
             created_by=order.client,
         )
-        service_request = order.service_request
-        service_request.status = service_request.Status.MATCHED
-        service_request.save(update_fields=["status", "updated_at"])
+        service_request.professional = order.professional
+        service_request.status = service_request.Status.OPEN
+        service_request.save(update_fields=["professional", "status", "updated_at"])
         return order
 
     def to_representation(self, instance):

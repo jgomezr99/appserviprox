@@ -8,12 +8,11 @@
  * Conectado a la base de datos oficial de contratistas registrados de Bogotá.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlatformSettings } from '../services/platformSettings';
 import { isUserAdmin } from '../utils/routes';
-import { LiveSupportChatModal } from './pqr/LiveSupportChatModal';
 import type { AppProblemReport, PqrReport } from '../types/serviprox';
 import {
   REGISTERED_CONTRACTORS_REF,
@@ -23,13 +22,22 @@ import {
   saveStoredAppProblems,
 } from '../data/pqrInitialData';
 
+const LiveSupportChatModal = lazy(() =>
+  import('./pqr/LiveSupportChatModal').then((m) => ({ default: m.LiveSupportChatModal }))
+);
+
 const HIDDEN_PATHS = ['/login', '/ingresar', '/register'];
 
 export const GlobalChatButton: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   const location = useLocation();
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatLoaded, setChatLoaded] = useState(false);
   const platform = usePlatformSettings();
+
+  useEffect(() => {
+    if (chatOpen) setChatLoaded(true);
+  }, [chatOpen]);
 
   useEffect(() => {
     const handleOpen = () => {
@@ -175,13 +183,16 @@ export const GlobalChatButton: React.FC = () => {
       </button>
 
       {/* ── Modal de Chat en Vivo ── */}
-      <LiveSupportChatModal
-        isOpen={chatOpen}
-        onClose={() => setChatOpen(false)}
-        contractors={REGISTERED_CONTRACTORS_REF}
-        onPqrCreatedFromChat={handlePqrCreated}
-        onAppProblemReported={handleAppProblem}
-      />
-    </>
+      {(chatOpen || chatLoaded) && (
+        <Suspense fallback={null}>
+          <LiveSupportChatModal
+            isOpen={chatOpen}
+            onClose={() => setChatOpen(false)}
+            contractors={REGISTERED_CONTRACTORS_REF}
+            onPqrCreatedFromChat={handlePqrCreated}
+            onAppProblemReported={handleAppProblem}
+          />
+        </Suspense>
+      )}    </>
   );
 };

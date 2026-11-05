@@ -11,7 +11,7 @@ export const SECTION_DEFAULTS: Record<string, Section> = {
       pqr: true,
       store: true,
       publish_store: true,
-      benefits: true,
+      profile: true,
     },
     professional: {
       profile_status: true,

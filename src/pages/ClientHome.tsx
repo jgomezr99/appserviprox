@@ -28,7 +28,6 @@ import {
   personCircleOutline,
   saveOutline,
   cartOutline,
-  giftOutline,
   addCircleOutline,
 } from "ionicons/icons";
 import { useAuth } from "../context/AuthContext";
@@ -369,7 +368,7 @@ const ClientHome: React.FC = () => {
                 <IonIcon icon={cartOutline} style={{ fontSize: "1.3rem" }} />
                 <h2>Tienda de productos</h2>
               </div>
-              <p>Compra y consulta herramientas, materiales y equipamiento de obra.</p>
+              <p>Compra y consulta tecnología, muebles, ropa y más artículos de la comunidad.</p>
             </a>
             )}
             {flags.publish_store && (
@@ -378,16 +377,7 @@ const ClientHome: React.FC = () => {
                 <IonIcon icon={addCircleOutline} style={{ fontSize: "1.3rem", color: "var(--ion-color-primary)" }} />
                 <h2>Publicar en tienda</h2>
               </div>
-              <p>Publica tus herramientas, equipos o materiales para venta o alquiler.</p>
-            </a>
-            )}
-            {flags.benefits && (
-            <a className="sp-card sp-home-link" href="/cliente/beneficios">
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                <IonIcon icon={giftOutline} style={{ fontSize: "1.3rem" }} />
-                <h2>Beneficios y puntos</h2>
-              </div>
-              <p>Consulta tus puntos acumulados y canjea recompensas exclusivas.</p>
+              <p>Publica tecnología, muebles, ropa y otros artículos para venta.</p>
             </a>
             )}
           </section>

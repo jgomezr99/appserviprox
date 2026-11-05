@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   IonButton,
   IonButtons,
@@ -21,9 +21,14 @@ import {
   star,
   timeOutline,
   homeOutline,
+  cameraOutline,
 } from "ionicons/icons";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { apiMessage, trackingPath } from "../../utils/workflow";
+import RequestPhotoPicker from "../serviprox/RequestPhotoPicker";
+import ServiceProgress from "../serviprox/ServiceProgress";
+import ServiceButtonContent from "../serviprox/ServiceButtonContent";
 import {
   catalogService,
   householdService,
@@ -48,7 +53,7 @@ interface TomarServicioModalProps {
   initialUrgency?: ServiceRequestUrgency;
   initialServiceId?: number | null;
   diagnosticSessionId?: number | null;
-  onSuccess?: (orderId: string | number) => void;
+  onSuccess?: (trackingUrl: string) => void;
 }
 
 export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
@@ -86,6 +91,10 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [toastMessage, setToastMessage] = useState("");
+  const [photos, setPhotos] = useState<File[]>([]);
+  const submittingRef = useRef(false);
+
+  useEffect(() => { setPhotos([]); }, [isOpen, category?.id, user?.id]);
 
   // Cargar datos cuando se abre el modal y cambia la categoría
   useEffect(() => {
@@ -172,10 +181,11 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
     professionalSearchService
       .list({ category: category.slug, service: selectedServiceId })
       .then((proList) => {
-        setProfessionals(proList);
+        const eligible = proList.filter((pro) => !pro.is_own_profile);
+        setProfessionals(eligible);
         setProfessional((current) => {
-          if (current && proList.some((pro) => pro.id === current.id)) return current;
-          if (initialProfessional && proList.some((pro) => pro.id === initialProfessional.id)) {
+          if (current && eligible.some((pro) => pro.id === current.id)) return current;
+          if (initialProfessional && eligible.some((pro) => pro.id === initialProfessional.id)) {
             return initialProfessional;
           }
           return null;
@@ -204,7 +214,11 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
   // Enviar y tomar el servicio confirmando dirección
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!category) return;
+    if (!category || submittingRef.current) return;
+    if (professional?.is_own_profile) {
+      setError("No puedes solicitar un servicio a tu propio perfil profesional.");
+      return;
+    }
 
     if (!addressLine.trim() || addressLine.trim().length < 5) {
       setError("Por favor ingresa una dirección válida para la visita del profesional.");
@@ -226,6 +240,7 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setError("");
 
@@ -233,7 +248,7 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
       // 1. Obtener o crear vivienda con la dirección confirmada
       let targetHousehold: Household | null = null;
       if (households.length > 0) {
-        targetHousehold = households[0];
+        targetHousehold = households.find((item) => item.is_default) || households[0];
         // Si el usuario modificó la dirección, la actualizamos
         if (
           addressLine.trim() !== targetHousehold.address_line ||
@@ -270,24 +285,23 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
         professional: professional?.id ?? null,
         description: description.trim(),
         urgency,
-      });
+      }, photos);
 
-      const orderId = req.order?.id || req.id;
-      setToastMessage(`¡Servicio tomado con éxito! Dirección confirmada: ${addressLine}`);
+      const targetPath = trackingPath(req);
+      setToastMessage("Solicitud registrada. Pendiente de aceptación o asignación.");
 
       onClose();
 
       if (onSuccess) {
-        onSuccess(orderId);
+        onSuccess(targetPath);
       } else {
-        setTimeout(() => {
-          history.push(`/seguimiento/${orderId}`);
-        }, 1000);
+        history.push(targetPath);
       }
     } catch (err: unknown) {
       console.error("Error al tomar el servicio:", err);
-      setError("No pudimos registrar la solicitud. Revisa los datos e intenta nuevamente.");
+      setError(apiMessage(err, "No pudimos registrar la solicitud. Revisa los datos e intenta nuevamente."));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -296,19 +310,19 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
 
   return (
     <>
-      <IonModal isOpen={isOpen} onDidDismiss={onClose} className="sp-service-modal">
+      <IonModal isOpen={isOpen} onDidDismiss={onClose} className="sp-service-modal sp-service-flow" backdropDismiss={!submitting}>
         <IonHeader>
           <IonToolbar className="sp-service-modal-header">
             <IonTitle>Tomar servicio: {category.name}</IonTitle>
             <IonButtons slot="end">
-              <IonButton onClick={onClose} fill="clear">
+              <IonButton onClick={onClose} fill="clear" disabled={submitting} aria-label="Cerrar tomar servicio">
                 <IonIcon slot="icon-only" icon={closeOutline} />
               </IonButton>
             </IonButtons>
           </IonToolbar>
         </IonHeader>
 
-        <IonContent fullscreen className="sp-service-modal-content">
+        <IonContent className="sp-service-modal-content">
           <div className="sp-service-modal-body">
             {/* Banner de Bienvenida */}
             <div className="sp-modal-banner">
@@ -321,6 +335,7 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
               </div>
             </div>
 
+            <ServiceProgress />
             <form onSubmit={handleSubmit}>
               {/* Sección 1: Confirmar Dirección */}
               <div className="sp-modal-section">
@@ -399,7 +414,7 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
                               <strong>{svc.name}</strong>
                               <span>{svc.description || `Servicio profesional calificado en ${category.name}`}</span>
                               {svc.price_min && (
-                                <span style={{ color: "#0B2F6B", fontWeight: 700, marginTop: "3px" }}>
+                                <span style={{ color: "var(--sf-primary)", fontWeight: 700, marginTop: "3px" }}>
                                   Tarifa sugerida: ${Number(svc.price_min).toLocaleString()} COP
                                 </span>
                               )}
@@ -454,11 +469,16 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
                 </div>
               </div>
 
-              {/* Sección 3: Urgencia */}
+              <section className="sp-modal-section sp-modal-section--photos" aria-label="Fotos del problema">
+                <h4 className="sp-modal-section-title"><IonIcon icon={cameraOutline} /><span>3. Fotos del problema (opcional)</span></h4>
+                <RequestPhotoPicker files={photos} onChange={setPhotos} disabled={submitting} />
+              </section>
+
+              {/* Sección 4: Urgencia */}
               <div className="sp-modal-section">
                 <h4 className="sp-modal-section-title">
                   <IonIcon icon={timeOutline} />
-                  <span>3. ¿Con qué urgencia lo requieres?</span>
+                  <span>4. ¿Con qué urgencia lo requieres?</span>
                 </h4>
 
                 <div className="sp-modal-urgency-row">
@@ -486,11 +506,11 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
                 </div>
               </div>
 
-              {/* Sección 4: Carrusel de Profesionales Disponibles */}
-              <div className="sp-modal-section">
+              {/* Sección 5: Profesionales disponibles */}
+              <div className="sp-modal-section sp-modal-section--professionals">
                 <h4 className="sp-modal-section-title">
                   <IonIcon icon={shieldCheckmarkOutline} />
-                  <span>4. Profesionales disponibles ({professionals.length})</span>
+                  <span>5. Profesionales disponibles ({professionals.length})</span>
                 </h4>
                 <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "-6px 0 12px" }}>
                   Puedes elegir un profesional o dejar que el sistema busque candidatos compatibles:
@@ -549,8 +569,8 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
                 )}
 
                 {professional && (
-                  <div style={{ marginTop: "12px", padding: "10px 14px", background: "rgba(11, 47, 107, 0.06)", borderRadius: "10px", display: "flex", alignItems: "center", gap: "10px", border: "1px solid rgba(11, 47, 107, 0.15)" }}>
-                    <IonIcon icon={checkmarkCircle} style={{ color: "#0B2F6B", fontSize: "22px", flexShrink: 0 }} />
+                  <div className="sf-professional-selection">
+                    <IonIcon icon={checkmarkCircle} />
                     <span style={{ fontSize: "0.88rem", color: "#0f172a" }}>
                       Tomarás el servicio con: <strong>{professional.display_name}</strong> ({professional.headline || category.name})
                     </span>
@@ -559,14 +579,14 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
               </div>
 
               {/* Errores */}
-              {error && <div className="sp-modal-error-box">{error}</div>}
+              {error && <div className="sp-modal-error-box" role="alert">{error}</div>}
 
               {/* Acciones y Autenticación */}
               <div className="sp-modal-actions">
                 {!isAuthenticated ? (
                   <>
                     <div style={{ textAlign: "center", padding: "8px 0", color: "#64748b", fontSize: "0.88rem" }}>
-                      Para confirmar la orden en la base de datos se requiere cuenta de cliente.
+                      Inicia sesión con tu cuenta de cliente para enviar la solicitud.
                     </div>
                     <IonButton
                       expand="block"
@@ -585,20 +605,9 @@ export const TomarServicioModal: React.FC<TomarServicioModalProps> = ({
                   className="sp-btn-confirm-submit"
                   disabled={submitting || !addressLine.trim()}
                 >
-                  {submitting ? (
-                    <>
-                      <IonSpinner name="crescent" style={{ width: "20px", height: "20px", marginRight: "8px" }} />
-                      <span>Confirmando servicio en base de datos...</span>
-                    </>
-                  ) : (
-                    <>
-                      <IonIcon slot="start" icon={paperPlaneOutline} />
-                      <span>
-                        Confirmar dirección y tomar servicio
-                        {professional?.display_name ? ` con ${professional.display_name}` : ""}
-                      </span>
-                    </>
-                  )}
+                  <ServiceButtonContent busy={submitting} icon={paperPlaneOutline}
+                    label={`Confirmar dirección y tomar servicio${professional?.display_name ? ` con ${professional.display_name}` : ""}`}
+                    busyLabel="Enviando solicitud..." />
                 </IonButton>
               </div>
             </form>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   IonBadge,
   IonButton,
@@ -22,6 +22,8 @@ import {
 } from "ionicons/icons";
 import { menuController } from "@ionic/core";
 import { serviceRequestService } from "../services/serviprox";
+import { useLivePage } from "../hooks/useLivePage";
+import { apiMessage, trackingPath } from "../utils/workflow";
 import type { ServiceRequest, ServiceRequestStatus } from "../types/serviprox";
 import RequestImageGallery from "../components/serviprox/RequestImageGallery";
 import "./RolePages.css";
@@ -49,8 +51,8 @@ const clientName = (request: ServiceRequest) =>
   "Cliente";
 
 const statusWithPayment = (request: ServiceRequest) => {
-  if (request.status !== "accepted" || !request.order) return request.status_label;
-  return `${request.status_label} · ${request.order.payment_status_label}`;
+  if (!request.order) return request.status_label;
+  return `${request.order.status_label} · ${request.order.payment_status_label}`;
 };
 
 const ProfessionalRequestsPage: React.FC = () => {
@@ -59,21 +61,17 @@ const ProfessionalRequestsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadRequests = async () => {
-    setLoading(true);
-    setError("");
+  const loadRequests = useCallback(async () => {
     try {
       setRequests(await serviceRequestService.list());
-    } catch {
-      setError("No pudimos cargar tus solicitudes recibidas.");
+      setError("");
+    } catch (failure) {
+      setError(apiMessage(failure, "No pudimos cargar tus solicitudes recibidas."));
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    void loadRequests();
   }, []);
+  useLivePage(loadRequests, 15000);
 
   const filteredRequests = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -96,7 +94,7 @@ const ProfessionalRequestsPage: React.FC = () => {
   }, [query, requests]);
 
   return (
-    <IonPage>
+    <IonPage className="sp-service-flow">
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
@@ -123,6 +121,7 @@ const ProfessionalRequestsPage: React.FC = () => {
           </header>
 
           <div className="sp-actions sp-actions--spaced">
+            <IonButton routerLink="/profesional/trabajos">Mis trabajos e historial</IonButton>
             <IonSearchbar
               className="sp-request-search"
               value={query}
@@ -183,6 +182,7 @@ const ProfessionalRequestsPage: React.FC = () => {
                   ) : null}
 
                   <div className="sp-actions">
+                    {request.order && <IonButton routerLink={trackingPath(request)}>Continuar seguimiento</IonButton>}
                     <IonButton routerLink={`/profesional/solicitudes/${request.id}`}>
                       Ver solicitud
                     </IonButton>
