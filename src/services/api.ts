@@ -533,11 +533,18 @@ export const checkBackendHealth = async (
 
       const contentType = res.headers.get("content-type") || "";
       if (res.ok && contentType.includes("application/json")) {
-        const data = await res.json();
+        const data = (await res.json()) as {
+          status?: string;
+          database?: string;
+          engine?: string;
+        };
+        if (data.status !== "ok" || data.database !== "connected") {
+          continue;
+        }
         setWorkingBaseUrl(base);
         return {
           ok: true,
-          database: data.database || "connected",
+          database: data.database,
           engine: data.engine,
           url: base,
         };

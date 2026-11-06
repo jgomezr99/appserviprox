@@ -72,7 +72,7 @@ export const NotificationsTab: React.FC<TabProps> = ({ form, setForm, sec, setSe
           <p className="as-muted">Notificaciones en tiempo real en la app móvil y navegadores.</p>
           <FieldList
             fields={[
-              { key: "push_provider", label: "Proveedor", kind: "select", options: ["Firebase Cloud Messaging", "OneSignal"] },
+              { key: "push_provider", label: "Proveedor", kind: "select", options: ["OneSignal"] },
               { key: "push_key", label: "Clave del servidor", kind: "password" },
               { key: "push_enabled", label: "Canal activo", kind: "toggle" },
             ]}

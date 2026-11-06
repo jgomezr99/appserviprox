@@ -41,23 +41,12 @@ import {
   professionalSearchService,
 } from '../services/serviprox';
 
-import {
-  getStoredPqrReports,
-  saveStoredPqrReports,
-  getStoredAppProblems,
-  saveStoredAppProblems,
-  REGISTERED_CONTRACTORS_REF,
-} from '../data/pqrInitialData';
 import { useAuth } from '../context/AuthContext';
 import { MaintenanceNotice, useMaintenance } from '../components/MaintenanceNotice';
 import { usePlatformSettings } from '../services/platformSettings';
 import { IonIcon, IonButton } from '@ionic/react';
 import { alertCircleOutline, arrowBackOutline } from 'ionicons/icons';
 import { useHistory } from 'react-router-dom';
-
-function buildRadicado() {
-  return `PQR-BOG-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-}
 
 const PqrPage: React.FC = () => {
   const { user } = useAuth();
@@ -128,12 +117,13 @@ const PqrPage: React.FC = () => {
   }
 
   // ── Datos con precarga desde la base de datos (filtrados por cuenta) ──────
-  const [pqrReports, setPqrReports] = useState<PqrReport[]>(() => getStoredPqrReports(user?.email));
-  const [appProblemReports, setAppProblemReports] = useState<AppProblemReport[]>(() => getStoredAppProblems(user?.email));
-  const [contractorRefs, setContractorRefs] = useState<PqrContractorRef[]>(REGISTERED_CONTRACTORS_REF);
+  const [pqrReports, setPqrReports] = useState<PqrReport[]>([]);
+  const [appProblemReports, setAppProblemReports] = useState<AppProblemReport[]>([]);
+  const [contractorRefs, setContractorRefs] = useState<PqrContractorRef[]>([]);
 
   // ── Estados de UI y modales ───────────────────────────────────────────────
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [toastMsg, setToastMsg] = useState('');
 
   const [showReportModal, setShowReportModal] = useState(false);
@@ -146,33 +136,19 @@ const PqrPage: React.FC = () => {
   // ── Sincronizar datos con el servidor / API de la base de datos oficial ───
   const loadAll = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const email = user?.email;
       const params = email ? { email } : undefined;
       const [apiPqrs, apiProblems, apiProfessionals] = await Promise.all([
         pqrService.list(params),
         appProblemService.list(params),
-        professionalSearchService.list().catch(() => []),
+        professionalSearchService.list(),
       ]);
 
-      // Si el API responde correctamente, mostrar los registros de la base de datos
-      if (Array.isArray(apiPqrs)) {
-        setPqrReports(apiPqrs);
-        saveStoredPqrReports(apiPqrs);
-      } else {
-        setPqrReports(getStoredPqrReports(email));
-      }
-
-      if (Array.isArray(apiProblems)) {
-        setAppProblemReports(apiProblems);
-        saveStoredAppProblems(apiProblems);
-      } else {
-        setAppProblemReports(getStoredAppProblems(email));
-      }
-
-      // Si hay profesionales, mapear y fusionar con los registrados locales
-      if (apiProfessionals && apiProfessionals.length > 0) {
-        const mappedRemote: PqrContractorRef[] = apiProfessionals.map((p) => ({
+      setPqrReports(apiPqrs);
+      setAppProblemReports(apiProblems);
+      setContractorRefs(apiProfessionals.map((p) => ({
           id: p.slug || String(p.id),
           name: p.display_name || `Profesional #${p.id}`,
           companyName: p.company_name || p.headline || `${p.display_name || 'Profesional'} • Servicios`,
@@ -184,29 +160,13 @@ const PqrPage: React.FC = () => {
           avatarUrl: p.avatar_url || undefined,
           neighborhood: p.neighborhood || p.city || 'Bogotá',
           phone: p.phone || undefined,
-        }));
-
-        const ids = new Set(mappedRemote.map((r) => r.id));
-        const combined = [...mappedRemote, ...REGISTERED_CONTRACTORS_REF.filter((r) => !ids.has(r.id))];
-
-        // Mantener orden oficial registrado (Jorge Morales, Carlos Mendoza, etc.)
-        const orderMap = new Map(REGISTERED_CONTRACTORS_REF.map((c, i) => [c.id, i]));
-        const sorted = [...combined].sort((a, b) => {
-          const orderA = orderMap.has(a.id) ? orderMap.get(a.id)! : 999;
-          const orderB = orderMap.has(b.id) ? orderMap.get(b.id)! : 999;
-          return orderA - orderB;
-        });
-
-        setContractorRefs(sorted);
-      } else {
-        setContractorRefs(REGISTERED_CONTRACTORS_REF);
-      }
-
+        })));
     } catch (err) {
-      console.warn('[PqrPage] Usando base de datos local:', err);
-      setPqrReports(getStoredPqrReports(user?.email));
-      setAppProblemReports(getStoredAppProblems(user?.email));
-      setContractorRefs(REGISTERED_CONTRACTORS_REF);
+      console.warn('[PqrPage] No fue posible cargar los datos de la API:', err);
+      setPqrReports([]);
+      setAppProblemReports([]);
+      setContractorRefs([]);
+      setLoadError('No fue posible conectar con la API y cargar los datos. Verifica la conexión e inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -221,6 +181,10 @@ const PqrPage: React.FC = () => {
   const handleOpenNewPqr = (contractor?: PqrContractorRef) => {
     if (maintenance) {
       setToastMsg(blockedMsg);
+      return;
+    }
+    if (!contractor && contractorRefs.length === 0) {
+      setToastMsg('No hay profesionales disponibles desde la base de datos. Actualiza la lista e inténtalo de nuevo.');
       return;
     }
     setTargetContractor(contractor);
@@ -244,7 +208,6 @@ const PqrPage: React.FC = () => {
     if ('id' in data && 'radicadoNumber' in data && data.id && data.radicadoNumber) {
       const created = data as PqrReport;
       setPqrReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
-      saveStoredPqrReports([created]);
       setToastMsg(`✅ Reclamo formal ${created.radicadoNumber} guardado en la base de datos.`);
       return;
     }
@@ -261,37 +224,10 @@ const PqrPage: React.FC = () => {
       };
       const created = await pqrService.create(pqrPayload);
       setPqrReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
-      saveStoredPqrReports([created]);
       setToastMsg(`✅ Reclamo formal ${created.radicadoNumber} guardado en la base de datos.`);
     } catch (err) {
-      console.warn('[PqrPage] Fallback a almacenamiento local:', err);
-      const radicado = buildRadicado();
-      const localReport: PqrReport = {
-        ...data,
-        clientEmail,
-        clientName,
-        clientPhone,
-        clientDocumentId,
-        clientAddress,
-        id: `pqr-bog-${Date.now()}`,
-        radicadoNumber: radicado,
-        status: 'radicado',
-        createdAt: new Date().toISOString(),
-        estimatedResponseDays: 2,
-        messages: [
-          {
-            id: `msg-${Date.now()}`,
-            sender: 'system',
-            senderName: 'Servicio Contratista Bogotá',
-            senderRole: 'Defensoría del Consumidor',
-            text: `Radicación formal ${radicado} registrada contra ${data.contractorCompany}. Citación de descargos enviada.`,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-      setPqrReports((prev) => [localReport, ...prev]);
-      saveStoredPqrReports([localReport]);
-      setToastMsg(`✅ Reclamo formal ${radicado} registrado.`);
+      console.warn('[PqrPage] No fue posible registrar la PQR en la API:', err);
+      setToastMsg('No se pudo registrar la PQR en el servidor. No se guardó localmente; verifica la conexión e inténtalo de nuevo.');
     }
   };
 
@@ -312,26 +248,9 @@ const PqrPage: React.FC = () => {
         );
       }
       setToastMsg('✅ Respuesta registrada y enviada al expediente.');
-    } catch {
-      const userFullName = user
-        ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username
-        : 'Cliente';
-      const localMsg = {
-        id: `msg-${Date.now()}`,
-        sender: 'client' as const,
-        senderName: userFullName,
-        senderRole: 'Cliente',
-        text,
-        timestamp: new Date().toISOString(),
-      };
-      setPqrReports((prev) =>
-        prev.map((r) => (r.id === pqrId ? { ...r, messages: [...(r.messages || []), localMsg] } : r))
-      );
-      if (selectedReport?.id === pqrId) {
-        setSelectedReport((prev) =>
-          prev ? { ...prev, messages: [...(prev.messages || []), localMsg] } : prev
-        );
-      }
+    } catch (err) {
+      console.warn('[PqrPage] No fue posible enviar la respuesta a la API:', err);
+      setToastMsg('No se pudo enviar la respuesta al servidor. Verifica la conexión e inténtalo de nuevo.');
     }
   };
 
@@ -359,12 +278,10 @@ const PqrPage: React.FC = () => {
         userEmail,
       });
       setAppProblemReports((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
-      saveStoredAppProblems([created]);
       setToastMsg(`✅ Reporte técnico ${created.ticketNumber} guardado en la base de datos.`);
-    } catch {
-      setAppProblemReports((prev) => [problem, ...prev]);
-      saveStoredAppProblems([problem]);
-      setToastMsg(`✅ Reporte técnico ${problem.ticketNumber} registrado.`);
+    } catch (err) {
+      console.warn('[PqrPage] No fue posible guardar el reporte técnico en la API:', err);
+      setToastMsg('No se pudo guardar el reporte técnico en el servidor. No se guardó localmente; verifica la conexión e inténtalo de nuevo.');
     }
   };
 
@@ -398,6 +315,14 @@ const PqrPage: React.FC = () => {
         ) : (
           <div className="p-4 sm:p-6 max-w-4xl mx-auto">
             <MaintenanceNotice />
+            {loadError && (
+              <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+                <p>{loadError}</p>
+                <IonButton size="small" fill="outline" onClick={() => void loadAll()}>
+                  Reintentar
+                </IonButton>
+              </div>
+            )}
             <PqrListView
               pqrReports={pqrReports}
               appProblemReports={appProblemReports}

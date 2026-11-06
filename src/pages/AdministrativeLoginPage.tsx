@@ -41,11 +41,17 @@ const AGENT_AVATAR =
 const AdministrativeLoginPage: React.FC = () => {
 	const history = useHistory();
 	const { isAuthenticated, isLoading: sessionLoading, login, user: sessionUser } = useAuth();
-	const [username, setUsername] = useState("");
+	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState("");
+	const [recoveryStep, setRecoveryStep] = useState<"email" | "code">("email");
+	const [recoveryCode, setRecoveryCode] = useState("");
+	const [newPassword, setNewPassword] = useState("");
+	const [recoveryMessage, setRecoveryMessage] = useState("");
+	const [recoveryError, setRecoveryError] = useState("");
+	const [recoverySubmitting, setRecoverySubmitting] = useState(false);
 	const [serverModalOpen, setServerModalOpen] = useState(false);
 	const [serverConnected, setServerConnected] = useState<boolean | null>(null);
 
@@ -69,15 +75,7 @@ const AdministrativeLoginPage: React.FC = () => {
 		return () => window.removeEventListener("serviprox:connection-status", handleStatus);
 	}, []);
 
-	// Modales
-	const [supportOpen, setSupportOpen] = useState(false);
 	const [adminChatOpen, setAdminChatOpen] = useState(false);
-
-	// Soporte de pregunta de seguridad
-	const [securityAnswer, setSecurityAnswer] = useState("");
-	const [supportUsername, setSupportUsername] = useState("");
-	const [securityQuestion, setSecurityQuestion] = useState("");
-	const [loadingQuestion, setLoadingQuestion] = useState(false);
 
 	// Estado del Chat en Vivo
 	const [chatInput, setChatInput] = useState("");
@@ -93,11 +91,6 @@ const AdministrativeLoginPage: React.FC = () => {
 			agentAvatar: AGENT_AVATAR,
 			text: "¡Hola! Soy Sofía de la Defensoría y Mesa Técnica de Servicio Contratista Bogotá. ¿En qué te puedo ayudar hoy? Puedes radicar  directamente por este chat o reportar cualquier problema técnico con la app.",
 			timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-			quickOptions: [
-				{ label: "🔑 Recuperar contraseña administrativa", action: "recuperar_pass" },
-				{ label: "🛡️ Validar pregunta de seguridad", action: "pregunta_seguridad" },
-				
-			],
 		},
 	]);
 
@@ -109,17 +102,12 @@ const AdministrativeLoginPage: React.FC = () => {
 
 	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
-		if (!username.trim() || password.length < 6 || submitting) return;
+		if (!email.trim() || password.length < 6 || submitting) return;
 
 		setSubmitting(true);
 		setError("");
 		try {
-			let currentUser: any;
-			try {
-				currentUser = await login({ email: username.trim(), password });
-			} catch (loginErr) {
-				currentUser = await authService.loginWithUsername(username.trim(), password);
-			}
+			const currentUser = await login({ email: email.trim().toLowerCase(), password });
 			if (!isUserAdmin(currentUser)) {
 				setError("Esta cuenta no tiene permisos administrativos. Acceso denegado.");
 				return;
@@ -140,22 +128,63 @@ const AdministrativeLoginPage: React.FC = () => {
 		}
 	};
 
-	const handleUsernameForRecovery = async (event: any) => {
-		const user = String(event.detail.value ?? "");
-		setSupportUsername(user);
-
-		if (user.trim().length > 0) {
-			setLoadingQuestion(true);
-			try {
-				const response = await authService.getSecurityQuestion(user.trim());
-				setSecurityQuestion(response.security_question);
-			} catch {
-				setSecurityQuestion("¿Cuál es la ciudad registrada en tu cuenta administrativa?");
-			} finally {
-				setLoadingQuestion(false);
+	const handlePasswordReset = async () => {
+		if (!email.trim() || recoverySubmitting) return;
+		setRecoveryMessage("");
+		setRecoveryError("");
+		setRecoverySubmitting(true);
+		try {
+			if (recoveryStep === "email") {
+				await authService.requestPasswordReset(email.trim().toLowerCase());
+				setRecoveryStep("code");
+				setRecoveryMessage("Si el correo está registrado, recibirás un código de 6 dígitos.");
+			} else {
+				await authService.confirmPasswordReset({
+					email: email.trim().toLowerCase(),
+					code: recoveryCode,
+					new_password: newPassword,
+				});
+				setRecoveryStep("email");
+				setRecoveryCode("");
+				setNewPassword("");
+				setRecoveryMessage("Contraseña actualizada. Ya puedes iniciar sesión.");
 			}
-		} else {
-			setSecurityQuestion("");
+		} catch (resetError) {
+			const payload = resetError instanceof ApiError
+				? resetError.payload as { detail?: unknown }
+				: null;
+			setRecoveryError(
+				typeof payload?.detail === "string"
+					? payload.detail
+					: recoveryStep === "email"
+						? "No pudimos enviar el código. Verifica que el backend y el correo estén disponibles."
+						: "No pudimos actualizar la contraseña. Verifica el código e inténtalo nuevamente."
+			);
+		} finally {
+			setRecoverySubmitting(false);
+		}
+	};
+
+	const resendPasswordResetCode = async () => {
+		if (!email.trim() || recoverySubmitting) return;
+		setRecoveryMessage("");
+		setRecoveryError("");
+		setRecoveryCode("");
+		setRecoverySubmitting(true);
+		try {
+			await authService.requestPasswordReset(email.trim().toLowerCase());
+			setRecoveryMessage("Enviamos un código nuevo. El código anterior ya no es válido.");
+		} catch (resetError) {
+			const payload = resetError instanceof ApiError
+				? resetError.payload as { detail?: unknown }
+				: null;
+			setRecoveryError(
+				typeof payload?.detail === "string"
+					? payload.detail
+					: "No pudimos enviar otro código. Verifica que el backend y el correo estén disponibles."
+			);
+		} finally {
+			setRecoverySubmitting(false);
 		}
 	};
 
@@ -181,72 +210,7 @@ const AdministrativeLoginPage: React.FC = () => {
 	const handleQuickAction = (action: string) => {
 		const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-		if (action === "recuperar_pass") {
-			setChatMessages((prev) => [
-				...prev,
-				{
-					id: `user-${Date.now()}`,
-					sender: "user",
-					text: "🔑 Deseo recuperar mi contraseña administrativa de Staff.",
-					timestamp: time,
-				},
-			]);
-			pushAgentResponse(
-				`Entendido. Para restablecer tu acceso como Staff, por favor escribe aquí tu nombre de usuario o correo corporativo. Consultaremos tu estado en la base de datos de Bogotá inmediatamente.`,
-				[
-					{ label: "🛡️ Tengo mi pregunta de seguridad", action: "pregunta_seguridad" },
-					{ label: "💬 Hablar con un asesor  humano", action: "supervisor" },
-				]
-			);
-		} else if (action === "pregunta_seguridad") {
-			setChatMessages((prev) => [
-				...prev,
-				{
-					id: `user-${Date.now()}`,
-					sender: "user",
-					text: "🛡️ Deseo validar mi pregunta de seguridad registrada.",
-					timestamp: time,
-				},
-			]);
-			pushAgentResponse(
-				`Perfecto. La pregunta de seguridad asignada a las cuentas Staff de Bogotá es: "¿Cuál es la ciudad registrada en tu cuenta?". Por favor escribe tu respuesta en el chat.`,
-				[
-					{ label: "Bogotá", action: "resp_bogota" },
-					{ label: "Medellín", action: "resp_otra" },
-					{ label: "Cali", action: "resp_otra" },
-				]
-			);
-		} else if (action === "resp_bogota") {
-			setChatMessages((prev) => [
-				...prev,
-				{
-					id: `user-${Date.now()}`,
-					sender: "user",
-					text: "Bogotá",
-					timestamp: time,
-				},
-			]);
-			pushAgentResponse(
-				`✅ ¡Respuesta de seguridad verificada con éxito!\n\nHemos habilitado el proceso de restablecimiento seguro para tu cuenta. ¿Deseas que enviemos un enlace temporal de acceso al correo vinculado o prefieres abrir la consola de reseteo?`,
-				[
-					{ label: "📧 Enviar enlace al correo", action: "enviar_correo" },
-					{ label: "Volver al inicio de sesión", action: "cerrar_chat" },
-				]
-			);
-		} else if (action === "resp_otra") {
-			setChatMessages((prev) => [
-				...prev,
-				{
-					id: `user-${Date.now()}`,
-					sender: "user",
-					text: "Respuesta de seguridad alternativa.",
-					timestamp: time,
-				},
-			]);
-			pushAgentResponse(
-				`La respuesta no coincide con el registro central. Por favor verifica los datos o escribe tu usuario para asistirte manualmente.`
-			);
-		} else if (action === "problema_app") {
+		if (action === "problema_app") {
 			setChatMessages((prev) => [
 				...prev,
 				{
@@ -271,19 +235,6 @@ const AdministrativeLoginPage: React.FC = () => {
 			]);
 			pushAgentResponse(
 				`El sistema de PQRS oficial de Bogotá está activo bajo la Ley 1480. Por favor indica el nombre de la empresa contratista o el número de radicado.`
-			);
-		} else if (action === "enviar_correo") {
-			setChatMessages((prev) => [
-				...prev,
-				{
-					id: `user-${Date.now()}`,
-					sender: "user",
-					text: "📧 Por favor envíen el enlace a mi correo.",
-					timestamp: time,
-				},
-			]);
-			pushAgentResponse(
-				`📩 Se ha generado la solicitud de recuperación. Si el usuario existe en el sistema administrativo, recibirás las instrucciones en breve.`
 			);
 		} else if (action === "cerrar_chat") {
 			setAdminChatOpen(false);
@@ -322,14 +273,8 @@ const AdministrativeLoginPage: React.FC = () => {
 		const lower = text.toLowerCase();
 		if (lower.includes("contraseña") || lower.includes("clave") || lower.includes("olvid")) {
 			pushAgentResponse(
-				`Recibido. He registrado tu solicitud de recuperación para el usuario o dato ingresado: "${text}". ¿Confirmas que deseas validar tu pregunta de seguridad para continuar?`,
-				[
-					{ label: "🛡️ Sí, responder pregunta", action: "pregunta_seguridad" },
-					{ label: "📧 Enviar código", action: "enviar_correo" },
-				]
+				"Para restablecer tu contraseña, vuelve al formulario de acceso, escribe el correo de tu cuenta y selecciona “Enviar código de recuperación”. No compartas tu contraseña ni códigos por este chat."
 			);
-		} else if (lower.includes("bogota") || lower.includes("bogotá")) {
-			handleQuickAction("resp_bogota");
 		} else {
 			pushAgentResponse(
 				`Mensaje recibido: "${text}". Un analista de la Mesa Técnica de Bogotá está procesando tu solicitud.`
@@ -380,15 +325,15 @@ const AdministrativeLoginPage: React.FC = () => {
 
 						<form onSubmit={handleSubmit} className="admin-login-form">
 							<label>
-								Usuario
+								Correo electrónico
 								<div className="admin-login-input">
 									<IonIcon icon={mailOutline} />
 									<IonInput
-										type="text"
-										value={username}
-										placeholder="Usuario administrativo"
+										type="email"
+										value={email}
+										placeholder="admin@serviprox.com"
 										required
-										onIonInput={(event) => setUsername(String(event.detail.value ?? ""))}
+										onIonInput={(event) => setEmail(String(event.detail.value ?? ""))}
 									/>
 								</div>
 							</label>
@@ -415,13 +360,42 @@ const AdministrativeLoginPage: React.FC = () => {
 								</div>
 							</label>
 
-						
+							{recoveryStep === "code" && (
+								<>
+									<label>
+										Código de recuperación
+										<div className="admin-login-input">
+											<IonInput
+												value={recoveryCode}
+												inputmode="numeric"
+												maxlength={6}
+												placeholder="Código de 6 dígitos"
+												onIonInput={(event) =>
+													setRecoveryCode(String(event.detail.value ?? "").replace(/\D/g, ""))
+												}
+											/>
+										</div>
+									</label>
+									<label>
+										Nueva contraseña
+										<div className="admin-login-input">
+											<IonInput
+												type="password"
+												value={newPassword}
+												autocomplete="new-password"
+												placeholder="Nueva contraseña"
+												onIonInput={(event) => setNewPassword(String(event.detail.value ?? ""))}
+											/>
+										</div>
+									</label>
+								</>
+							)}
 
 							<IonButton
 								type="submit"
 								expand="block"
 								className="admin-login-submit"
-								disabled={!username.trim() || password.length < 6 || submitting}
+								disabled={!email.trim() || password.length < 6 || submitting}
 							>
 								{submitting ? <IonSpinner name="crescent" /> : "Iniciar sesión"}
 							</IonButton>
@@ -431,8 +405,37 @@ const AdministrativeLoginPage: React.FC = () => {
 								className="admin-login-support"
 								onClick={() => setAdminChatOpen(true)}
 							>
-								Olvidaste tu contraseña Recuperar con soporte
+								Abrir chat de soporte
 							</button>
+							<button
+								type="button"
+								className="admin-login-support"
+								onClick={() => void handlePasswordReset()}
+								disabled={
+									!email.trim() ||
+									recoverySubmitting ||
+									(recoveryStep === "code" &&
+										(recoveryCode.length !== 6 || newPassword.length < 6))
+								}
+							>
+								{recoverySubmitting
+									? "Procesando..."
+									: recoveryStep === "email"
+										? "Enviar código de recuperación"
+										: "Cambiar contraseña"}
+							</button>
+							{recoveryStep === "code" && (
+								<button
+									type="button"
+									className="admin-login-support"
+									onClick={() => void resendPasswordResetCode()}
+									disabled={recoverySubmitting}
+								>
+									Enviar otro código
+								</button>
+							)}
+							{recoveryMessage && <p role="status">{recoveryMessage}</p>}
+							{recoveryError && <p className="admin-login-error" role="alert">{recoveryError}</p>}
 						</form>
 					</section>
 				</main>
@@ -665,84 +668,6 @@ const AdministrativeLoginPage: React.FC = () => {
 						document.body
 					)}
 
-				{/* ═════════════════════════════════════════════════════════════════════
-				    MODAL DE PREGUNTA DE SEGURIDAD (OPCIONAL/ALTERNATIVA)
-				   ═════════════════════════════════════════════════════════════════════ */}
-				{supportOpen &&
-					createPortal(
-						<div
-							className="admin-support-modal-backdrop"
-							onClick={(e) => {
-								if (e.target === e.currentTarget) setSupportOpen(false);
-							}}
-						>
-							<div className="admin-support-modal-dialog" role="dialog" aria-modal="true">
-								<header className="admin-support-modal-header">
-									<h2>Recuperar contraseña</h2>
-									<button
-										type="button"
-										className="admin-chat-close-btn"
-										onClick={() => setSupportOpen(false)}
-									>
-										✕
-									</button>
-								</header>
-								<div className="admin-support-modal-body">
-									<p>Responde esta pregunta para que el soporte administrativo pueda ayudarte.</p>
-									<label>
-										Usuario
-										<input
-											type="text"
-											value={supportUsername}
-											placeholder="Tu usuario administrativo"
-											onChange={(e) =>
-												handleUsernameForRecovery({ detail: { value: e.target.value } })
-											}
-										/>
-									</label>
-									<label>
-										Pregunta de seguridad
-										<input
-											type="text"
-											value={securityQuestion || "Ingresa tu usuario para ver la pregunta"}
-											readOnly
-											style={{ background: "#f8fafc", color: "#64748b" }}
-										/>
-									</label>
-									<label>
-										Respuesta
-										<input
-											type="text"
-											value={securityAnswer}
-											placeholder="Escribe tu respuesta"
-											onChange={(e) => setSecurityAnswer(e.target.value)}
-										/>
-									</label>
-									<div className="admin-support-modal-actions">
-										<button
-											type="button"
-											className="admin-support-modal-submit"
-											disabled={!supportUsername.trim() || !securityAnswer.trim() || loadingQuestion}
-											onClick={() => {
-												setSupportOpen(false);
-												setAdminChatOpen(true);
-											}}
-										>
-											{loadingQuestion ? "Cargando..." : "Abrir chat de soporte"}
-										</button>
-										<button
-											type="button"
-											className="admin-support-modal-cancel"
-											onClick={() => setSupportOpen(false)}
-										>
-											Cancelar
-										</button>
-									</div>
-								</div>
-							</div>
-						</div>,
-						document.body
-					)}
 			</IonContent>
 			<ServerConnectionModal
 				isOpen={serverModalOpen}

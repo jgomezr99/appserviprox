@@ -25,9 +25,27 @@ const CURRENCIES = ["Peso colombiano (COP)", "Dólar (USD)", "Euro (EUR)"];
 
 export const PaymentsTab: React.FC<TabProps> = ({ form, setForm, sec, setSec, busy, save, reset, notify }) => {
   const [rows, setRows] = useState<PaymentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  const loadPayments = async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const response = await api.get<any>("admin/payments/");
+      const payments = Array.isArray(response) ? response : response?.results;
+      if (!Array.isArray(payments)) throw new Error("La respuesta de pagos tiene un formato inesperado.");
+      setRows(payments);
+    } catch (error) {
+      setRows([]);
+      setLoadError(error instanceof Error ? error.message : "No se pudieron cargar las transacciones.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    api.get<PaymentRow[]>("admin/payments/").then(setRows).catch(() => setRows([]));
+    void loadPayments();
   }, []);
 
   return (
@@ -96,7 +114,14 @@ export const PaymentsTab: React.FC<TabProps> = ({ form, setForm, sec, setSec, bu
       </Card>
 
       <Card title="Transacciones recientes" icon="🧾">
-        {rows.length === 0 ? (
+        {loading ? (
+          <Empty text="Cargando transacciones desde la base de datos..." />
+        ) : loadError ? (
+          <div role="alert" style={{ color: "#b91c1c" }}>
+            <p>{loadError}</p>
+            <button type="button" className="as-btn as-btn-outline" onClick={() => void loadPayments()}>Reintentar</button>
+          </div>
+        ) : rows.length === 0 ? (
           <Empty text="Aún no hay transacciones registradas. Aparecerán aquí cuando se procesen pagos." />
         ) : (
           <table className="as-table">

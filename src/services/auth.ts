@@ -19,9 +19,11 @@ export const authService = {
   },
 
   loginWithUsername: async (username: string, password: string) => {
-    const tokens = await api.post<AuthTokenResponse>("auth/token/", { username, password }, {
-      auth: false,
-    });
+    const tokens = await api.post<AuthTokenResponse>(
+      "auth/token/",
+      { username, password },
+      { auth: false }
+    );
     tokenStorage.setTokens(tokens.access, tokens.refresh);
     return api.get<User>("auth/me/");
   },
@@ -40,13 +42,22 @@ export const authService = {
   },
 
   requestPasswordReset: (email: string) =>
-    api.post<{ detail: string }>("auth/password-reset/request/", { email }, { auth: false }),
+    api.post<{ detail: string }>(
+      "auth/password-reset/request/",
+      { email },
+      { auth: false }
+    ),
 
   confirmPasswordReset: (payload: {
     email: string;
     code: string;
     new_password: string;
-  }) => api.post<{ detail: string }>("auth/password-reset/confirm/", payload, { auth: false }),
+  }) =>
+    api.post<{ detail: string }>(
+      "auth/password-reset/confirm/",
+      payload,
+      { auth: false }
+    ),
 
   getCurrentUser: () => api.get<User>("auth/me/"),
 
@@ -81,10 +92,4 @@ export const authService = {
     return tokens.access;
   },
 
-  getSecurityQuestion: (username: string) =>
-    api.post<{ security_question: string }>(
-      "auth/security-question/",
-      { username },
-      { auth: false }
-    ),
 };

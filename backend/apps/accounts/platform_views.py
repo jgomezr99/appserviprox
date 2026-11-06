@@ -36,6 +36,7 @@ SECTION_KEYS = (
     "app_params",
     "maintenance",
     "role_params",
+    "benefit_catalog",
 )
 SECTION_LIMIT = {"appearance": 8_000_000}
 DEFAULT_SECTION_LIMIT = 200_000
@@ -101,6 +102,7 @@ class PublicPlatformSettingsView(APIView):
         public["maintenance_message"] = message
         public["appearance"] = data["sections"].get("appearance", {})
         public["role_params"] = data["sections"].get("role_params", {})
+        public["benefit_catalog"] = data["sections"].get("benefit_catalog", {})
         return Response(public)
 
 

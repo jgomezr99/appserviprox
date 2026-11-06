@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import {
   IonButtons,
   IonButton,
@@ -23,7 +23,8 @@ import {
   arrowBackOutline,
 } from "ionicons/icons";
 import { useAuth } from "../context/AuthContext";
-import { usePlatformSettings } from "../services/platformSettings";
+import { api } from "../services/api";
+import { platformSettingsService, usePlatformSettings } from "../services/platformSettings";
 import { useHistory } from "react-router-dom";
 import "./RolePages.css";
 
@@ -38,102 +39,99 @@ interface BenefitItem {
   description: string;
 }
 
-const DEFAULT_BENEFITS: BenefitItem[] = [
-  {
-    id: "ben-1",
-    title: "Bono \$50.000 COP en Ferreterías Aliadas",
-    points: 500,
-    recharge: 50000,
-    category: "Equipamiento",
-    icon: "🛠️",
-    level: "Todos",
-    description: "Válido para compras de herramientas y materiales en ferreterías Homecenter o Constructor.",
-  },
-  {
-    id: "ben-2",
-    title: "Certificación y Recertificación RETIE",
-    points: 1200,
-    recharge: 100000,
-    category: "Capacitaciones",
-    icon: "📜",
-    level: "Plata",
-    description: "Descuento del 50% en el curso oficial de actualización de normas eléctricas y seguridad.",
-  },
-  {
-    id: "ben-3",
-    title: "Kit de Protección Personal (EPP)",
-    points: 800,
-    recharge: 60000,
-    category: "Seguridad",
-    icon: "🦺",
-    level: "Bronce",
-    description: "Casco dieléctrico, guantes de alta resistencia, gafas de seguridad y chaleco reflectivo.",
-  },
-  {
-    id: "ben-4",
-    title: "Recarga de Saldo de Cuenta \$100.000",
-    points: 1000,
-    recharge: 100000,
-    category: "Financiero",
-    icon: "💳",
-    level: "Oro",
-    description: "Saldo directo en tu billetera Serviprox para postularte a servicios premium y destacar tu perfil.",
-  },
-];
-
 export const BenefitsPage: React.FC = () => {
   const { user } = useAuth();
   const history = useHistory();
   const platform = usePlatformSettings();
   const benefitsEnabled = platform.features.benefits;
 
-  const [userPoints, setUserPoints] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem("serviprox_user_points");
-      if (saved) return parseInt(saved, 10);
-    } catch {}
-    return 1250;
-  });
-
-  const [catalog, setCatalog] = useState<BenefitItem[]>(() => {
-    try {
-      const saved = localStorage.getItem("serviprox_benefits_catalog");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return DEFAULT_BENEFITS;
-  });
-
+  const [userPoints, setUserPoints] = useState<number | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [catalog, setCatalog] = useState<BenefitItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [toastMessage, setToastMessage] = useState("");
   const [redeemedIds, setRedeemedIds] = useState<Set<string | number>>(new Set());
+  const [redemptions, setRedemptions] = useState<Array<{ benefit_id: string; title: string; status: string }>>([]);
+  const [redeemingId, setRedeemingId] = useState<string | number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  const loadBenefits = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const settings = await platformSettingsService.fetchPublic();
+      const configuredItems = settings.benefit_catalog?.items || settings.sections?.benefit_catalog?.items;
+      setCatalog(Array.isArray(configuredItems) ? configuredItems.map((item: any) => ({
+        id: item.id,
+        title: item.title || "",
+        points: Number(item.points || 0),
+        recharge: Number(item.recharge_amount || 0),
+        category: item.category || "General",
+        icon: item.icon || "🎁",
+        level: item.level_required || "Todos",
+        description: item.description || "",
+      })) : []);
+
+      if (user?.role === "professional") {
+        const [profile, redemptions] = await Promise.all([
+          api.get<any>("professionals/me/"),
+          api.get<any>("professionals/benefit-redemptions/"),
+        ]);
+        const points = Number(profile.points);
+        const balance = Number(profile.wallet_balance);
+        setUserPoints(Number.isFinite(points) ? points : null);
+        setWalletBalance(Number.isFinite(balance) ? balance : null);
+        const history = Array.isArray(redemptions) ? redemptions : [];
+        setRedemptions(history);
+        setRedeemedIds(new Set(history.map((item) => item.benefit_id)));
+      } else {
+        setUserPoints(null);
+        setWalletBalance(null);
+        setRedeemedIds(new Set());
+        setRedemptions([]);
+      }
+    } catch (error) {
+      setUserPoints(null);
+      setWalletBalance(null);
+      setLoadError(error instanceof Error ? error.message : "No se pudieron cargar los beneficios desde la base de datos.");
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.role]);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("serviprox_benefits_catalog");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCatalog(parsed);
-        }
-      }
-    } catch {}
-  }, []);
+    void loadBenefits();
+  }, [loadBenefits]);
 
-  const handleRedeem = (item: BenefitItem) => {
+  const handleRedeem = async (item: BenefitItem) => {
+    if (user?.role !== "professional" || userPoints === null) {
+      setToastMessage("Los canjes están disponibles para cuentas profesionales.");
+      return;
+    }
     if (userPoints < item.points) {
       setToastMessage(`Puntos insuficientes. Necesitas ${item.points} pts y tienes ${userPoints} pts.`);
       return;
     }
-    const newPoints = userPoints - item.points;
-    setUserPoints(newPoints);
     try {
-      localStorage.setItem("serviprox_user_points", String(newPoints));
-    } catch {}
-    setRedeemedIds((prev) => new Set(prev).add(item.id));
-    setToastMessage(`¡Felicidades! Has canjeado "${item.title}". Revisa tu correo para el código de canje.`);
+      setRedeemingId(item.id);
+      const result = await api.post<{
+        remaining_points: number;
+        benefit_id: string;
+        title: string;
+        status: string;
+      }>("professionals/benefit-redemptions/", {
+        benefit_id: item.id,
+      });
+      setUserPoints(result.remaining_points);
+      setRedeemedIds((prev) => new Set(prev).add(item.id));
+      setRedemptions((previous) => [result, ...previous]);
+      setToastMessage(`Solicitud de canje de "${item.title}" registrada. Serviprox confirmará su entrega.`);
+    } catch (error) {
+      setToastMessage(error instanceof Error ? error.message : "No se pudo registrar el canje.");
+    } finally {
+      setRedeemingId(null);
+    }
   };
 
   // Si la función está desactivada por el administrador, bloquear vista
@@ -224,9 +222,23 @@ export const BenefitsPage: React.FC = () => {
               Tus Puntos y Recompensas
             </h1>
             <p style={{ color: "#64748b", margin: 0, fontSize: "0.95rem" }}>
-              Acumula puntos completando servicios con alta calificación y canjéalos por equipamiento, capacitaciones y recargas.
+              Consulta tu saldo de puntos y solicita canjes del catálogo publicado por Serviprox.
             </p>
           </header>
+
+          {loading && <p role="status">Cargando beneficios desde la base de datos...</p>}
+          {loadError && (
+            <div role="alert" style={{ marginBottom: "20px", color: "#b91c1c" }}>
+              <p>{loadError}</p>
+              <button type="button" onClick={() => void loadBenefits()}>Reintentar</button>
+            </div>
+          )}
+          {!loading && !loadError && catalog.length === 0 && (
+            <p role="status">No hay beneficios publicados en la base de datos.</p>
+          )}
+          {user?.role !== "professional" && !loading && (
+            <p role="status">El saldo de puntos y los canjes están disponibles para cuentas profesionales.</p>
+          )}
 
           {/* Tarjetas de Puntos y Nivel */}
           <section
@@ -255,14 +267,14 @@ export const BenefitsPage: React.FC = () => {
                   Puntos Acumulados
                 </span>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "6px" }}>
-                  <h2 style={{ fontSize: "2.4rem", fontWeight: 900, margin: 0 }}>{userPoints.toLocaleString()}</h2>
+                  <h2 style={{ fontSize: "2.4rem", fontWeight: 900, margin: 0 }}>{userPoints?.toLocaleString() ?? "—"}</h2>
                   <span style={{ fontSize: "1.1rem", fontWeight: 600 }}>pts</span>
                 </div>
               </div>
               <div style={{ marginTop: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <IonIcon icon={sparkles} style={{ fontSize: "1.2rem", color: "#fbbf24" }} />
                 <span style={{ fontSize: "0.85rem", opacity: 0.95 }}>
-                  Ganas 100 pts por cada servicio con calificación de 5 estrellas
+                  Puntos disponibles registrados en tu perfil profesional
                 </span>
               </div>
             </div>
@@ -285,18 +297,20 @@ export const BenefitsPage: React.FC = () => {
                   Tu Nivel de Profesional
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" }}>
-                  <span style={{ fontSize: "1.8rem" }}>🥈</span>
+                  <span style={{ fontSize: "1.8rem" }}>📊</span>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 800, color: "#1e293b" }}>Nivel Plata</h3>
-                    <span style={{ fontSize: "0.8rem", color: "#10b981", fontWeight: 600 }}>
-                      +10% de visibilidad en el mapa
+                    <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "#1e293b" }}>
+                      Nivel no disponible
+                    </h3>
+                    <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                      El perfil aún no registra un nivel.
                     </span>
                   </div>
                 </div>
               </div>
               <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
                 <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-                  Faltan <strong>750 pts</strong> para subir a <strong>Nivel Oro</strong>
+                  Los puntos se consultan directamente desde tu perfil.
                 </span>
               </div>
             </div>
@@ -322,7 +336,7 @@ export const BenefitsPage: React.FC = () => {
                   <IonIcon icon={walletOutline} style={{ fontSize: "2rem", color: "#059669" }} />
                   <div>
                     <h3 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 900, color: "#065f46" }}>
-                      \$50.000 COP
+                      {walletBalance === null ? "—" : walletBalance.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 })}
                     </h3>
                     <span style={{ fontSize: "0.78rem", color: "#64748b" }}>Disponible para postulaciones</span>
                   </div>
@@ -330,7 +344,7 @@ export const BenefitsPage: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setToastMessage("Saldo activo para usar en contrataciones y servicios premium.")}
+                onClick={() => setToastMessage(redemptions.length ? `Tienes ${redemptions.length} solicitudes de canje registradas.` : "No tienes solicitudes de canje registradas.")}
                 style={{
                   marginTop: "14px",
                   padding: "8px 14px",
@@ -384,7 +398,7 @@ export const BenefitsPage: React.FC = () => {
           >
             {filteredCatalog.map((item) => {
               const isRedeemed = redeemedIds.has(item.id);
-              const canAfford = userPoints >= item.points;
+              const canAfford = userPoints !== null && userPoints >= item.points;
 
               return (
                 <article
@@ -437,8 +451,8 @@ export const BenefitsPage: React.FC = () => {
 
                     <button
                       type="button"
-                      disabled={isRedeemed || !canAfford}
-                      onClick={() => handleRedeem(item)}
+                      disabled={isRedeemed || !canAfford || redeemingId === item.id || user?.role !== "professional"}
+                      onClick={() => void handleRedeem(item)}
                       style={{
                         width: "100%",
                         padding: "10px",
@@ -446,17 +460,17 @@ export const BenefitsPage: React.FC = () => {
                         border: "none",
                         fontWeight: 700,
                         fontSize: "0.88rem",
-                        cursor: isRedeemed || !canAfford ? "not-allowed" : "pointer",
+                        cursor: isRedeemed || !canAfford || user?.role !== "professional" ? "not-allowed" : "pointer",
                         background: isRedeemed
                           ? "#10b981"
-                          : canAfford
+                          : canAfford && user?.role === "professional"
                           ? "#2563eb"
                           : "#cbd5e1",
                         color: "#ffffff",
                         transition: "all 0.15s",
                       }}
                     >
-                      {isRedeemed ? "✓ Canjeado" : canAfford ? "Canjear Beneficio" : "Puntos insuficientes"}
+                      {isRedeemed ? "✓ Solicitud registrada" : redeemingId === item.id ? "Registrando..." : user?.role !== "professional" ? "Solo profesionales" : canAfford ? "Solicitar canje" : "Puntos insuficientes"}
                     </button>
                   </div>
                 </article>
@@ -478,4 +492,3 @@ export const BenefitsPage: React.FC = () => {
 };
 
 export default BenefitsPage;
-

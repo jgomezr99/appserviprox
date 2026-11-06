@@ -54,7 +54,7 @@ export const SecurityTab: React.FC<TabProps> = ({ form, sec, setSec, busy, save,
               { key: "twofa_method", label: "Métodos de 2FA permitidos", kind: "select", options: ["Aplicación de autenticación (Google Authenticator)", "SMS", "Correo electrónico"] },
               { key: "idle", label: "Tiempo de sesión inactiva", kind: "select", options: ["15 minutos", "30 minutos", "1 hora", "4 horas"] },
               { key: "max_attempts", label: "Máximo de intentos de inicio de sesión", kind: "select", options: ["3 intentos", "5 intentos", "10 intentos"] },
-              { key: "lock", label: "Bloqueo de cuenta", kind: "select", options: ["15 minutos", "30 minutos", "1 hora", "24 horas"] },
+              { key: "lock", label: "Bloqueo de cuenta", kind: "select", options: ["2 minutos", "15 minutos", "30 minutos", "1 hora", "24 horas"] },
             ]}
             values={sec}
             onChange={onChange}

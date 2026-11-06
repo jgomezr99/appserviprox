@@ -62,7 +62,33 @@ class AdminCatalogTests(TestCase):
         with patch.dict(connection.settings_dict, {"NAME": database_path}):
             response = self.api.get("/api/v1/admin/overview/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["database"]["database_name"], str(database_path))
+        data = response.json()
+        self.assertEqual(data["database"]["database_name"], str(database_path))
+        self.assertTrue(data["database"]["connected"])
+        self.assertEqual(data["kpis"]["clients"], 1)
+        self.assertEqual(data["kpis"]["professionals"], 0)
+        self.assertEqual(data["kpis"]["hired_services"], 0)
+        self.assertEqual(data["kpis"]["pending_publications"], 0)
+        self.assertEqual(data["kpis"]["open_pqrs"], 0)
+        self.assertEqual(data["kpis"]["technical_issues"], 0)
+        self.assertEqual(data["charts"]["user_distribution"], {
+            "clients": 1,
+            "professionals": 0,
+            "administrators": 1,
+        })
+        self.assertEqual(data["charts"]["pqr_chart"], {
+            "radicado": 0,
+            "en_revision": 0,
+            "conciliacion": 0,
+            "resuelto": 0,
+        })
+        self.assertEqual(data["reports"], {
+            "blocked_accounts_today": 0,
+            "complaints": 0,
+            "rejected_publications": 0,
+            "cancelled_services": 0,
+            "technical_issues": 0,
+        })
 
     def test_catalog_and_existing_admin_endpoints_require_administrator(self):
         paths = [self.root + "categories/", self.root + "services/", "/api/v1/admin/overview/", "/api/v1/admin/users/"]

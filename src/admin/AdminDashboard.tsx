@@ -3,7 +3,7 @@ import { useHistory } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { adminService } from "../services/adminService";
 import { api } from "../services/api";
-import { usePlatformSettings } from "../services/platformSettings";
+import { platformSettingsService, usePlatformSettings } from "../services/platformSettings";
 import AdminSettings from "./AdminSettings";
 import AdminReportsStats from "./AdminReportsStats";
 import AdminPayments from "./AdminPayments";
@@ -189,10 +189,11 @@ export interface PqrItem {
   relatedTo: string;
   date: string;
   updatedDate: string;
-  priority: "Alta" | "Media" | "Baja";
+  priority: "Alta" | "Media" | "Baja" | "No definida";
   status: "En revisión" | "Abierta" | "En proceso" | "Resuelta" | "Cerrada";
   city: string;
   attachments: string[];
+  assignedTo?: string;
   timeline: {
     date: string;
     text: string;
@@ -212,12 +213,12 @@ export interface TechnicalFailureItem {
   moduleBadgeColor: string;
   reporter: {
     name: string;
-    role: "Cliente" | "Profesional" | "Administrador";
+    role: "Cliente" | "Profesional" | "Administrador" | "Usuario";
     avatar: string;
     email?: string;
   };
   date: string;
-  priority: "Crítica" | "Alta" | "Media" | "Baja";
+  priority: "Crítica" | "Alta" | "Media" | "Baja" | "No definida";
   status: "Abierta" | "En proceso" | "Resuelta" | "Cerrada";
   assignedTo: {
     name: string;
@@ -228,6 +229,152 @@ export interface TechnicalFailureItem {
   attachments: Array<{ name: string; url?: string; type: "image" | "file" }>;
   timeline: Array<{ date: string; text: string; isInitial?: boolean }>;
 }
+
+const formatAdminDate = (value?: string) =>
+  value ? new Date(value).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "—";
+
+const mapPqrStatus = (status: string): PqrItem["status"] => {
+  if (status === "en_revision") return "En revisión";
+  if (status === "conciliacion") return "En proceso";
+  if (status === "resuelto") return "Resuelta";
+  if (status === "sancionado") return "Cerrada";
+  return "Abierta";
+};
+
+const mapPqrFromDatabase = (p: any): PqrItem => {
+  const type = p.type || p.pqr_type;
+  const typeVal = type === "queja"
+    ? "queja"
+    : type === "reclamo" || type === "recurso_garantia"
+      ? "reclamo"
+      : type === "peticion"
+        ? "peticion"
+        : "reporte";
+  const typeLabel = typeVal === "queja" ? "Queja" : typeVal === "reclamo" ? "Reclamo" : typeVal === "peticion" ? "Petición" : "Reporte";
+  const description = p.description || "";
+  const caseNumber = String(p.radicadoNumber || p.radicado_number || String(p.id || "").replace(/^pqr-/, ""));
+  const messages = Array.isArray(p.messages) ? p.messages : [];
+
+  return {
+    id: caseNumber.startsWith("#") ? caseNumber : `#${caseNumber}`,
+    raw_id: p.id,
+    type: typeVal,
+    typeLabel,
+    typeIcon: typeVal === "queja" ? "⚠️" : typeVal === "reclamo" ? "📄" : typeVal === "peticion" ? "🎧" : "🔧",
+    typeBg: typeVal === "queja" ? "#fee2e2" : typeVal === "reclamo" ? "#f3e8ff" : typeVal === "peticion" ? "#fef3c7" : "#dbeafe",
+    typeColor: typeVal === "queja" ? "#dc2626" : typeVal === "reclamo" ? "#9333ea" : typeVal === "peticion" ? "#d97706" : "#2563eb",
+    title: String(p.reason || description).replace(/_/g, " ").slice(0, 60),
+    shortDesc: description.slice(0, 30),
+    description,
+    client: {
+      name: p.clientName || p.client_name || "",
+      document_id: p.clientDocumentId || p.client_document_id || "",
+      avatar: "",
+      rating: 0,
+      reviews_count: 0,
+      email: p.clientEmail || p.client_email || "",
+      phone: p.clientPhone || p.client_phone || "",
+    },
+    contractor: (p.contractorName || p.contractor_name) ? {
+      name: p.contractorName || p.contractor_name,
+      document_id: "",
+      avatar: p.contractorAvatar || p.contractor_avatar || "",
+      rating: 0,
+      reviews_count: 0,
+      specialty: p.contractorSpecialty || p.contractor_specialty || "",
+    } : null,
+    relatedTo: p.relatedTo || p.related_to || p.contractorCompany || p.contractor_company || "",
+    date: formatAdminDate(p.createdAt || p.created_at),
+    updatedDate: formatAdminDate(p.updatedAt || p.updated_at || p.createdAt || p.created_at),
+    priority: p.priority || "No definida",
+    status: mapPqrStatus(p.status || ""),
+    city: p.clientAddress || p.client_address || "",
+    attachments: Array.isArray(p.evidenceFiles || p.evidence_files) ? (p.evidenceFiles || p.evidence_files) : [],
+    assignedTo: p.assignedTo || p.assigned_to || "",
+    timeline: messages.map((message: any) => ({
+      date: formatAdminDate(message.timestamp),
+      text: `${message.senderName || message.sender_name || message.senderRole || message.sender_role || ""}: ${message.text || ""}`.replace(/^: /, ""),
+    })),
+    adminResponse: p.adminResolutionNotes || p.admin_resolution_notes || "",
+  };
+};
+
+const mapProblemToPqr = (problem: any): PqrItem => {
+  const title = problem.categoryLabel || problem.category_label || "";
+  const createdAt = problem.createdAt || problem.created_at;
+  const ticketNumber = String(problem.ticketNumber || problem.ticket_number || problem.id || "");
+  const reportedBy = problem.reportedBy || problem.reported_by || "";
+
+  return {
+    id: ticketNumber.startsWith("#") ? ticketNumber : `#${ticketNumber}`,
+    raw_id: problem.id,
+    type: "reporte",
+    typeLabel: "Reporte",
+    typeIcon: "🔧",
+    typeBg: "#dbeafe",
+    typeColor: "#2563eb",
+    title: problem.title || title,
+    shortDesc: (problem.description || "").slice(0, 30),
+    description: problem.description || "",
+    client: {
+      name: reportedBy,
+      document_id: "",
+      avatar: "",
+      rating: 0,
+      reviews_count: 0,
+      email: problem.userEmail || problem.user_email || "",
+    },
+    contractor: null,
+    relatedTo: problem.deviceInfo || problem.device_info || "",
+    date: formatAdminDate(createdAt),
+    updatedDate: formatAdminDate(createdAt),
+    priority: problem.priority || "No definida",
+    status: problem.status === "resuelto" ? "Resuelta" : problem.status === "en_proceso" ? "En proceso" : "Abierta",
+    city: "",
+    attachments: Array.isArray(problem.attachments) ? problem.attachments : [],
+    timeline: [
+      { date: formatAdminDate(createdAt), text: "Incidencia registrada" },
+      ...((problem.responseNotes || problem.response_notes) ? [{ date: "Seguimiento", text: problem.responseNotes || problem.response_notes }] : []),
+    ],
+  };
+};
+
+const mapProblemFromDatabase = (problem: any): TechnicalFailureItem => {
+  const module = problem.categoryLabel || problem.category_label || "";
+  const reporterName = problem.reportedBy || problem.reported_by || "";
+  const createdAt = problem.createdAt || problem.created_at;
+  const ticketNumber = String(problem.ticketNumber || problem.ticket_number || problem.id || "");
+  const assignedTo = problem.assignedTo || problem.assigned_to || "";
+
+  return {
+    id: ticketNumber.startsWith("#") ? ticketNumber : `#${ticketNumber}`,
+    raw_id: problem.id,
+    typeIcon: module.toLowerCase().includes("chat") ? "💬" : module.toLowerCase().includes("pago") || module.toLowerCase().includes("contrat") ? "🛒" : module.toLowerCase().includes("mapa") ? "🌐" : module.toLowerCase().includes("notif") ? "📞" : module.toLowerCase().includes("foto") || module.toLowerCase().includes("publi") ? "🖼️" : "⚠️",
+    title: problem.title || module,
+    shortDesc: (problem.description || "").slice(0, 28),
+    description: problem.description || "",
+    module,
+    moduleBadgeBg: module.toLowerCase().includes("chat") ? "#f3e8ff" : module.toLowerCase().includes("publi") ? "#fce7f3" : module.toLowerCase().includes("pago") || module.toLowerCase().includes("contrat") ? "#ccfbf1" : module.toLowerCase().includes("mapa") ? "#dcfce7" : module.toLowerCase().includes("notif") ? "#fef3c7" : "#dbeafe",
+    moduleBadgeColor: module.toLowerCase().includes("chat") ? "#9333ea" : module.toLowerCase().includes("publi") ? "#db2777" : module.toLowerCase().includes("pago") || module.toLowerCase().includes("contrat") ? "#0f766e" : module.toLowerCase().includes("mapa") ? "#15803d" : module.toLowerCase().includes("notif") ? "#d97706" : "#1d4ed8",
+    reporter: {
+      name: reporterName,
+      role: problem.reportedByRole || "Usuario",
+      avatar: "",
+      email: problem.userEmail || problem.user_email || "",
+    },
+    date: formatAdminDate(createdAt),
+    priority: problem.priority || "No definida",
+    status: problem.status === "resuelto" ? "Resuelta" : problem.status === "en_proceso" ? "En proceso" : "Abierta",
+    assignedTo: assignedTo ? { name: assignedTo, avatar: "" } : null,
+    platform: problem.deviceInfo || problem.device_info || "",
+    version: problem.version || "",
+    attachments: Array.isArray(problem.attachments) ? problem.attachments : [],
+    timeline: [
+      { date: formatAdminDate(createdAt), text: `Incidencia registrada por ${reporterName}`, isInitial: true },
+      ...((problem.responseNotes || problem.response_notes) ? [{ date: "Seguimiento", text: problem.responseNotes || problem.response_notes }] : []),
+    ],
+  };
+};
 
 export interface PlatformNotification {
   id: number | string;
@@ -1445,20 +1592,15 @@ export const AdminDashboard: React.FC = () => {
 
   // Notificaciones de la plataforma
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<PlatformNotification[]>([
-    { id: 1, title: "PQR Radicado", text: "Nueva queja PQR radicada por Laura G.", time: "Hace 10 min", unread: true, type: "pqr", link: "pqr" },
-    { id: 2, title: "Verificación RETIE", text: "Carlos M. solicitó verificación de tarjeta profesional RETIE.", time: "Hace 25 min", unread: true, type: "verificacion", link: "profesionales" },
-    { id: 3, title: "Reporte Técnico", text: "Se reportó una falla técnica en carga de imágenes.", time: "Hace 1 hora", unread: true, type: "falla", link: "fallas" },
-  ]);
-  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(3);
+  const [notifications, setNotifications] = useState<PlatformNotification[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
   const [notificationsFilter, setNotificationsFilter] = useState<"todas" | "no_leidas">("todas");
 
   const fetchDbNotifications = async () => {
     try {
       const res = await adminService.getNotifications();
       if (res && Array.isArray(res.notifications)) {
-        if (res.notifications.length > 0) {
-          const mapped: PlatformNotification[] = res.notifications.map((n) => ({
+        const mapped: PlatformNotification[] = res.notifications.map((n) => ({
             id: n.id,
             title: n.title,
             text: n.text,
@@ -1469,14 +1611,13 @@ export const AdminDashboard: React.FC = () => {
             target_id: n.target_id,
             created_at: n.created_at,
           }));
-          setNotifications(mapped);
-          setUnreadNotificationsCount(res.unread_count ?? mapped.filter((n) => n.unread).length);
-        } else {
-          setUnreadNotificationsCount(0);
-        }
+        setNotifications(mapped);
+        setUnreadNotificationsCount(res.unread_count ?? mapped.filter((n) => n.unread).length);
       }
     } catch (e) {
-      console.warn("Error cargando notificaciones de BD:", e);
+      setNotifications([]);
+      setUnreadNotificationsCount(0);
+      showNotification(e instanceof Error ? e.message : "Error cargando notificaciones desde la base de datos.", "error");
     }
   };
 
@@ -1626,145 +1767,9 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Lista de solicitudes recientes (idénticas a la imagen)
-  const [requestsList, setRequestsList] = useState<RequestItem[]>([
-    {
-      id: "req-1",
-      type: "Servicio",
-      typeIcon: "🔧",
-      typeColor: "#dbeafe",
-      title: "Instalación de aire acondicionado",
-      userName: "Carlos M.",
-      userAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-      date: "08/10/2026",
-      status: "En revisión",
-      statusClass: "ad-status-revision",
-    },
-    {
-      id: "req-2",
-      type: "Producto",
-      typeIcon: "🛒",
-      typeColor: "#dcfce7",
-      title: "Taladro eléctrico",
-      userName: "Ana P.",
-      userAvatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80",
-      date: "08/10/2026",
-      status: "Aprobado",
-      statusClass: "ad-status-aprobado",
-    },
-    {
-      id: "req-3",
-      type: "Servicio",
-      typeIcon: "🔧",
-      typeColor: "#dbeafe",
-      title: "Reparación de plomería",
-      userName: "Miguel R.",
-      userAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-      date: "07/10/2026",
-      status: "En revisión",
-      statusClass: "ad-status-revision",
-    },
-    {
-      id: "req-4",
-      type: "PQR",
-      typeIcon: "💬",
-      typeColor: "#fee2e2",
-      title: "Cobro indebido en servicio",
-      userName: "Laura G.",
-      userAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80",
-      date: "07/10/2026",
-      status: "Abierto",
-      statusClass: "ad-status-abierto",
-    },
-    {
-      id: "req-5",
-      type: "Falla",
-      typeIcon: "🐞",
-      typeColor: "#f3e8ff",
-      title: "Error al subir imágenes",
-      userName: "Juan S.",
-      userAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
-      date: "07/10/2026",
-      status: "En proceso",
-      statusClass: "ad-status-proceso",
-    },
-  ]);
-
-  // Profesionales destacados (idénticos a la imagen)
-  const [prosList, setProsList] = useState<TopProfessional[]>([
-    {
-      id: "pro-1",
-      name: "Andrés López",
-      specialty: "Electricista",
-      rating: 4.9,
-      tier: "Nivel Oro",
-      avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80",
-      points: 1450,
-      completedJobs: 132,
-      verified: true,
-    },
-    {
-      id: "pro-2",
-      name: "María Torres",
-      specialty: "Limpieza",
-      rating: 4.8,
-      tier: "Nivel Plata",
-      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80",
-      points: 980,
-      completedJobs: 87,
-      verified: true,
-    },
-    {
-      id: "pro-3",
-      name: "José Ramírez",
-      specialty: "Plomero",
-      rating: 4.8,
-      tier: "Nivel Oro",
-      avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=100&auto=format&fit=crop&q=80",
-      points: 1200,
-      completedJobs: 114,
-      verified: true,
-    },
-    {
-      id: "pro-4",
-      name: "Carolina Pérez",
-      specialty: "Entrenadora",
-      rating: 4.7,
-      tier: "Nivel Plata",
-      avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100&auto=format&fit=crop&q=80",
-      points: 850,
-      completedJobs: 54,
-      verified: true,
-    },
-  ]);
-
-  // Auditoría inicial
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([
-    {
-      id: "aud-1",
-      adminName: "Superadministrador",
-      action: "Aprobación de producto",
-      target: "Taladro eléctrico (Ana P.)",
-      date: "08/10/2026 14:30",
-      reason: "Verificación de especificaciones y precio reglamentario",
-    },
-    {
-      id: "aud-2",
-      adminName: "Superadministrador",
-      action: "Asignación de puntos",
-      target: "Andrés López (+200 pts)",
-      date: "07/10/2026 18:15",
-      reason: "Cumplimiento récord de 10 servicios 5 estrellas en Kennedy",
-    },
-    {
-      id: "aud-3",
-      adminName: "Superadministrador",
-      action: "Bloqueo temporal",
-      target: "Usuario contratista #402",
-      date: "07/10/2026 11:20",
-      reason: "Queja reiterada de incumplimiento de citas",
-    },
-  ]);
+  const [requestsList, setRequestsList] = useState<RequestItem[]>([]);
+  const [prosList, setProsList] = useState<TopProfessional[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
 
   // Estado de conexión a la Base de Datos
   const [dbInfo, setDbInfo] = useState<{
@@ -1774,84 +1779,112 @@ export const AdminDashboard: React.FC = () => {
     loading: boolean;
   }>({
     connected: false,
-    engine: "sqlite",
+    engine: "",
     database_name: "",
     loading: true,
   });
 
   // Métricas de Indicadores Clave (KPIs)
   const [kpis, setKpis] = useState({
-    clients: 1248,
-    professionals: 356,
-    hired_services: 1890,
-    pending_publications: 42,
-    open_pqrs: 27,
-    technical_issues: 5,
-    raw_clients: 4,
-    raw_pros: 15,
-    raw_services: 5,
-    raw_publications: 21,
-    raw_pqrs: 4,
-    raw_issues: 3,
+    clients: 0,
+    professionals: 0,
+    hired_services: 0,
+    pending_publications: 0,
+    open_pqrs: 0,
+    technical_issues: 0,
+    raw_clients: 0,
+    raw_pros: 0,
+    raw_services: 0,
+    raw_publications: 0,
+    raw_pqrs: 0,
+    raw_issues: 0,
   });
 
   // Distribución de usuarios para gráfica
   const [userDistribution, setUserDistribution] = useState({
-    clients: 1248,
-    professionals: 356,
-    administrators: 18,
+    clients: 0,
+    professionals: 0,
+    administrators: 0,
   });
 
   // Distribución de PQR para gráfico de barras
   const [pqrDistribution, setPqrDistribution] = useState({
-    radicado: 6,
-    en_revision: 9,
-    conciliacion: 4,
-    resuelto: 8,
+    radicado: 0,
+    en_revision: 0,
+    conciliacion: 0,
+    resuelto: 0,
   });
 
-  // Función para consultar en vivo la base de datos
+  const [overviewReports, setOverviewReports] = useState({
+    blocked_accounts_today: 0,
+    complaints: 0,
+    rejected_publications: 0,
+    cancelled_services: 0,
+    technical_issues: 0,
+  });
+
+  const clearOverviewData = () => {
+    setKpis({
+      clients: 0,
+      professionals: 0,
+      hired_services: 0,
+      pending_publications: 0,
+      open_pqrs: 0,
+      technical_issues: 0,
+      raw_clients: 0,
+      raw_pros: 0,
+      raw_services: 0,
+      raw_publications: 0,
+      raw_pqrs: 0,
+      raw_issues: 0,
+    });
+    setRequestsList([]);
+    setProsList([]);
+    setAuditLogs([]);
+    setUserDistribution({ clients: 0, professionals: 0, administrators: 0 });
+    setPqrDistribution({ radicado: 0, en_revision: 0, conciliacion: 0, resuelto: 0 });
+    setOverviewReports({
+      blocked_accounts_today: 0,
+      complaints: 0,
+      rejected_publications: 0,
+      cancelled_services: 0,
+      technical_issues: 0,
+    });
+  };
+
   const fetchLiveOverview = async () => {
     setDbInfo((prev) => ({ ...prev, loading: true }));
     try {
       const data = await adminService.getOverview();
-      if (data.database && data.database.connected) {
-        setDbInfo({
-          connected: true,
-          engine: data.database.engine || "sqlite",
-          database_name: String(data.database.database_name || "db.sqlite3"),
-          loading: false,
-        });
-        if (data.kpis) {
-          setKpis((prev) => ({ ...prev, ...data.kpis }));
-        }
-        if (data.requests_list && data.requests_list.length > 0) {
-          setRequestsList(data.requests_list);
-        }
-        if (data.top_professionals && data.top_professionals.length > 0) {
-          setProsList(data.top_professionals);
-        }
-        if (data.audit_logs && data.audit_logs.length > 0) {
-          setAuditLogs(data.audit_logs);
-        }
-        if (data.charts?.user_distribution) {
-          setUserDistribution(data.charts.user_distribution);
-        }
-        if (data.charts?.pqr_chart) {
-          setPqrDistribution(data.charts.pqr_chart);
-        }
-      } else {
+      if (!data.database?.connected) {
         setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
+        clearOverviewData();
+        return;
       }
+
+      setDbInfo({
+        connected: true,
+        engine: data.database.engine || "",
+        database_name: data.database.database_name || "",
+        loading: false,
+      });
+      setKpis((prev) => ({ ...prev, ...data.kpis }));
+      setRequestsList(data.requests_list);
+      setProsList(data.top_professionals);
+      setAuditLogs(data.audit_logs);
+      setUserDistribution(data.charts.user_distribution);
+      setPqrDistribution(data.charts.pqr_chart);
+      setOverviewReports(data.reports);
     } catch (err) {
-      console.warn("Fallo al consultar base de datos en overview:", err);
       setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
+      clearOverviewData();
+      console.warn("Fallo al consultar base de datos en overview:", err);
     }
   };
 
-  // Listas conectadas a la base de datos (con persistencia local y fallback)
-  const [clientsList, setClientsList] = useState<ClientItem[]>(getPersistedClients);
-  const [allProsList, setAllProsList] = useState<ProfessionalItem[]>(getPersistedPros);
+  // Listas cargadas directamente desde la base de datos.
+  const [clientsList, setClientsList] = useState<ClientItem[]>([]);
+  const [allProsList, setAllProsList] = useState<ProfessionalItem[]>([]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [prosLoading, setProsLoading] = useState(false);
 
@@ -1871,14 +1904,10 @@ export const AdminDashboard: React.FC = () => {
     setClientsLoading(true);
     try {
       const res = await adminService.getUsers("client");
-      if (res && Array.isArray(res.users) && res.users.length > 0) {
-        const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
-        const filtered = res.users.filter((c: any) => !deleted.includes(`client:${c.id}`) && !deleted.includes(String(c.id)));
-        setClientsList(filtered);
-        try { localStorage.setItem("serviprox_clients_list", JSON.stringify(filtered)); } catch {}
-      }
+      setClientsList(Array.isArray(res.users) ? res.users : []);
     } catch (err) {
-      console.warn("Error cargando clientes de BD:", err);
+      setClientsList([]);
+      showNotification(err instanceof Error ? err.message : "Error cargando clientes desde la base de datos.", "error");
     } finally {
       setClientsLoading(false);
     }
@@ -1889,14 +1918,10 @@ export const AdminDashboard: React.FC = () => {
     setProsLoading(true);
     try {
       const res = await adminService.getProfessionals();
-      if (Array.isArray(res) && res.length > 0) {
-        const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
-        const filtered = res.filter((p: any) => !deleted.includes(`professional:${p.id}`) && !deleted.includes(String(p.id)));
-        setAllProsList(filtered);
-        try { localStorage.setItem("serviprox_pros_list", JSON.stringify(filtered)); } catch {}
-      }
+      setAllProsList(Array.isArray(res) ? res : []);
     } catch (err) {
-      console.warn("Error cargando profesionales de BD:", err);
+      setAllProsList([]);
+      showNotification(err instanceof Error ? err.message : "Error cargando profesionales desde la base de datos.", "error");
     } finally {
       setProsLoading(false);
     }
@@ -1909,147 +1934,14 @@ export const AdminDashboard: React.FC = () => {
         adminService.getProblems(),
       ]);
 
-      const mappedFromDb: PqrItem[] = [];
-
-      if (Array.isArray(dbPqrs) && dbPqrs.length > 0) {
-        dbPqrs.forEach((p: any) => {
-          const typeVal = p.pqr_type === "queja" ? "queja" : p.pqr_type === "reclamo" ? "reclamo" : p.pqr_type === "peticion" ? "peticion" : "reporte";
-          mappedFromDb.push({
-            id: p.radicado_number?.startsWith("#") ? p.radicado_number : `#${p.radicado_number || p.id}`,
-            raw_id: p.id,
-            type: typeVal as any,
-            typeLabel: (typeVal === "queja" ? "Queja" : typeVal === "reclamo" ? "Reclamo" : typeVal === "peticion" ? "Petición" : "Reporte") as any,
-            typeIcon: typeVal === "queja" ? "⚠️" : typeVal === "reclamo" ? "📄" : "🎧",
-            typeBg: typeVal === "queja" ? "#fee2e2" : typeVal === "reclamo" ? "#f3e8ff" : "#fef3c7",
-            typeColor: typeVal === "queja" ? "#dc2626" : typeVal === "reclamo" ? "#9333ea" : "#d97706",
-            title: p.reason?.replace(/_/g, " ") || p.description?.slice(0, 35) || "PQR de usuario",
-            shortDesc: (p.description?.slice(0, 30) || "Sin descripción") + "...",
-            description: p.description || "Sin descripción detallada.",
-            client: {
-              name: p.client_name || "Cliente Serviprox",
-              document_id: p.client_document_id || "CC Verificada",
-              avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80",
-              rating: 4.8,
-              reviews_count: 20,
-              email: p.client_email || "cliente@serviprox.co",
-              phone: p.client_phone,
-            },
-            contractor: p.contractor_name ? {
-              name: p.contractor_name,
-              document_id: "CC Profesional",
-              avatar: p.contractor_avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-              rating: 4.7,
-              reviews_count: 50,
-              specialty: p.contractor_specialty || "Especialista Serviprox",
-            } : null,
-            relatedTo: p.contractor_company || "Servicio contratado",
-            date: p.created_at ? new Date(p.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "Hoy",
-            updatedDate: p.updated_at ? new Date(p.updated_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "Hoy",
-            priority: "Alta",
-            status: p.status === "resuelto" ? "Resuelta" : p.status === "en_revision" ? "En revisión" : p.status === "conciliacion" ? "En proceso" : "Abierta",
-            city: "Bogotá, Colombia",
-            attachments: Array.isArray(p.evidence_files) ? p.evidence_files : [],
-            timeline: Array.isArray(p.messages) && p.messages.length > 0
-              ? p.messages.map((m: any) => ({
-                  date: m.timestamp ? new Date(m.timestamp).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "Fecha",
-                  text: `${m.sender_name || m.sender_role}: ${m.text}`,
-                }))
-              : [
-                  { date: "Registro", text: "Solicitud radicada en la plataforma Serviprox" },
-                ],
-          });
-        });
-      }
-
-      if (Array.isArray(dbProblems) && dbProblems.length > 0) {
-        dbProblems.forEach((fal: any) => {
-          mappedFromDb.push({
-            id: fal.ticket_number?.startsWith("#") ? fal.ticket_number : `#${fal.ticket_number || fal.id}`,
-            raw_id: fal.id,
-            type: "reporte",
-            typeLabel: "Reporte",
-            typeIcon: "🔧",
-            typeBg: "#dbeafe",
-            typeColor: "#2563eb",
-            title: fal.category_label || "Falla técnica en la app",
-            shortDesc: (fal.description?.slice(0, 30) || "Falla en app") + "...",
-            description: fal.description || "Reporte técnico sin descripción.",
-            client: {
-              name: fal.reported_by || "Usuario",
-              document_id: "Usuario App",
-              avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-              rating: 5.0,
-              reviews_count: 10,
-              email: fal.user_email || "usuario@serviprox.co",
-            },
-            contractor: null,
-            relatedTo: fal.device_info || "App móvil Serviprox",
-            date: fal.created_at ? new Date(fal.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "Hoy",
-            updatedDate: "Hoy",
-            priority: "Media",
-            status: fal.status === "resuelto" ? "Resuelta" : fal.status === "en_proceso" ? "En proceso" : "Abierta",
-            city: "Bogotá, Colombia",
-            attachments: Array.isArray(fal.attachments) ? fal.attachments : [],
-            timeline: [
-              { date: "Registro", text: "Falla técnica reportada por el usuario desde la app" },
-              ...(fal.response_notes ? [{ date: "Solución", text: fal.response_notes }] : []),
-            ],
-          });
-        });
-      }
-
-      if (mappedFromDb.length > 0) {
-        setPqrList((prev) => {
-          const existingIds = new Set(mappedFromDb.map((m) => m.id));
-          const rest = prev.filter((item) => !existingIds.has(item.id));
-          return [...mappedFromDb, ...rest];
-        });
-
-        if (Array.isArray(dbProblems) && dbProblems.length > 0) {
-          const mappedFailures: TechnicalFailureItem[] = dbProblems.map((fal: any) => {
-            const mod = fal.category_label || "Autenticación";
-            return {
-              id: fal.ticket_number?.startsWith("#") ? fal.ticket_number : `#${fal.ticket_number || fal.id}`,
-              raw_id: fal.id,
-              typeIcon: mod.toLowerCase().includes("chat") ? "💬" : mod.toLowerCase().includes("pago") || mod.toLowerCase().includes("contrat") ? "🛒" : mod.toLowerCase().includes("mapa") ? "🌐" : mod.toLowerCase().includes("notif") ? "📞" : mod.toLowerCase().includes("foto") || mod.toLowerCase().includes("publi") ? "🖼️" : "⚠️",
-              title: fal.category_label || "Incidencia técnica en la app",
-              shortDesc: (fal.description?.slice(0, 28) || "Falla técnica...") + "...",
-              description: fal.description || "Reporte técnico sin descripción adicional.",
-              module: mod,
-              moduleBadgeBg: mod.toLowerCase().includes("chat") ? "#f3e8ff" : mod.toLowerCase().includes("publi") ? "#fce7f3" : mod.toLowerCase().includes("pago") || mod.toLowerCase().includes("contrat") ? "#ccfbf1" : mod.toLowerCase().includes("mapa") ? "#dcfce7" : mod.toLowerCase().includes("notif") ? "#fef3c7" : mod.toLowerCase().includes("móvil") ? "#e0e7ff" : "#dbeafe",
-              moduleBadgeColor: mod.toLowerCase().includes("chat") ? "#9333ea" : mod.toLowerCase().includes("publi") ? "#db2777" : mod.toLowerCase().includes("pago") || mod.toLowerCase().includes("contrat") ? "#0f766e" : mod.toLowerCase().includes("mapa") ? "#15803d" : mod.toLowerCase().includes("notif") ? "#d97706" : mod.toLowerCase().includes("móvil") ? "#4338ca" : "#1d4ed8",
-              reporter: {
-                name: fal.reported_by || "Usuario Serviprox",
-                role: (fal.reported_by?.toLowerCase().includes("pro") ? "Profesional" : "Cliente") as any,
-                avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-                email: fal.user_email || "usuario@serviprox.co",
-              },
-              date: fal.created_at ? new Date(fal.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "Hoy",
-              priority: "Alta",
-              status: fal.status === "resuelto" ? "Resuelta" : fal.status === "en_proceso" ? "En proceso" : "Abierta",
-              assignedTo: {
-                name: "Carlos M.",
-                avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
-              },
-              platform: fal.device_info || "Aplicación móvil (Android)",
-              version: "v1.2.0",
-              attachments: [],
-              timeline: [
-                { date: "Registro", text: `Incidencia creada por ${fal.reported_by || "Usuario"}`, isInitial: true },
-                ...(fal.response_notes ? [{ date: "Solución", text: fal.response_notes }] : []),
-              ],
-            };
-          });
-
-          setFailuresList((prev) => {
-            const existingIds = new Set(mappedFailures.map((m) => m.id));
-            const rest = prev.filter((item) => !existingIds.has(item.id));
-            return [...mappedFailures, ...rest];
-          });
-        }
-      }
+      const pqrRecords = Array.isArray(dbPqrs) ? dbPqrs : [];
+      const problemRecords = Array.isArray(dbProblems) ? dbProblems : [];
+      setPqrList([...pqrRecords.map(mapPqrFromDatabase), ...problemRecords.map(mapProblemToPqr)]);
+      setFailuresList(problemRecords.map(mapProblemFromDatabase));
     } catch (e) {
-      console.warn("Error cargando PQRs de la base de datos:", e);
+      setPqrList([]);
+      setFailuresList([]);
+      showNotification(e instanceof Error ? e.message : "Error cargando PQR y fallas desde la base de datos.", "error");
     }
   };
 
@@ -2323,13 +2215,7 @@ export const AdminDashboard: React.FC = () => {
   const [motivoBeneficio, setMotivoBeneficio] = useState("Premio por puntualidad y alta calificación");
 
   // Catálogo de beneficios configurable (con persistencia en storage)
-  const [benefitsCatalog, setBenefitsCatalog] = useState<BenefitCatalogItem[]>(() => {
-    try {
-      const saved = localStorage.getItem("serviprox_benefits_catalog");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return INITIAL_BENEFIT_CATALOG;
-  });
+  const [benefitsCatalog, setBenefitsCatalog] = useState<BenefitCatalogItem[]>([]);
 
   // Pestaña activa del modal de beneficios: 'asignar' | 'crear'
   const [benefitModalTab, setBenefitModalTab] = useState<"asignar" | "crear">("asignar");
@@ -2352,8 +2238,8 @@ export const AdminDashboard: React.FC = () => {
   const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
 
   // Estados específicos para la vista de Beneficios y Puntos
-  const [benefitProsList, setBenefitProsList] = useState<BenefitProItem[]>(INITIAL_BENEFIT_PROS);
-  const [selectedBenefitProId, setSelectedBenefitProId] = useState<number>(1);
+  const [benefitProsList, setBenefitProsList] = useState<BenefitProItem[]>([]);
+  const [selectedBenefitProId, setSelectedBenefitProId] = useState<number>(0);
   const [benefitsTab, setBenefitsTab] = useState<"Todos" | "Bronce" | "Plata" | "Oro" | "Destacados">("Todos");
   const [benefitSearch, setBenefitSearch] = useState("");
   const [benefitCategoryFilter, setBenefitCategoryFilter] = useState("Todas");
@@ -2365,8 +2251,8 @@ export const AdminDashboard: React.FC = () => {
   const [selectedBenefitCheckboxIds, setSelectedBenefitCheckboxIds] = useState<number[]>([]);
 
   // Estados específicos para la vista de PQR y Reportes (Diseño exacto oficial)
-  const [pqrList, setPqrList] = useState<PqrItem[]>(INITIAL_PQR_ITEMS);
-  const [selectedPqrId, setSelectedPqrId] = useState<string>("#1028");
+  const [pqrList, setPqrList] = useState<PqrItem[]>([]);
+  const [selectedPqrId, setSelectedPqrId] = useState<string>("");
   const [pqrTab, setPqrTab] = useState<"Todas" | "Quejas" | "Reclamos" | "Peticiones" | "Reportes">("Todas");
   const [pqrSearch, setPqrSearch] = useState("");
   const [pqrTypeFilter, setPqrTypeFilter] = useState("Todos");
@@ -2401,8 +2287,8 @@ export const AdminDashboard: React.FC = () => {
   // ═════════════════════════════════════════════════════════════════════
   // ESTADOS Y ACCIONES: MÓDULO FALLAS TÉCNICAS (CONECTADO A BD)
   // ═════════════════════════════════════════════════════════════════════
-  const [failuresList, setFailuresList] = useState<TechnicalFailureItem[]>(INITIAL_FAILURES_DATA);
-  const [selectedFailureId, setSelectedFailureId] = useState<string>("#1045");
+  const [failuresList, setFailuresList] = useState<TechnicalFailureItem[]>([]);
+  const [selectedFailureId, setSelectedFailureId] = useState<string>("");
   const [failureTab, setFailureTab] = useState<"Todas" | "Abiertas" | "En proceso" | "Resueltas" | "Cerradas">("Todas");
   const [failureSearch, setFailureSearch] = useState("");
   const [failureCategoryFilter, setFailureCategoryFilter] = useState("Todas");
@@ -2437,6 +2323,51 @@ export const AdminDashboard: React.FC = () => {
     const title = type === "success" ? "Éxito" : type === "error" ? "Error" : "Información";
     setActiveAlert({ kind: "alert", title, message, variant: type, value: "" });
   };
+
+  useEffect(() => {
+    let active = true;
+    platformSettingsService.getAdmin()
+      .then((settings) => {
+        if (!active) return;
+        const catalog = settings.sections?.benefit_catalog?.items;
+        setBenefitsCatalog(Array.isArray(catalog) ? catalog : []);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setBenefitsCatalog([]);
+        showNotification(error instanceof Error ? error.message : "No se pudo consultar el catálogo de beneficios en la base de datos.", "error");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const mapped: BenefitProItem[] = allProsList.map((pro: any) => {
+      const points = Number(pro.points) || 0;
+      const nextLevelPoints = points < 1000 ? 1000 : points < 2000 ? 2000 : 3000;
+      return {
+        id: Number(pro.id),
+        name: pro.display_name || "",
+        document_id: "",
+        category: Array.isArray(pro.categories) ? pro.categories.join(", ") : (pro.specialty_label || ""),
+        city: pro.city || "",
+        points,
+        level: points >= 2000 ? "Oro" : points >= 1000 ? "Plata" : "Bronce",
+        redeemed_count: 0,
+        status: pro.is_active ? "Activo" : "Suspendido",
+        rating: Number(pro.rating_avg) || 0,
+        reviews_count: Number(pro.jobs_completed) || 0,
+        avatar: pro.avatar_url || "",
+        next_level_points: nextLevelPoints,
+        redeemed_history: [],
+      };
+    });
+    setBenefitProsList(mapped);
+    if (mapped.length && !mapped.some((pro) => pro.id === selectedBenefitProId)) {
+      setSelectedBenefitProId(mapped[0].id);
+    }
+  }, [allProsList, selectedBenefitProId]);
 
   const showConfirm = (message: string, title = "Confirmar acción") =>
     new Promise<boolean>((resolve) => {
@@ -2529,83 +2460,33 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
 
-    const newTicketNum = `#${Math.floor(1046 + Math.random() * 8900)}`;
-    const nowStr = new Date().toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" });
-
-    const newFailure: TechnicalFailureItem = {
-      id: newTicketNum,
-      raw_id: Date.now(),
-      typeIcon: newFailureModule.toLowerCase().includes("chat") ? "💬" : newFailureModule.toLowerCase().includes("pago") || newFailureModule.toLowerCase().includes("contrat") ? "🛒" : newFailureModule.toLowerCase().includes("mapa") ? "🌐" : newFailureModule.toLowerCase().includes("notif") ? "📞" : newFailureModule.toLowerCase().includes("foto") || newFailureModule.toLowerCase().includes("publi") ? "🖼️" : "⚠️",
-      title: newFailureTitle.trim(),
-      shortDesc: (newFailureDescription.trim().slice(0, 28) || "Falla técnica...") + "...",
-      description: newFailureDescription.trim(),
-      module: newFailureModule,
-      moduleBadgeBg: newFailureModule.toLowerCase().includes("chat") ? "#f3e8ff" : newFailureModule.toLowerCase().includes("publi") ? "#fce7f3" : newFailureModule.toLowerCase().includes("pago") || newFailureModule.toLowerCase().includes("contrat") ? "#ccfbf1" : newFailureModule.toLowerCase().includes("mapa") ? "#dcfce7" : newFailureModule.toLowerCase().includes("notif") ? "#fef3c7" : newFailureModule.toLowerCase().includes("móvil") ? "#e0e7ff" : "#dbeafe",
-      moduleBadgeColor: newFailureModule.toLowerCase().includes("chat") ? "#9333ea" : newFailureModule.toLowerCase().includes("publi") ? "#db2777" : newFailureModule.toLowerCase().includes("pago") || newFailureModule.toLowerCase().includes("contrat") ? "#0f766e" : newFailureModule.toLowerCase().includes("mapa") ? "#15803d" : newFailureModule.toLowerCase().includes("notif") ? "#d97706" : newFailureModule.toLowerCase().includes("móvil") ? "#4338ca" : "#1d4ed8",
-      reporter: {
-        name: newFailureReporter.trim() || adminDisplayName,
-        role: "Cliente",
-        avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80",
-        email: "usuario@serviprox.co",
-      },
-      date: nowStr,
-      priority: newFailurePriority,
-      status: "Abierta",
-      assignedTo: {
-        name: "Carlos M.",
-        avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
-      },
-      platform: newFailurePlatform,
-      version: newFailureVersion,
-      attachments: newFailureFiles.map((file) => ({
-        name: file.name,
-        type: file.type.startsWith("image/") ? "image" as const : "file" as const,
-      })),
-      timeline: [
-        { date: nowStr, text: `Incidencia creada por ${newFailureReporter.trim() || adminDisplayName}`, isInitial: true },
-      ],
-    };
-
     try {
       const savedProblem = await adminService.createProblem({
-        ticketNumber: newTicketNum,
         module: newFailureModule,
         title: newFailureTitle.trim(),
         description: newFailureDescription.trim(),
         reportedBy: newFailureReporter.trim() || adminDisplayName,
         priority: newFailurePriority,
         deviceInfo: newFailurePlatform,
+        version: newFailureVersion,
         adminName: adminDisplayName,
         attachments: newFailureFiles,
       });
-      if (savedProblem.ok === false) throw new Error(savedProblem.message || "No se pudo guardar la incidencia.");
-      if (Array.isArray(savedProblem.attachments)) newFailure.attachments = savedProblem.attachments;
+      if (savedProblem.ok === false || !savedProblem.ticket_number) {
+        throw new Error(savedProblem.message || "El servidor no devolvió el ticket creado.");
+      }
+      await fetchDbPqrsAndProblems();
+      setSelectedFailureId(`#${savedProblem.ticket_number}`);
+      setModalNewFailureOpen(false);
+
+      setNewFailureTitle("");
+      setNewFailureDescription("");
+      setNewFailureReporter("");
+      setNewFailureFiles([]);
+      await showNotification(`Incidencia ${savedProblem.ticket_number} registrada en la base de datos.`, "success");
     } catch (error) {
       showNotification(error instanceof Error ? error.message : "No se pudo guardar la incidencia.", "error");
-      return;
     }
-
-    setFailuresList((prev) => [newFailure, ...prev]);
-    setSelectedFailureId(newFailure.id);
-    setModalNewFailureOpen(false);
-
-    setAuditLogs((prev) => [
-      {
-        id: `aud-${Date.now()}`,
-        adminName: adminDisplayName,
-        action: `Registro manual de falla técnica (${newFailureModule})`,
-        target: `${newFailure.title} (${newTicketNum})`,
-        date: new Date().toLocaleString(),
-        reason: newFailureDescription.trim().slice(0, 100),
-      },
-      ...prev,
-    ]);
-
-    setNewFailureTitle("");
-    setNewFailureDescription("");
-    setNewFailureReporter("");
-    setNewFailureFiles([]);
-    await showNotification(`✓ Incidencia ${newTicketNum} registrada exitosamente en la base de datos.`, "success");
   };
 
   // Asignar técnico responsable
@@ -2613,50 +2494,19 @@ export const AdminDashboard: React.FC = () => {
     const cur = failuresList.find((f) => f.id === selectedFailureId);
     if (!cur) return;
 
-    const nowStr = new Date().toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" });
-    const staffAvatar = assignFailureStaff === "Ana R."
-      ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80"
-      : assignFailureStaff === "Daniel S."
-      ? "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
-      : assignFailureStaff === "Miguel P."
-      ? "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80"
-      : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80";
-
-    setFailuresList((prev) =>
-      prev.map((f) =>
-        f.id === selectedFailureId
-          ? {
-              ...f,
-              status: f.status === "Abierta" ? "En proceso" : f.status,
-              assignedTo: { name: assignFailureStaff, avatar: staffAvatar },
-              timeline: [...f.timeline, { date: nowStr, text: `Asignada a ${assignFailureStaff}` }],
-            }
-          : f
-      )
-    );
-
-    setModalAssignFailureOpen(false);
-
-    await adminService.assignProblem({
-      targetId: cur.raw_id || cur.id,
-      assignedTo: assignFailureStaff,
-      adminName: adminDisplayName,
-      reason: `Asignada al especialista ${assignFailureStaff}`,
-    });
-
-    setAuditLogs((prev) => [
-      {
-        id: `aud-${Date.now()}`,
+    try {
+      await adminService.assignProblem({
+        targetId: cur.raw_id || cur.id,
+        assignedTo: assignFailureStaff,
         adminName: adminDisplayName,
-        action: `Asignación de falla a ${assignFailureStaff}`,
-        target: `${cur.title} (${cur.id})`,
-        date: new Date().toLocaleString(),
-        reason: `Especialista asignado: ${assignFailureStaff}`,
-      },
-      ...prev,
-    ]);
-
-    await showNotification(`✓ Incidencia ${cur.id} asignada a ${assignFailureStaff} exitosamente.`, "success");
+        reason: `Asignada al especialista ${assignFailureStaff}`,
+      });
+      await fetchDbPqrsAndProblems();
+      setModalAssignFailureOpen(false);
+      await showNotification(`✓ Incidencia ${cur.id} asignada a ${assignFailureStaff} exitosamente.`, "success");
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo asignar la incidencia.", "error");
+    }
   };
 
   // Cambiar estado de incidencia
@@ -2664,44 +2514,22 @@ export const AdminDashboard: React.FC = () => {
     const cur = failuresList.find((f) => f.id === selectedFailureId);
     if (!cur) return;
 
-    const nowStr = new Date().toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" });
     const noteText = failureStatusReason.trim() || `Estado cambiado a ${newFailureStatusChoice}`;
 
-    setFailuresList((prev) =>
-      prev.map((f) =>
-        f.id === selectedFailureId
-          ? {
-              ...f,
-              status: newFailureStatusChoice,
-              timeline: [...f.timeline, { date: nowStr, text: noteText }],
-            }
-          : f
-      )
-    );
-
-    setModalChangeFailureStatusOpen(false);
-    setFailureStatusReason("");
-
-    await adminService.updateProblemStatus({
-      targetId: cur.raw_id || cur.id,
-      newStatus: newFailureStatusChoice,
-      adminName: adminDisplayName,
-      reason: noteText,
-    });
-
-    setAuditLogs((prev) => [
-      {
-        id: `aud-${Date.now()}`,
+    try {
+      await adminService.updateProblemStatus({
+        targetId: cur.raw_id || cur.id,
+        newStatus: newFailureStatusChoice,
         adminName: adminDisplayName,
-        action: `Cambio de estado a ${newFailureStatusChoice}`,
-        target: `${cur.title} (${cur.id})`,
-        date: new Date().toLocaleString(),
         reason: noteText,
-      },
-      ...prev,
-    ]);
-
-    await showNotification(`✓ Incidencia ${cur.id} actualizada a "${newFailureStatusChoice}" exitosamente.`, "success");
+      });
+      await fetchDbPqrsAndProblems();
+      setModalChangeFailureStatusOpen(false);
+      setFailureStatusReason("");
+      await showNotification(`✓ Incidencia ${cur.id} actualizada a "${newFailureStatusChoice}" exitosamente.`, "success");
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo actualizar la incidencia.", "error");
+    }
   };
 
   // Añadir comentario al seguimiento
@@ -2710,42 +2538,22 @@ export const AdminDashboard: React.FC = () => {
     const cur = failuresList.find((f) => f.id === selectedFailureId);
     if (!cur) return;
 
-    const nowStr = new Date().toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" });
     const commentMsg = `Comentario: ${newFailureCommentText.trim()}`;
 
-    setFailuresList((prev) =>
-      prev.map((f) =>
-        f.id === selectedFailureId
-          ? { ...f, timeline: [...f.timeline, { date: nowStr, text: commentMsg }] }
-          : f
-      )
-    );
-
-    setModalAddFailureCommentOpen(false);
-    setNewFailureCommentText("");
-
-    await adminService.executeAction({
-      action: "respond_pqr",
-      target_id: cur.raw_id || cur.id,
-      response_text: commentMsg,
-      new_status: cur.status.toLowerCase(),
-      admin_name: adminDisplayName,
-      send_notification: false,
-    });
-
-    setAuditLogs((prev) => [
-      {
-        id: `aud-${Date.now()}`,
+    try {
+      await adminService.updateProblemStatus({
+        targetId: cur.raw_id || cur.id,
+        newStatus: cur.status,
         adminName: adminDisplayName,
-        action: `Nota técnica en incidencia`,
-        target: `${cur.title} (${cur.id})`,
-        date: new Date().toLocaleString(),
-        reason: commentMsg.slice(0, 100),
-      },
-      ...prev,
-    ]);
-
-    await showNotification(`✓ Comentario añadido a la incidencia ${cur.id}.`, "success");
+        reason: commentMsg,
+      });
+      await fetchDbPqrsAndProblems();
+      setModalAddFailureCommentOpen(false);
+      setNewFailureCommentText("");
+      await showNotification(`✓ Comentario añadido a la incidencia ${cur.id}.`, "success");
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo guardar el comentario.", "error");
+    }
   };
 
   // Cerrar incidencia directamente
@@ -2763,39 +2571,18 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
 
-    const nowStr = new Date().toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" });
-    setFailuresList((prev) =>
-      prev.map((f) =>
-        f.id === selectedFailureId
-          ? {
-              ...f,
-              status: "Cerrada",
-              timeline: [...f.timeline, { date: nowStr, text: "Incidencia cerrada por administración" }],
-            }
-          : f
-      )
-    );
-
-    await adminService.updateProblemStatus({
-      targetId: cur.raw_id || cur.id,
-      newStatus: "cerrada",
-      adminName: adminDisplayName,
-      reason: "Incidencia cerrada por resolución técnica",
-    });
-
-    setAuditLogs((prev) => [
-      {
-        id: `aud-${Date.now()}`,
+    try {
+      await adminService.updateProblemStatus({
+        targetId: cur.raw_id || cur.id,
+        newStatus: "Cerrada",
         adminName: adminDisplayName,
-        action: `Cierre de incidencia técnica`,
-        target: `${cur.title} (${cur.id})`,
-        date: new Date().toLocaleString(),
-        reason: "Cerrada y verificada",
-      },
-      ...prev,
-    ]);
-
-    await showNotification(`✓ Incidencia ${cur.id} cerrada exitosamente.`, "success");
+        reason: "Incidencia cerrada por resolución técnica",
+      });
+      await fetchDbPqrsAndProblems();
+      await showNotification(`Incidencia ${cur.id} cerrada en la base de datos.`, "success");
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo cerrar la incidencia.", "error");
+    }
   };
 
   const adminDisplayName = (user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username) || "Superadministrador";
@@ -3280,7 +3067,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Crear nuevo beneficio en el catálogo oficial de Serviprox
-  const confirmCreateBenefit = () => {
+  const confirmCreateBenefit = async () => {
     if (!newBenefitTitle.trim()) {
       showNotification("Por favor ingresa el título del beneficio.", "error");
       return;
@@ -3301,11 +3088,21 @@ export const AdminDashboard: React.FC = () => {
       level_required: newBenefitLevel,
     };
 
-    const updatedCatalog = [newBenefitItem, ...benefitsCatalog];
-    setBenefitsCatalog(updatedCatalog);
     try {
-      localStorage.setItem("serviprox_benefits_catalog", JSON.stringify(updatedCatalog));
-    } catch {}
+      const settings = await platformSettingsService.getAdmin();
+      const currentCatalog = settings.sections?.benefit_catalog?.items;
+      const updatedCatalog = [newBenefitItem, ...(Array.isArray(currentCatalog) ? currentCatalog : [])];
+      await platformSettingsService.saveAdmin({
+        sections: {
+          ...settings.sections,
+          benefit_catalog: { items: updatedCatalog },
+        },
+      });
+      setBenefitsCatalog(updatedCatalog);
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo guardar el beneficio en la base de datos.", "error");
+      return;
+    }
 
     setAuditLogs((prev) => [
       {
@@ -3481,59 +3278,30 @@ export const AdminDashboard: React.FC = () => {
       setModalReplyPqrOpen(false);
       return;
     }
-    const targetId = targetPqrToReply.raw_id || targetPqrToReply.id;
-    const dateNowStr = new Date().toLocaleDateString("es-CO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const newStatusByLabel: Record<PqrReplyStatus, string> = {
+      "En proceso": "conciliacion",
+      Resuelta: "resuelto",
+      "En revisión": "en_revision",
+      Cerrada: "resuelto",
+    };
 
-    const newHistoryText = `Respuesta enviada por el administrador (${replyPqrStatus}): "${replyPqrText.slice(0, 70)}..." ${replySendNotification ? "• Notificación enviada al cliente" : ""}`;
-
-    setPqrList((prev) =>
-      prev.map((item) =>
-        item.id === targetPqrToReply.id
-          ? {
-              ...item,
-              status: replyPqrStatus,
-              adminResponse: replyPqrText,
-              updatedDate: dateNowStr,
-              timeline: [
-                ...item.timeline,
-                { date: dateNowStr, text: newHistoryText },
-              ],
-            }
-          : item
-      )
-    );
-
-    setAuditLogs((prev) => [
-      {
-        id: `aud-${Date.now()}`,
+    try {
+      await adminService.respondPqr({
+        targetId: targetPqrToReply.raw_id || targetPqrToReply.id,
+        responseText: replyPqrText,
+        newStatus: newStatusByLabel[replyPqrStatus],
         adminName: adminDisplayName,
-        action: `Respuesta a ${targetPqrToReply.typeLabel} y notificación`,
-        target: `${targetPqrToReply.id} - ${targetPqrToReply.client.name}`,
-        date: new Date().toLocaleString(),
-        reason: replyPqrText,
-      },
-      ...prev,
-    ]);
-
-    setModalReplyPqrOpen(false);
-
-    await adminService.respondPqr({
-      targetId,
-      responseText: replyPqrText,
-      newStatus: replyPqrStatus.toLowerCase().replace(" ", "_"),
-      adminName: adminDisplayName,
-      sendNotification: replySendNotification,
-    });
-
-    showNotification(
-      `✅ Respuesta guardada en la base de datos para el caso ${targetPqrToReply.id}.\n${replySendNotification ? `Se envió notificación inmediata a ${targetPqrToReply.client.name} (${targetPqrToReply.client.email || "App móvil"}).` : "Sin notificación adicional."}`
-    );
+        sendNotification: replySendNotification,
+      });
+      await fetchDbPqrsAndProblems();
+      await fetchDbNotifications();
+      setModalReplyPqrOpen(false);
+      showNotification(
+        `Respuesta guardada en la base de datos para el caso ${targetPqrToReply.id}.${replySendNotification ? ` Se envió notificación a ${targetPqrToReply.client.name}.` : " Sin notificación adicional."}`
+      );
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo guardar la respuesta.", "error");
+    }
   };
 
   const handleCloseCase = async (pqr: PqrItem) => {
@@ -3546,40 +3314,20 @@ export const AdminDashboard: React.FC = () => {
     const confirmClose = await showConfirm(`¿Confirmas el cierre definitivo del caso ${pqr.id}?`, "Cerrar caso");
     if (!confirmClose) return;
 
-    const dateNowStr = new Date().toLocaleDateString("es-CO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    setPqrList((prev) =>
-      prev.map((item) =>
-        item.id === pqr.id
-          ? {
-              ...item,
-              status: "Cerrada",
-              updatedDate: dateNowStr,
-              timeline: [
-                ...item.timeline,
-                { date: dateNowStr, text: "Caso cerrado y archivado por el administrador" },
-              ],
-            }
-          : item
-      )
-    );
-
-    await adminService.executeAction({
-      action: "respond_pqr",
-      target_id: pqr.raw_id || pqr.id,
-      response_text: buildPqrAutoReply(pqr, "Cerrada"),
-      new_status: "cerrada",
-      admin_name: adminDisplayName,
-      send_notification: true,
-    });
-
-    await showNotification(`✓ Caso ${pqr.id} cerrado formalmente exitosamente.`, "success");
+    try {
+      await adminService.respondPqr({
+        targetId: pqr.raw_id || pqr.id,
+        responseText: buildPqrAutoReply(pqr, "Cerrada"),
+        newStatus: "resuelto",
+        adminName: adminDisplayName,
+        sendNotification: true,
+      });
+      await fetchDbPqrsAndProblems();
+      await fetchDbNotifications();
+      await showNotification(`Caso ${pqr.id} cerrado en la base de datos.`, "success");
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo cerrar el caso.", "error");
+    }
   };
 
   const handleAssignCase = async (pqr: PqrItem) => {
@@ -3592,28 +3340,17 @@ export const AdminDashboard: React.FC = () => {
     const agent = await showPrompt("Ingresa el nombre del agente o responsable a asignar:", "Soporte Técnico - Nivel 2", "Asignar responsable");
     if (!agent) return;
 
-    const dateNowStr = new Date().toLocaleDateString("es-CO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    setPqrList((prev) =>
-      prev.map((item) =>
-        item.id === pqr.id
-          ? {
-              ...item,
-              timeline: [
-                ...item.timeline,
-                { date: dateNowStr, text: `Caso asignado a ${agent}` },
-              ],
-            }
-          : item
-      )
-    );
-    await showNotification(`✓ Caso ${pqr.id} asignado a ${agent} exitosamente.`, "success");
+    try {
+      await adminService.assignPqr({
+        targetId: pqr.raw_id || pqr.id,
+        assignedTo: agent,
+        adminName: adminDisplayName,
+      });
+      await fetchDbPqrsAndProblems();
+      await showNotification(`Caso ${pqr.id} asignado a ${agent} en la base de datos.`, "success");
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo asignar el caso.", "error");
+    }
   };
 
   const handleEscalateCase = async (pqr: PqrItem) => {
@@ -3623,29 +3360,17 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
 
-    const dateNowStr = new Date().toLocaleDateString("es-CO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    setPqrList((prev) =>
-      prev.map((item) =>
-        item.id === pqr.id
-          ? {
-              ...item,
-              priority: "Alta",
-              timeline: [
-                ...item.timeline,
-                { date: dateNowStr, text: "Caso escalado con prioridad Alta a Gerencia de Calidad" },
-              ],
-            }
-          : item
-      )
-    );
-    await showNotification(`✓ Caso ${pqr.id} escalado a Gerencia de Operaciones exitosamente.`, "success");
+    try {
+      await adminService.updatePqrPriority({
+        targetId: pqr.raw_id || pqr.id,
+        priority: "Alta",
+        adminName: adminDisplayName,
+      });
+      await fetchDbPqrsAndProblems();
+      await showNotification(`Prioridad del caso ${pqr.id} actualizada en la base de datos.`, "success");
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo actualizar la prioridad.", "error");
+    }
   };
 
   const handleCreateManualPqr = async () => {
@@ -3654,57 +3379,48 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
 
-    const newIdNum = Math.floor(1000 + Math.random() * 9000);
-    const newId = `#${newIdNum}`;
-    const dateNowStr = new Date().toLocaleDateString("es-CO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    try {
+      const title = newPqrTitle.trim();
+      const description = newPqrDescription.trim() || title;
+      if (newPqrType === "reporte") {
+        const result = await adminService.createProblem({
+          module: newPqrRelatedTo.trim() || "Falla técnica en la app",
+          title,
+          description,
+          reportedBy: newPqrClientName.trim(),
+          priority: newPqrPriority,
+          adminName: adminDisplayName,
+        });
+        if (result.ok === false || !result.ticket_number) {
+          throw new Error(result.message || "El servidor no devolvió el ticket creado.");
+        }
+        await fetchDbPqrsAndProblems();
+        setSelectedFailureId(`#${result.ticket_number}`);
+        await showNotification(`Incidencia ${result.ticket_number} registrada en la base de datos.`, "success");
+      } else {
+        const result = await adminService.createPqr({
+          type: newPqrType,
+          reason: title.slice(0, 60),
+          description,
+          clientName: newPqrClientName.trim(),
+          relatedTo: newPqrRelatedTo.trim(),
+          priority: newPqrPriority,
+        });
+        const caseNumber = result.radicadoNumber || result.radicado_number;
+        if (!caseNumber) throw new Error("El servidor no devolvió el número de radicado.");
+        await fetchDbPqrsAndProblems();
+        setSelectedPqrId(`#${caseNumber}`);
+        await showNotification(`Solicitud ${caseNumber} registrada en la base de datos.`, "success");
+      }
 
-    const newItem: PqrItem = {
-      id: newId,
-      raw_id: newIdNum,
-      type: newPqrType,
-      typeLabel: (newPqrType === "queja" ? "Queja" : newPqrType === "reclamo" ? "Reclamo" : newPqrType === "peticion" ? "Petición" : "Reporte") as any,
-      typeIcon: newPqrType === "queja" ? "⚠️" : newPqrType === "reclamo" ? "📄" : newPqrType === "peticion" ? "🎧" : "🔧",
-      typeBg: newPqrType === "queja" ? "#fee2e2" : newPqrType === "reclamo" ? "#f3e8ff" : newPqrType === "peticion" ? "#fef3c7" : "#dbeafe",
-      typeColor: newPqrType === "queja" ? "#dc2626" : newPqrType === "reclamo" ? "#9333ea" : newPqrType === "peticion" ? "#d97706" : "#2563eb",
-      title: newPqrTitle,
-      shortDesc: (newPqrDescription.slice(0, 30) || newPqrTitle) + "...",
-      description: newPqrDescription || "Sin descripción proporcionada.",
-      client: {
-        name: newPqrClientName,
-        document_id: "CC Registrada",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-        rating: 5.0,
-        reviews_count: 5,
-        email: `${newPqrClientName.toLowerCase().replace(/\s+/g, ".")}@serviprox.co`,
-      },
-      contractor: null,
-      relatedTo: newPqrRelatedTo || "Servicio General",
-      date: dateNowStr,
-      updatedDate: dateNowStr,
-      priority: newPqrPriority,
-      status: "Abierta",
-      city: "Bogotá, Colombia",
-      attachments: [],
-      timeline: [
-        { date: dateNowStr, text: "Solicitud registrada manualmente por el administrador" },
-      ],
-    };
-
-    setPqrList([newItem, ...pqrList]);
-    setSelectedPqrId(newId);
-    setModalNewPqrOpen(false);
-    setNewPqrTitle("");
-    setNewPqrClientName("");
-    setNewPqrRelatedTo("");
-    setNewPqrDescription("");
-
-    await showNotification(`Solicitud ${newId} registrada exitosamente en la base de datos.`, "success");
+      setModalNewPqrOpen(false);
+      setNewPqrTitle("");
+      setNewPqrClientName("");
+      setNewPqrRelatedTo("");
+      setNewPqrDescription("");
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : "No se pudo registrar la solicitud.", "error");
+    }
   };
 
   // Filtrado de PQR y Reportes
@@ -3820,8 +3536,7 @@ export const AdminDashboard: React.FC = () => {
     return true;
   });
 
-  const currentFailure =
-    failuresList.find((f) => f.id === selectedFailureId) || failuresList[0] || INITIAL_FAILURES_DATA[0];
+  const currentFailure = failuresList.find((f) => f.id === selectedFailureId) || failuresList[0];
 
   // Función helper: Validar si un trámite o caso está cerrado/resuelto
   function isTramiClosed(status?: string): boolean {
@@ -4338,7 +4053,22 @@ export const AdminDashboard: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
               </svg>
-              <span>Miércoles, 8 de octubre de 2026</span>
+            <span>{new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
+            </div>
+            <div className={`ad-db-status ${dbInfo.loading ? "loading" : dbInfo.connected ? "connected" : "disconnected"}`} role="status" aria-live="polite">
+            <span className="ad-db-status-dot" />
+            <span>
+              {dbInfo.loading
+                ? "Conectando a la base de datos..."
+                : dbInfo.connected
+                  ? `Base de datos conectada${dbInfo.engine ? ` · ${dbInfo.engine}` : ""}`
+                  : "Base de datos desconectada"}
+            </span>
+            {!dbInfo.loading && !dbInfo.connected && (
+              <button type="button" onClick={() => void fetchLiveOverview()}>
+                Reintentar
+              </button>
+            )}
             </div>
           </div>
 
@@ -4353,9 +4083,6 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="ad-kpi-value">{kpis.clients.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Clientes registrados</p>
-              <div className="ad-kpi-trend positive">
-                <span>↗</span> +12%
-              </div>
             </div>
 
             {/* 2. Profesionales activos */}
@@ -4367,9 +4094,6 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="ad-kpi-value">{kpis.professionals.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Profesionales activos</p>
-              <div className="ad-kpi-trend positive">
-                <span>↗</span> +8%
-              </div>
             </div>
 
             {/* 3. Publicaciones en revisión */}
@@ -4381,9 +4105,6 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="ad-kpi-value">{kpis.pending_publications.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Publicaciones en revisión</p>
-              <div className="ad-kpi-trend warning">
-                <span>↗</span> +24%
-              </div>
             </div>
 
             {/* 4. Servicios contratados */}
@@ -4395,9 +4116,6 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="ad-kpi-value">{kpis.hired_services.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Servicios contratados</p>
-              <div className="ad-kpi-trend" style={{ color: "#9333ea" }}>
-                <span>↗</span> +15%
-              </div>
             </div>
 
             {/* 5. PQR pendientes */}
@@ -4409,9 +4127,6 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="ad-kpi-value">{kpis.open_pqrs.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">PQR pendientes</p>
-              <div className="ad-kpi-trend danger">
-                <span>↘</span> +8%
-              </div>
             </div>
 
             {/* 6. Fallas técnicas */}
@@ -4423,9 +4138,6 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="ad-kpi-value">{kpis.technical_issues.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Fallas técnicas</p>
-              <div className="ad-kpi-trend teal">
-                <span>↘</span> -20%
-              </div>
             </div>
           </section>
 
@@ -4572,6 +4284,14 @@ export const AdminDashboard: React.FC = () => {
                             </tr>
                           ))
                         )
+                      ) : filteredRequests.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
+                            {dbInfo.connected
+                              ? "No hay solicitudes para mostrar."
+                              : "Conecta la base de datos para ver las solicitudes."}
+                          </td>
+                        </tr>
                       ) : (
                         filteredRequests.map((row) => (
                           <tr key={row.id}>
@@ -4685,7 +4405,13 @@ export const AdminDashboard: React.FC = () => {
                     </button>
                   </div>
                   <div className="ad-pro-list">
-                    {prosList.map((pro) => (
+                    {prosList.length === 0 ? (
+                      <p className="ad-empty-state">
+                        {dbInfo.connected
+                          ? "No hay profesionales registrados."
+                          : "Conecta la base de datos para ver los profesionales."}
+                      </p>
+                    ) : prosList.map((pro) => (
                       <div key={pro.id} className="ad-pro-item">
                         <div className="ad-pro-identity">
                           <img
@@ -4741,7 +4467,7 @@ export const AdminDashboard: React.FC = () => {
                         <span>Cuentas bloqueadas hoy</span>
                       </div>
                       <span className="ad-report-count" style={{ color: "#dc2626" }}>
-                        5
+                        {overviewReports.blocked_accounts_today.toLocaleString("es-CO")}
                       </span>
                     </div>
 
@@ -4753,10 +4479,10 @@ export const AdminDashboard: React.FC = () => {
                         >
                           ⚠️
                         </div>
-                        <span>Quejas por mala práctica</span>
+                        <span>Quejas registradas</span>
                       </div>
                       <span className="ad-report-count" style={{ color: "#ea580c" }}>
-                        8
+                        {overviewReports.complaints.toLocaleString("es-CO")}
                       </span>
                     </div>
 
@@ -4771,7 +4497,7 @@ export const AdminDashboard: React.FC = () => {
                         <span>Publicaciones rechazadas</span>
                       </div>
                       <span className="ad-report-count" style={{ color: "#d97706" }}>
-                        14
+                        {overviewReports.rejected_publications.toLocaleString("es-CO")}
                       </span>
                     </div>
 
@@ -4786,7 +4512,7 @@ export const AdminDashboard: React.FC = () => {
                         <span>Servicios cancelados</span>
                       </div>
                       <span className="ad-report-count" style={{ color: "#2563eb" }}>
-                        11
+                        {overviewReports.cancelled_services.toLocaleString("es-CO")}
                       </span>
                     </div>
 
@@ -4801,7 +4527,7 @@ export const AdminDashboard: React.FC = () => {
                         <span>Incidencias app</span>
                       </div>
                       <span className="ad-report-count" style={{ color: "#9333ea" }}>
-                        12
+                        {overviewReports.technical_issues.toLocaleString("es-CO")}
                       </span>
                     </div>
                   </div>
@@ -5797,6 +5523,7 @@ export const AdminDashboard: React.FC = () => {
                       <option value="Alta">Alta</option>
                       <option value="Media">Media</option>
                       <option value="Baja">Baja</option>
+                      <option value="No definida">No definida</option>
                     </select>
 
                     <select
@@ -8114,12 +7841,9 @@ export const AdminDashboard: React.FC = () => {
                       ⚠️
                     </div>
                   </div>
-                  <div className="ad-pqr-kpi-value">{Math.max(128, failuresList.length)}</div>
+                  <div className="ad-pqr-kpi-value">{failuresList.length}</div>
                   <div className="ad-pqr-kpi-footer">
-                    <span className="ad-pqr-trend green" style={{ background: "#dcfce7", padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem" }}>
-                      ↗ +18%
-                    </span>
-                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>este mes</span>
+                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>Registros de la base de datos</span>
                   </div>
                 </div>
 
@@ -8132,13 +7856,10 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="ad-pqr-kpi-value">
-                    {Math.max(42, failuresList.filter((f) => f.priority === "Alta" || f.priority === "Crítica").length)}
+                    {failuresList.filter((f) => f.priority === "Alta" || f.priority === "Crítica").length}
                   </div>
                   <div className="ad-pqr-kpi-footer">
-                    <span className="ad-pqr-trend green" style={{ background: "#dcfce7", padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem" }}>
-                      ↑ +25%
-                    </span>
-                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>que ayer</span>
+                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>Prioridad informada</span>
                   </div>
                 </div>
 
@@ -8151,13 +7872,10 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="ad-pqr-kpi-value">
-                    {Math.max(56, failuresList.filter((f) => f.status === "En proceso").length)}
+                    {failuresList.filter((f) => f.status === "En proceso").length}
                   </div>
                   <div className="ad-pqr-kpi-footer">
-                    <span className="ad-pqr-trend green" style={{ background: "#dcfce7", padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem" }}>
-                      ↑ +12%
-                    </span>
-                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>este mes</span>
+                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>Estado actual</span>
                   </div>
                 </div>
 
@@ -8170,13 +7888,10 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="ad-pqr-kpi-value">
-                    {Math.max(24, failuresList.filter((f) => f.status === "Resuelta").length)}
+                    {failuresList.filter((f) => f.status === "Resuelta").length}
                   </div>
                   <div className="ad-pqr-kpi-footer">
-                    <span className="ad-pqr-trend green" style={{ background: "#dcfce7", padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem" }}>
-                      ↑ +20%
-                    </span>
-                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>este mes</span>
+                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>Estado actual</span>
                   </div>
                 </div>
               </div>
@@ -8191,7 +7906,7 @@ export const AdminDashboard: React.FC = () => {
                     className={`ad-pqr-tab-btn ${failureTab === "Todas" ? "active" : ""}`}
                     onClick={() => setFailureTab("Todas")}
                   >
-                    Todas ({Math.max(128, failuresList.length)})
+                    Todas ({failuresList.length})
                   </button>
                   <button
                     type="button"
@@ -8199,7 +7914,7 @@ export const AdminDashboard: React.FC = () => {
                     className={`ad-pqr-tab-btn ${failureTab === "Abiertas" ? "active" : ""}`}
                     onClick={() => setFailureTab("Abiertas")}
                   >
-                    Abiertas ({Math.max(62, failuresList.filter((f) => f.status === "Abierta").length)})
+                    Abiertas ({failuresList.filter((f) => f.status === "Abierta").length})
                   </button>
                   <button
                     type="button"
@@ -8207,7 +7922,7 @@ export const AdminDashboard: React.FC = () => {
                     className={`ad-pqr-tab-btn ${failureTab === "En proceso" ? "active" : ""}`}
                     onClick={() => setFailureTab("En proceso")}
                   >
-                    En proceso ({Math.max(56, failuresList.filter((f) => f.status === "En proceso").length)})
+                    En proceso ({failuresList.filter((f) => f.status === "En proceso").length})
                   </button>
                   <button
                     type="button"
@@ -8215,7 +7930,7 @@ export const AdminDashboard: React.FC = () => {
                     className={`ad-pqr-tab-btn ${failureTab === "Resueltas" ? "active" : ""}`}
                     onClick={() => setFailureTab("Resueltas")}
                   >
-                    Resueltas ({Math.max(24, failuresList.filter((f) => f.status === "Resuelta").length)})
+                    Resueltas ({failuresList.filter((f) => f.status === "Resuelta").length})
                   </button>
                   <button
                     type="button"
@@ -8223,7 +7938,7 @@ export const AdminDashboard: React.FC = () => {
                     className={`ad-pqr-tab-btn ${failureTab === "Cerradas" ? "active" : ""}`}
                     onClick={() => setFailureTab("Cerradas")}
                   >
-                    Cerradas ({Math.max(18, failuresList.filter((f) => f.status === "Cerrada").length)})
+                    Cerradas ({failuresList.filter((f) => f.status === "Cerrada").length})
                   </button>
                 </div>
 
@@ -8297,6 +8012,7 @@ export const AdminDashboard: React.FC = () => {
                       <option value="Alta">Alta</option>
                       <option value="Media">Media</option>
                       <option value="Baja">Baja</option>
+                      <option value="No definida">No definida</option>
                     </select>
                   </div>
 
@@ -8574,7 +8290,7 @@ export const AdminDashboard: React.FC = () => {
                     }}
                   >
                     <span>
-                      Mostrando 1-{filteredFailures.length} de {Math.max(128, failuresList.length)} incidencias
+                      Mostrando {filteredFailures.length ? 1 : 0}-{filteredFailures.length} de {failuresList.length} incidencias
                     </span>
                     <div style={{ display: "flex", gap: "6px" }}>
                       <button
@@ -8689,11 +8405,11 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
                         <span style={{ color: "#64748b" }}>Plataforma:</span>
-                        <span style={{ color: "#334155" }}>{currentFailure.platform || "Web / App Android"}</span>
+                        <span style={{ color: "#334155" }}>{currentFailure.platform || "—"}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
                         <span style={{ color: "#64748b" }}>Versión afectada:</span>
-                        <span style={{ color: "#334155", fontFamily: "monospace" }}>{currentFailure.version || "v2.4.1"}</span>
+                        <span style={{ color: "#334155", fontFamily: "monospace" }}>{currentFailure.version || "—"}</span>
                       </div>
                     </div>
 
@@ -8745,15 +8461,12 @@ export const AdminDashboard: React.FC = () => {
                           setUploadingFailureFiles(true);
                           try {
                             const result = await adminService.uploadProblemAttachments({
-                              targetId: currentFailure.id,
+                              targetId: currentFailure.raw_id || currentFailure.id,
                               attachments: files,
                               adminName: adminDisplayName,
                             });
                             if (!result.ok) throw new Error(result.message || "No se pudieron adjuntar los archivos.");
-                            const attachments = result.attachments || [];
-                            setFailuresList((previous) => previous.map((failure) =>
-                              failure.id === currentFailure.id ? { ...failure, attachments } : failure
-                            ));
+                            await fetchDbPqrsAndProblems();
                             showNotification(result.message, "success");
                           } catch (error) {
                             showNotification(error instanceof Error ? error.message : "No se pudieron adjuntar los archivos.", "error");
@@ -8895,7 +8608,17 @@ export const AdminDashboard: React.FC = () => {
                           onClick={async () => {
                             const info = await showPrompt(`Solicitar más información a ${currentFailure.reporter.name}:`, "¿Podrías detallar qué mensaje de error exacto aparece?", "Solicitar información");
                             if (info) {
-                              showNotification(`Solicitud enviada a ${currentFailure.reporter.name}: "${info}"`, "success");
+                              try {
+                                await adminService.addProblemNote({
+                                  targetId: currentFailure.raw_id || currentFailure.id,
+                                  note: `Información solicitada: ${info}`,
+                                  adminName: adminDisplayName,
+                                });
+                                await fetchDbPqrsAndProblems();
+                                showNotification("Solicitud de información registrada en la base de datos.", "success");
+                              } catch (error) {
+                                showNotification(error instanceof Error ? error.message : "No se pudo registrar la solicitud.", "error");
+                              }
                             }
                           }}
                         >
@@ -11497,7 +11220,7 @@ export const AdminDashboard: React.FC = () => {
       {/* ═════════════════════════════════════════════════════════════════════
           MODAL: ASIGNAR ESPECIALISTA TÉCNICO A INCIDENCIA
          ═════════════════════════════════════════════════════════════════════ */}
-      {modalAssignFailureOpen && (
+      {modalAssignFailureOpen && currentFailure && (
         <div className="ad-modal-backdrop" onClick={() => setModalAssignFailureOpen(false)}>
           <div className="ad-modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "480px" }}>
             <div className="ad-modal-header">
@@ -11551,7 +11274,7 @@ export const AdminDashboard: React.FC = () => {
       {/* ═════════════════════════════════════════════════════════════════════
           MODAL: CAMBIAR ESTADO DE INCIDENCIA
          ═════════════════════════════════════════════════════════════════════ */}
-      {modalChangeFailureStatusOpen && (
+      {modalChangeFailureStatusOpen && currentFailure && (
         <div className="ad-modal-backdrop" onClick={() => setModalChangeFailureStatusOpen(false)}>
           <div className="ad-modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "480px" }}>
             <div className="ad-modal-header">
@@ -11615,7 +11338,7 @@ export const AdminDashboard: React.FC = () => {
       {/* ═════════════════════════════════════════════════════════════════════
           MODAL: AÑADIR COMENTARIO AL SEGUIMIENTO DE FALLA TÉCNICA
          ═════════════════════════════════════════════════════════════════════ */}
-      {modalAddFailureCommentOpen && (
+      {modalAddFailureCommentOpen && currentFailure && (
         <div className="ad-modal-backdrop" onClick={() => setModalAddFailureCommentOpen(false)}>
           <div className="ad-modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "480px" }}>
             <div className="ad-modal-header">

@@ -155,8 +155,7 @@ export const pqrService = {
   list: (params?: { mine?: boolean; email?: string }) =>
     api
       .get<PaginatedResponse<PqrReport> | PqrReport[]>("pqrs/", { params })
-      .then(unwrapList)
-      .catch(() => [] as PqrReport[]),          // graceful fallback if endpoint missing
+      .then(unwrapList),
 
   /** Get single PQR with its message thread */
   get: (id: string) =>
@@ -180,17 +179,8 @@ export const appProblemService = {
   list: (params?: { mine?: boolean; email?: string }) =>
     api
       .get<PaginatedResponse<AppProblemReport> | AppProblemReport[]>("app-problems/", { params })
-      .then(unwrapList)
-      .catch(() => [] as AppProblemReport[]),
+      .then(unwrapList),
 
   create: (payload: Omit<AppProblemReport, "id" | "ticketNumber" | "status" | "createdAt">) =>
-    api
-      .post<AppProblemReport>("app-problems/", payload)
-      .catch(() => ({
-        id: `prob-local-${Date.now()}`,
-        ticketNumber: `APP-BUG-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        status: "recibido" as const,
-        createdAt: new Date().toISOString(),
-        ...payload,
-      } as AppProblemReport)),
+    api.post<AppProblemReport>("app-problems/", payload),
 };

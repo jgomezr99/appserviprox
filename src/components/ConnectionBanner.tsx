@@ -48,21 +48,33 @@ export const ConnectionBanner: React.FC = () => {
     };
   }, []);
 
-  // Sondeo automático cada 4 segundos cuando está desconectado
+  // Verifica la API y su conexión a la BD al abrir la app y mientras está visible.
   useEffect(() => {
-    if (!isDisconnected) return;
+    let active = true;
+    const checkConnection = async () => {
+      if (document.visibilityState === "hidden") return;
+      const res = await checkBackendHealth();
+      if (!active) return;
+      if (res.ok) {
+        setIsDisconnected((wasDisconnected) => {
+          if (wasDisconnected) {
+            setJustReconnected(true);
+            setTimeout(() => setJustReconnected(false), 3000);
+          }
+          return false;
+        });
+      } else {
+        setIsDisconnected(true);
+      }
+    };
 
-    const interval = setInterval(() => {
-      checkBackendHealth().then((res) => {
-        if (res.ok) {
-          setIsDisconnected(false);
-          setJustReconnected(true);
-          setTimeout(() => setJustReconnected(false), 3000);
-        }
-      });
-    }, 4000);
+    void checkConnection();
+    const interval = window.setInterval(checkConnection, isDisconnected ? 4000 : 30000);
 
-    return () => clearInterval(interval);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, [isDisconnected]);
 
   if (!isDisconnected && !justReconnected) {

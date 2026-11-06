@@ -43,7 +43,7 @@ import type {
   PqrContractorRef,
 } from '../../types/serviprox';
 import { pqrService } from '../../services/serviprox';
-import { saveStoredPqrReports, getStoredPqrReports, getCitizenAvatar } from '../../data/pqrInitialData';
+import { getCitizenAvatar } from '../../data/pqrInitialData';
 import { useAuth } from '../../context/AuthContext';
 import './pqrStyles.css';
 
@@ -139,6 +139,7 @@ export function PqrReportModal({
   const [simulatedFiles, setSimulatedFiles] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessSubmitted, setIsSuccessSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [createdReport, setCreatedReport] = useState<PqrReport | null>(null);
   const [generatedRadicado, setGeneratedRadicado] = useState('');
   const [copiedRadicado, setCopiedRadicado] = useState(false);
@@ -170,16 +171,21 @@ export function PqrReportModal({
       alert('Por favor describe los hechos de la queja o reclamo.');
       return;
     }
+    if (!activeContractor) {
+      setSubmitError('No hay un profesional disponible desde la base de datos para asociar a esta PQR.');
+      return;
+    }
 
     setIsSubmitting(true);
+    setSubmitError('');
 
     const payload = {
       type: pqrType,
       reason,
-      contractorId: activeContractor?.id || 'carlos-mendoza',
-      contractorName: activeContractor?.name || 'Ing. Carlos Mendoza',
-      contractorCompany: activeContractor?.companyName || 'Mendoza Instalaciones Eléctricas RETIE',
-      contractorSpecialty: activeContractor?.specialtyLabel || 'Electricidad y Certificación RETIE',
+      contractorId: activeContractor.id,
+      contractorName: activeContractor.name,
+      contractorCompany: activeContractor.companyName,
+      contractorSpecialty: activeContractor.specialtyLabel,
       contractorAvatar: activeContractor?.avatarUrl,
       clientName,
       clientPhone,
@@ -194,21 +200,11 @@ export function PqrReportModal({
       desiredResolution:
         desiredResolution.trim() ||
         'Revisión técnica urgente, garantía vinculante y mediación por el comité de calidad de Bogotá.',
-      evidenceFiles:
-        simulatedFiles.length > 0
-          ? simulatedFiles
-          : ['Acta_Visita_Tecnica.pdf', 'Foto_Evidencia_Falla.jpg'],
+      evidenceFiles: simulatedFiles,
     };
 
     try {
-      // 1. Guardar de forma directa en la base de datos oficial (Django / SQLite)
       const created = await pqrService.create(payload);
-
-      // 2. Actualizar caché de almacenamiento local para persistencia inmediata
-      const existing = getStoredPqrReports();
-      saveStoredPqrReports([created, ...existing.filter((r) => r.id !== created.id)]);
-
-      // 3. Notificar a componente padre
       if (onSubmitPqr) {
         onSubmitPqr(created);
       }
@@ -217,38 +213,8 @@ export function PqrReportModal({
       setGeneratedRadicado(created.radicadoNumber);
       setIsSuccessSubmitted(true);
     } catch (err) {
-      console.warn('[PqrReportModal] Fallback a radicado local por conexión:', err);
-      const radicadoNum = `PQR-BOG-${new Date().getFullYear()}-${Math.floor(
-        1000 + Math.random() * 9000
-      )}`;
-      const fallbackReport: PqrReport = {
-        ...payload,
-        id: `pqr-bog-${Date.now()}`,
-        radicadoNumber: radicadoNum,
-        status: 'radicado',
-        createdAt: new Date().toISOString(),
-        estimatedResponseDays: 2,
-        messages: [
-          {
-            id: `msg-${Date.now()}`,
-            sender: 'system',
-            senderName: 'Servicio Contratista Bogotá',
-            senderRole: 'Sistema de Radicación Oficial',
-            text: `Radicado formal ${radicadoNum} registrado ante la Defensoría del Consumidor (Ley 1480). El contratista ${payload.contractorCompany} ha sido notificado para descargos (48h hábiles).`,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-
-      const existing = getStoredPqrReports();
-      saveStoredPqrReports([fallbackReport, ...existing.filter((r) => r.id !== fallbackReport.id)]);
-      if (onSubmitPqr) {
-        onSubmitPqr(fallbackReport);
-      }
-
-      setCreatedReport(fallbackReport);
-      setGeneratedRadicado(radicadoNum);
-      setIsSuccessSubmitted(true);
+      console.warn('[PqrReportModal] No fue posible registrar la PQR en la API:', err);
+      setSubmitError('No se pudo registrar la PQR en el servidor. No se generó un radicado; verifica la conexión e inténtalo de nuevo.');
     } finally {
       setIsSubmitting(false);
     }
@@ -261,6 +227,7 @@ export function PqrReportModal({
     setDesiredResolution('');
     setAmountDisputed('');
     setSimulatedFiles([]);
+    setSubmitError('');
     onClose();
   };
 
@@ -421,6 +388,11 @@ export function PqrReportModal({
           ) : (
             /* ── Formulario con Tarjetas Elevadas y Profundidad Visual ── */
             <form onSubmit={handleSubmit} className="space-y-5">
+              {submitError && (
+                <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
+                  {submitError}
+                </p>
+              )}
               {/* ── 0. TARJETA DE IDENTIFICACIÓN: CIUDADANO TITULAR REGISTRADO EN BASE DE DATOS ── */}
               <div className="bg-gradient-to-br from-neutral-950 via-neutral-900 to-slate-900 text-white p-5 rounded-3xl border border-neutral-700/80 shadow-xl space-y-4 relative overflow-hidden">
                 {/* Glow decorativo de fondo */}
@@ -973,5 +945,4 @@ export function PqrReportModal({
     document.body
   );
 }
-
 

@@ -18,6 +18,12 @@ class PQRReport(models.Model):
         ("resuelto", "Resuelto a Satisfacción"),
         ("sancionado", "Contratista Sancionado"),
     ]
+    PRIORITY_CHOICES = [
+        ("", "Sin prioridad"),
+        ("Alta", "Alta"),
+        ("Media", "Media"),
+        ("Baja", "Baja"),
+    ]
 
     radicado_number = models.CharField(max_length=60, unique=True, db_index=True)
     client = models.ForeignKey(
@@ -50,6 +56,9 @@ class PQRReport(models.Model):
     pqr_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default="queja")
     reason = models.CharField(max_length=60, default="mala_calidad_obra")
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="radicado", db_index=True)
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, blank=True, default="")
+    assigned_to = models.CharField(max_length=150, blank=True, default="")
+    related_to = models.CharField(max_length=255, blank=True, default="")
 
     incident_date = models.DateField(default=datetime.date.today)
     amount_disputed = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -103,6 +112,13 @@ class AppProblemReport(models.Model):
         ("en_proceso", "En Corrección Técnica"),
         ("resuelto", "Corregido en Producción"),
     ]
+    PRIORITY_CHOICES = [
+        ("", "Sin prioridad"),
+        ("Crítica", "Crítica"),
+        ("Alta", "Alta"),
+        ("Media", "Media"),
+        ("Baja", "Baja"),
+    ]
 
     ticket_number = models.CharField(max_length=60, unique=True, db_index=True)
     user = models.ForeignKey(
@@ -112,13 +128,17 @@ class AppProblemReport(models.Model):
         blank=True,
         related_name="app_problems",
     )
+    title = models.CharField(max_length=180, blank=True, default="")
     user_email = models.EmailField(blank=True, default="", db_index=True)
     category = models.CharField(max_length=50, default="error_mapa")
     category_label = models.CharField(max_length=100, default="Falla en Mapa / GPS Bogotá")
     description = models.TextField()
     device_info = models.CharField(max_length=150, blank=True, default="Android / Web")
+    version = models.CharField(max_length=50, blank=True, default="")
     reported_by = models.CharField(max_length=150, blank=True, default="")
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="recibido")
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, blank=True, default="")
+    assigned_to = models.CharField(max_length=150, blank=True, default="")
     response_notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 

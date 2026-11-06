@@ -3,6 +3,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from apps.accounts.models import UserRole
 from .models import PQRReport, PQRMessage, AppProblemReport
 from apps.accounts.platform_guard import require_feature
 from .serializers import (
@@ -10,6 +11,15 @@ from .serializers import (
     PQRMessageSerializer,
     AppProblemReportSerializer,
 )
+
+
+def _is_platform_admin(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and user.is_active
+        and (user.is_superuser or user.role == UserRole.STAFF)
+    )
 
 
 class PQRViewSet(viewsets.ModelViewSet):
@@ -22,10 +32,14 @@ class PQRViewSet(viewsets.ModelViewSet):
         email = self.request.query_params.get("email")
         user = self.request.user
         if email:
-            return qs.filter(Q(client__email__iexact=email) | Q(client_email__iexact=email))
+            if _is_platform_admin(user) or (
+                user and user.is_authenticated and user.email.casefold() == email.casefold()
+            ):
+                return qs.filter(Q(client__email__iexact=email) | Q(client_email__iexact=email))
+            return qs.none()
+        if _is_platform_admin(user):
+            return qs
         if user and user.is_authenticated:
-            if user.is_staff:
-                return qs
             return qs.filter(Q(client=user) | Q(client_email__iexact=user.email))
         return qs.none()
 
@@ -43,7 +57,7 @@ class PQRViewSet(viewsets.ModelViewSet):
         user = self.request.user if self.request.user.is_authenticated else None
         extra_kwargs = {}
         client_email = serializer.validated_data.get("client_email")
-        if not user and client_email:
+        if (not user or _is_platform_admin(user)) and client_email:
             from django.contrib.auth import get_user_model
             User = get_user_model()
             found_user = User.objects.filter(email__iexact=client_email).first()
@@ -60,7 +74,7 @@ class PQRViewSet(viewsets.ModelViewSet):
                 if not serializer.validated_data.get("client_address") and getattr(found_user, "address", None):
                     extra_kwargs["client_address"] = found_user.address
 
-        if user:
+        if user and not _is_platform_admin(user):
             extra_kwargs["client"] = user
             full_name = f"{user.first_name} {user.last_name}".strip()
             if not serializer.validated_data.get("client_name") and full_name:
@@ -103,9 +117,9 @@ class PQRViewSet(viewsets.ModelViewSet):
         PQRMessage.objects.create(
             pqr=pqr,
             sender="system",
-            sender_name="Servicio Contratista Bogotá",
-            sender_role="Sistema de Radicación Oficial",
-            text=f"Radicado formal {pqr.radicado_number} registrado ante la Defensoría del Consumidor (Ley 1480). El contratista {pqr.contractor_company} ha sido notificado para descargos (48h hábiles).",
+            sender_name="Serviprox",
+            sender_role="Sistema",
+            text=f"Solicitud {pqr.radicado_number} registrada en Serviprox.",
         )
 
     @action(detail=True, methods=["post"], url_path="messages")
@@ -155,14 +169,21 @@ class AppProblemViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         if self.request.query_params.get("all") == "true":
-            return qs
-        if email:
-            return qs.filter(Q(user__email__iexact=email) | Q(user_email__iexact=email))
-        if user and user.is_authenticated:
-            if user.is_staff:
+            if _is_platform_admin(self.request.user):
                 return qs
+        email = self.request.query_params.get("email")
+        user = self.request.user
+        if email:
+            if _is_platform_admin(user) or (
+                user and user.is_authenticated and user.email.casefold() == email.casefold()
+            ):
+                return qs.filter(Q(user__email__iexact=email) | Q(user_email__iexact=email))
+            return qs.none()
+        if _is_platform_admin(user):
+            return qs
+        if user and user.is_authenticated:
             return qs.filter(Q(user=user) | Q(user_email__iexact=user.email))
-        return qs
+        return qs.none()
 
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None
@@ -189,4 +210,3 @@ class AppProblemViewSet(viewsets.ModelViewSet):
                 extra["reported_by"] = full_name
 
         serializer.save(**extra)
-

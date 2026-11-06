@@ -185,19 +185,7 @@ const Register: React.FC = () => {
           ? { profession: profession.trim(), certificate }
           : {}),
       };
-      let currentUser;
-      try {
-        currentUser = await register({ ...payload, username: baseUsername });
-      } catch (err) {
-        const usernameTaken =
-          err instanceof ApiError &&
-          typeof err.payload === "object" &&
-          err.payload !== null &&
-          "username" in err.payload;
-        if (!usernameTaken) throw err;
-        const suffix = Math.floor(100 + Math.random() * 900);
-        currentUser = await register({ ...payload, username: `${baseUsername}${suffix}` });
-      }
+      const currentUser = await register({ ...payload, username: baseUsername });
       history.replace(getEntryRoute(currentUser));
     } catch (err) {
       setError(getRegisterErrorMessage(err));

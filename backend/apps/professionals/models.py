@@ -65,6 +65,28 @@ class ProfessionalProfile(models.Model):
         return "".join(p[0] for p in parts[:2]).upper() if parts else "SP"
 
 
+class BenefitRedemption(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pendiente")
+        FULFILLED = "fulfilled", _("Entregado")
+        CANCELLED = "cancelled", _("Cancelado")
+
+    profile = models.ForeignKey(
+        ProfessionalProfile,
+        on_delete=models.CASCADE,
+        related_name="benefit_redemptions",
+    )
+    benefit_id = models.CharField(max_length=100)
+    title = models.CharField(max_length=180)
+    points = models.PositiveIntegerField()
+    recharge_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
 class ProfessionalService(models.Model):
     """Servicio concreto que atiende un profesional, con su rango de tarifa propio."""
 

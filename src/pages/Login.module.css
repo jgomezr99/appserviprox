@@ -562,8 +562,13 @@
 }
 
 .recoveryMessage {
-  color: var(--sp-primary);
+  color: #167a48;
+  padding: 10px 12px;
+  border: 1px solid rgba(22, 122, 72, 0.2);
+  border-radius: 12px;
+  background: #edf8f1;
   font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .primaryButton {

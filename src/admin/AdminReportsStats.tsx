@@ -7,29 +7,36 @@ interface Props {
 }
 
 export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
-  const [dateRange, setDateRange] = useState("01/05/2026 - 08/30/2026");
-  const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
+  const [dateRange, setDateRange] = useState("");
   const [contratacionesPeriod, setContratacionesPeriod] = useState("10meses");
-  const [mapMetric, setMapMetric] = useState("contrataciones");
   const [activeTooltip, setActiveTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
   const [hoveredLocality, setHoveredLocality] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [reportsData, setReportsData] = useState<ReportsStatsResponse | null>(null);
   const [isDatabaseLive, setIsDatabaseLive] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
     const fetchStats = async () => {
       setLoading(true);
+      setLoadError("");
       try {
         const resp = await adminService.getReportsStats();
         if (isMounted) {
           setReportsData(resp);
           setIsDatabaseLive(resp.database_connected ?? false);
+          setDateRange(resp.period);
         }
-      } catch (err) {
-        console.error("Error cargando estadísticas de base de datos:", err);
+      } catch (error) {
+        if (isMounted) {
+          setReportsData(null);
+          setIsDatabaseLive(false);
+          setDateRange("");
+          setLoadError(error instanceof Error ? error.message : "No se pudieron cargar los reportes desde la base de datos.");
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -38,125 +45,59 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
-  // Datos dinámicos con respaldo calibrado
-  const hiresData = reportsData?.hires_data || [
-    { month: "Ene", val: 45 },
-    { month: "Feb", val: 82 },
-    { month: "Mar", val: 125 },
-    { month: "Abr", val: 154 },
-    { month: "May", val: 198 },
-    { month: "Jun", val: 235 },
-    { month: "Jul", val: 242 },
-    { month: "Ago", val: 290 },
-    { month: "Sep", val: 320 },
-    { month: "Oct", val: 375 },
-  ];
-
-  const topServices = reportsData?.top_services || [
-    { name: "Electricista", count: 420, pct: 100 },
-    { name: "Plomero", count: 350, pct: 83 },
-    { name: "Limpieza", count: 280, pct: 66 },
-    { name: "Mantenimiento", count: 210, pct: 50 },
-    { name: "Entrenador personal", count: 190, pct: 45 },
-    { name: "Clases particulares", count: 150, pct: 35 },
-    { name: "Veterinaria a domicilio", count: 120, pct: 28 },
-    { name: "Otros", count: 112, pct: 26 },
-  ];
-
-  const topProducts = reportsData?.top_products || [
-    { name: "Tecnología", count: 520, pct: 100 },
-    { name: "Muebles", count: 380, pct: 73 },
-    { name: "Multimedia", count: 310, pct: 60 },
-    { name: "Ropa", count: 290, pct: 55 },
-    { name: "Deportes", count: 240, pct: 46 },
-    { name: "Libros", count: 180, pct: 34 },
-    { name: "Juguetes", count: 150, pct: 28 },
-    { name: "Herramientas", count: 120, pct: 23 },
-  ];
-
-  const newUsersData = reportsData?.new_users_data || [
-    { month: "Ene", clients: 140, pros: 80 },
-    { month: "Feb", clients: 165, pros: 95 },
-    { month: "Mar", clients: 195, pros: 125 },
-    { month: "Abr", clients: 150, pros: 108 },
-    { month: "May", clients: 200, pros: 142 },
-    { month: "Jun", clients: 175, pros: 120 },
-    { month: "Jul", clients: 215, pros: 155 },
-    { month: "Ago", clients: 265, pros: 190 },
-    { month: "Sep", clients: 220, pros: 165 },
-    { month: "Oct", clients: 170, pros: 130 },
-  ];
-
-  const monthlyRevenue = reportsData?.monthly_revenue || [
-    { month: "Ene", amount: "5.2M", val: 5.2 },
-    { month: "Feb", amount: "5.8M", val: 5.8 },
-    { month: "Mar", amount: "6.9M", val: 6.9 },
-    { month: "Abr", amount: "8.1M", val: 8.1 },
-    { month: "May", amount: "9.5M", val: 9.5 },
-    { month: "Jun", amount: "10.4M", val: 10.4 },
-    { month: "Jul", amount: "12.2M", val: 12.2 },
-    { month: "Ago", amount: "15.8M", val: 15.8 },
-    { month: "Sep", amount: "17.5M", val: 17.5 },
-    { month: "Oct", amount: "18.8M", val: 18.8 },
-  ];
-
-  const localities = reportsData?.localities || [
-    { id: "kennedy", name: "Kennedy", count: 420, color: "#1d4ed8" },
-    { id: "suba", name: "Suba", count: 350, color: "#3b82f6" },
-    { id: "engativa", name: "Engativá", count: 290, color: "#60a5fa" },
-    { id: "chapinero", name: "Chapinero", count: 250, color: "#93c5fd" },
-    { id: "usaquen", name: "Usaquén", count: 220, color: "#bfdbfe" },
-    { id: "bosa", name: "Bosa", count: 190, color: "#c7d2fe" },
-    { id: "teusaquillo", name: "Teusaquillo", count: 180, color: "#ddd6fe" },
-    { id: "santafe", name: "Santa Fe", count: 140, color: "#ede9fe" },
-    { id: "otras", name: "Otras", count: 112, color: "#f1f5f9" },
-  ];
-
-  const pqrStatus = reportsData?.pqr_status || {
-    total: 342,
-    raw_total: 7,
-    resueltas: 198,
-    resueltas_pct: 58,
-    en_proceso: 82,
-    en_proceso_pct: 24,
-    pendientes: 41,
-    pendientes_pct: 12,
-    rechazadas: 21,
-    rechazadas_pct: 6,
+  const hiresData = reportsData?.hires_data ?? [];
+  const visibleHiresData = contratacionesPeriod === "6meses" ? hiresData.slice(-6) : hiresData;
+  const topServices = reportsData?.top_services ?? [];
+  const topProducts = reportsData?.top_products ?? [];
+  const newUsersData = reportsData?.new_users_data ?? [];
+  const monthlyRevenue = reportsData?.monthly_revenue ?? [];
+  const localities = reportsData?.localities ?? [];
+  const pqrStatus = reportsData?.pqr_status ?? {
+    total: 0,
+    raw_total: 0,
+    resueltas: 0,
+    resueltas_pct: 0,
+    en_proceso: 0,
+    en_proceso_pct: 0,
+    pendientes: 0,
+    pendientes_pct: 0,
+    rechazadas: 0,
+    rechazadas_pct: 0,
   };
-
-  const kpis = reportsData?.kpis || {
-    users: { raw: 18, display: "5,842", trend: "+12%", sparkline: [6, 10, 14, 18] },
-    pros: { raw: 15, display: "1,243", trend: "+8%", sparkline: [8, 11, 13, 15] },
-    products: { raw: 71, display: "2,356", trend: "+15%", sparkline: [15, 30, 48, 71] },
-    hires: { raw: 8, display: "1,827", trend: "+18%", sparkline: [2, 4, 6, 8] },
-    pqrs: { raw: 7, display: "342", trend: "-6%", sparkline: [9, 8, 8, 7] },
-    revenue: { raw: 84250000, display: "$84.250.000", trend: "+22%", sparkline: [5, 8, 12, 18.5] },
+  const emptyKpi = { raw: 0, display: "—", trend: "—", sparkline: [] as number[] };
+  const kpis = reportsData?.kpis ?? {
+    users: emptyKpi,
+    pros: emptyKpi,
+    products: emptyKpi,
+    hires: emptyKpi,
+    pqrs: emptyKpi,
+    revenue: emptyKpi,
   };
-
-  const recentActivity = reportsData?.recent_activity || [
-    { id: "1", date: "08/10/2026 16:45", module: "Contrataciones", description: "Nueva contratación #1028", user: "Carlos Díaz", status: "completado" },
-    { id: "2", date: "08/10/2026 16:10", module: "Tienda", description: "Producto publicado", user: "María Torres", status: "aprobado" },
-    { id: "3", date: "08/10/2026 15:20", module: "PQR y Reportes", description: "Nueva queja #450", user: "Andrés López", status: "en_proceso" },
-    { id: "4", date: "08/10/2026 14:15", module: "Usuarios", description: "Registro de usuario", user: "Laura Gómez", status: "completado" },
-    { id: "5", date: "08/10/2026 13:30", module: "Fallas Técnicas", description: "Error en la app", user: "Ricardo Sánchez", status: "resuelto" },
-  ];
+  const recentActivity = reportsData?.recent_activity ?? [];
 
   // Helper para contar localidad
-  const getLocalityCount = (id: string, fallback: number) => {
+  const getLocalityCount = (id: string) => {
     const found = localities.find((l) => l.id === id);
-    return found ? found.count : fallback;
+    return reportsData ? found?.count ?? 0 : "—";
+  };
+  const renderSparkline = (values: number[], color: string) => {
+    const points = values.slice(-4);
+    const max = Math.max(...points, 1);
+    return points.map((value, index) => (
+      <span key={index} style={{ height: `${Math.max(3, (value / max) * 18)}px`, background: color }} />
+    ));
   };
 
   // Descarga oficial del reporte en formato CSV con datos reales
   const handleExportCsv = () => {
+    if (!reportsData || !isDatabaseLive) return;
     const csvContent =
       "data:text/csv;charset=utf-8," +
       "REPORTE Y ESTADÍSTICAS OFICIALES SERVIPROX\n" +
       `Periodo,${dateRange}\n` +
-      `Origen de datos,${isDatabaseLive ? "Base de datos SQLite en vivo" : "Caché del sistema"}\n\n` +
+      `Origen de datos,Base de datos ${reportsData.database_engine || "conectada"}\n\n` +
       "MÉTRICAS CLAVE (KPIS)\n" +
       "Métrica,Valor,Tendencia,Registros BD\n" +
       `Usuarios registrados,${kpis.users.display},${kpis.users.trend},${kpis.users.raw}\n` +
@@ -216,7 +157,7 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                   boxShadow: isDatabaseLive ? "0 0 6px #22c55e" : "none",
                 }}
               />
-              {isDatabaseLive ? "Datos en vivo de BD (SQLite)" : loading ? "Conectando..." : "Modo seguro"}
+              {isDatabaseLive ? `Base de datos conectada (${reportsData?.database_engine || "activa"})` : loading ? "Conectando..." : "Sin conexión a base de datos"}
             </span>
           </div>
           <p>
@@ -226,72 +167,17 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
 
         <div className="ad-reports-header-actions">
           {/* Selector de Fecha */}
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              className="ad-reports-date-btn"
-              onClick={() => setDateDropdownOpen((prev) => !prev)}
-            >
+          <div>
+            <div className="ad-reports-date-btn" aria-label="Periodo de datos">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                 <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
               </svg>
-              <span>{dateRange}</span>
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
-              </svg>
-            </button>
-
-            {dateDropdownOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "105%",
-                  right: 0,
-                  background: "#ffffff",
-                  borderRadius: "10px",
-                  border: "1px solid #e2e8f0",
-                  boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
-                  padding: "6px",
-                  zIndex: 50,
-                  minWidth: "220px",
-                }}
-              >
-                {[
-                  "01/05/2026 - 08/30/2026",
-                  "01/01/2026 - 31/10/2026 (Año 2026)",
-                  "Últimos 30 días",
-                  "Últimos 90 días",
-                ].map((range) => (
-                  <button
-                    key={range}
-                    type="button"
-                    onClick={() => {
-                      setDateRange(range);
-                      setDateDropdownOpen(false);
-                    }}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "8px 12px",
-                      background: dateRange === range ? "#eff6ff" : "none",
-                      color: dateRange === range ? "#2563eb" : "#334155",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontWeight: dateRange === range ? 700 : 500,
-                      fontSize: "0.82rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {range}
-                  </button>
-                ))}
-              </div>
-            )}
+              <span>{dateRange || (loading ? "Consultando base de datos..." : "Periodo no disponible")}</span>
+            </div>
           </div>
 
           {/* Botón Exportar Reporte */}
-          <button type="button" className="ad-reports-export-btn" onClick={handleExportCsv}>
+          <button type="button" className="ad-reports-export-btn" onClick={handleExportCsv} disabled={!isDatabaseLive || loading}>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
               <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z" />
             </svg>
@@ -299,6 +185,14 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
           </button>
         </div>
       </div>
+      {loadError && (
+        <div role="alert" className="ad-reports-error">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => setReloadKey((key) => key + 1)} disabled={loading}>
+            {loading ? "Conectando..." : "Reintentar"}
+          </button>
+        </div>
+      )}
 
       {/* ═════════════════════════════════════════════════════════════════════
           FILA 1: 6 TARJETAS DE INDICADORES CLAVE (KPIS)
@@ -316,14 +210,11 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
             <div className="ad-reports-kpi-label">Usuarios registrados</div>
           </div>
           <div className="ad-reports-kpi-bottom">
-            <span className={`ad-reports-kpi-trend ${kpis.users.trend.includes("-") || kpis.users.trend.includes("↓") ? "down" : "up"}`}>
-              {kpis.users.trend.includes("↑") || kpis.users.trend.includes("↓") ? kpis.users.trend : `↑ ${kpis.users.trend}`}
+            <span className={`ad-reports-kpi-trend ${kpis.users.trend.startsWith("-") ? "down" : "up"}`}>
+            {kpis.users.trend}
             </span>
             <div className="ad-reports-kpi-sparkline">
-              <span style={{ height: "6px", background: "#bfdbfe" }} />
-              <span style={{ height: "10px", background: "#93c5fd" }} />
-              <span style={{ height: "14px", background: "#60a5fa" }} />
-              <span style={{ height: "18px", background: "#3b82f6" }} />
+              {renderSparkline(kpis.users.sparkline, "#3b82f6")}
             </div>
           </div>
         </div>
@@ -340,14 +231,11 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
             <div className="ad-reports-kpi-label">Profesionales activos</div>
           </div>
           <div className="ad-reports-kpi-bottom">
-            <span className={`ad-reports-kpi-trend ${kpis.pros.trend.includes("-") || kpis.pros.trend.includes("↓") ? "down" : "up"}`}>
-              {kpis.pros.trend.includes("↑") || kpis.pros.trend.includes("↓") ? kpis.pros.trend : `↑ ${kpis.pros.trend}`}
+            <span className={`ad-reports-kpi-trend ${kpis.pros.trend.startsWith("-") ? "down" : "up"}`}>
+              {kpis.pros.trend}
             </span>
             <div className="ad-reports-kpi-sparkline">
-              <span style={{ height: "8px", background: "#a7f3d0" }} />
-              <span style={{ height: "11px", background: "#6ee7b7" }} />
-              <span style={{ height: "13px", background: "#34d399" }} />
-              <span style={{ height: "18px", background: "#10b981" }} />
+              {renderSparkline(kpis.pros.sparkline, "#10b981")}
             </div>
           </div>
         </div>
@@ -364,14 +252,11 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
             <div className="ad-reports-kpi-label">Productos publicados</div>
           </div>
           <div className="ad-reports-kpi-bottom">
-            <span className={`ad-reports-kpi-trend ${kpis.products.trend.includes("-") || kpis.products.trend.includes("↓") ? "down" : "up"}`}>
-              {kpis.products.trend.includes("↑") || kpis.products.trend.includes("↓") ? kpis.products.trend : `↑ ${kpis.products.trend}`}
+            <span className={`ad-reports-kpi-trend ${kpis.products.trend.startsWith("-") ? "down" : "up"}`}>
+              {kpis.products.trend}
             </span>
             <div className="ad-reports-kpi-sparkline">
-              <span style={{ height: "7px", background: "#e9d5ff" }} />
-              <span style={{ height: "10px", background: "#d8b4fe" }} />
-              <span style={{ height: "15px", background: "#c084fc" }} />
-              <span style={{ height: "18px", background: "#a855f7" }} />
+              {renderSparkline(kpis.products.sparkline, "#a855f7")}
             </div>
           </div>
         </div>
@@ -388,14 +273,11 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
             <div className="ad-reports-kpi-label">Contrataciones realizadas</div>
           </div>
           <div className="ad-reports-kpi-bottom">
-            <span className={`ad-reports-kpi-trend ${kpis.hires.trend.includes("-") || kpis.hires.trend.includes("↓") ? "down" : "up"}`}>
-              {kpis.hires.trend.includes("↑") || kpis.hires.trend.includes("↓") ? kpis.hires.trend : `↑ ${kpis.hires.trend}`}
+            <span className={`ad-reports-kpi-trend ${kpis.hires.trend.startsWith("-") ? "down" : "up"}`}>
+              {kpis.hires.trend}
             </span>
             <div className="ad-reports-kpi-sparkline">
-              <span style={{ height: "6px", background: "#fed7aa" }} />
-              <span style={{ height: "11px", background: "#fdba74" }} />
-              <span style={{ height: "14px", background: "#fb923c" }} />
-              <span style={{ height: "18px", background: "#f97316" }} />
+              {renderSparkline(kpis.hires.sparkline, "#f97316")}
             </div>
           </div>
         </div>
@@ -412,14 +294,11 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
             <div className="ad-reports-kpi-label">PQR recibidas</div>
           </div>
           <div className="ad-reports-kpi-bottom">
-            <span className={`ad-reports-kpi-trend ${kpis.pqrs.trend.includes("-") || kpis.pqrs.trend.includes("↓") ? "down" : "up"}`}>
-              {kpis.pqrs.trend.includes("↑") || kpis.pqrs.trend.includes("↓") ? kpis.pqrs.trend : `↓ ${kpis.pqrs.trend.replace("-", "")}`}
+            <span className={`ad-reports-kpi-trend ${kpis.pqrs.trend.startsWith("-") ? "down" : "up"}`}>
+              {kpis.pqrs.trend}
             </span>
             <div className="ad-reports-kpi-sparkline">
-              <span style={{ height: "18px", background: "#fca5a5" }} />
-              <span style={{ height: "14px", background: "#f87171" }} />
-              <span style={{ height: "10px", background: "#ef4444" }} />
-              <span style={{ height: "6px", background: "#dc2626" }} />
+              {renderSparkline(kpis.pqrs.sparkline, "#dc2626")}
             </div>
           </div>
         </div>
@@ -438,14 +317,11 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
             <div className="ad-reports-kpi-label">Ingresos totales (COP)</div>
           </div>
           <div className="ad-reports-kpi-bottom">
-            <span className={`ad-reports-kpi-trend ${kpis.revenue.trend.includes("-") || kpis.revenue.trend.includes("↓") ? "down" : "up"}`}>
-              {kpis.revenue.trend.includes("↑") || kpis.revenue.trend.includes("↓") ? kpis.revenue.trend : `↑ ${kpis.revenue.trend}`}
+            <span className={`ad-reports-kpi-trend ${kpis.revenue.trend.startsWith("-") ? "down" : "up"}`}>
+              {kpis.revenue.trend}
             </span>
             <div className="ad-reports-kpi-sparkline">
-              <span style={{ height: "8px", background: "#a7f3d0" }} />
-              <span style={{ height: "11px", background: "#6ee7b7" }} />
-              <span style={{ height: "14px", background: "#34d399" }} />
-              <span style={{ height: "18px", background: "#059669" }} />
+              {renderSparkline(kpis.revenue.sparkline, "#059669")}
             </div>
           </div>
         </div>
@@ -466,7 +342,6 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
             >
               <option value="10meses">Últimos 10 meses</option>
               <option value="6meses">Últimos 6 meses</option>
-              <option value="ano">Año 2026</option>
             </select>
           </div>
 
@@ -494,11 +369,12 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
 
               {/* Área y Línea de datos */}
               {(() => {
-                const points = hiresData.map((d, i) => {
-                  const x = 50 + i * 48;
+                const points = visibleHiresData.map((d, i) => {
+                  const x = 50 + i * (440 / Math.max(visibleHiresData.length - 1, 1));
                   const y = 172 - (d.val / 400) * 152;
                   return { x, y, ...d };
                 });
+                if (!points.length) return null;
 
                 const dArea = `M ${points[0].x} 172 ` + points.map((p) => `L ${p.x} ${p.y}`).join(" ") + ` L ${points[points.length - 1].x} 172 Z`;
                 const dLine = points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(" ");
@@ -793,7 +669,7 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                     }}
                   >
                     <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>
-                      {pqrStatus.total}
+                      {reportsData ? pqrStatus.total : "—"}
                     </div>
                     <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700 }}>PQR</div>
                   </div>
@@ -806,22 +682,22 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
               <div className="ad-reports-donut-legend-item">
                 <span className="ad-reports-legend-dot" style={{ background: "#10b981" }} />
                 <strong>Resueltas</strong>
-                <span>{pqrStatus.resueltas_pct}%</span>
+                <span>{reportsData ? `${pqrStatus.resueltas_pct}%` : "—"}</span>
               </div>
               <div className="ad-reports-donut-legend-item">
                 <span className="ad-reports-legend-dot" style={{ background: "#3b82f6" }} />
                 <strong>En proceso</strong>
-                <span>{pqrStatus.en_proceso_pct}%</span>
+                <span>{reportsData ? `${pqrStatus.en_proceso_pct}%` : "—"}</span>
               </div>
               <div className="ad-reports-donut-legend-item">
                 <span className="ad-reports-legend-dot" style={{ background: "#f59e0b" }} />
                 <strong>Pendientes</strong>
-                <span>{pqrStatus.pendientes_pct}%</span>
+                <span>{reportsData ? `${pqrStatus.pendientes_pct}%` : "—"}</span>
               </div>
               <div className="ad-reports-donut-legend-item">
                 <span className="ad-reports-legend-dot" style={{ background: "#ef4444" }} />
                 <strong>Rechazadas</strong>
-                <span>{pqrStatus.rechazadas_pct}%</span>
+                <span>{reportsData ? `${pqrStatus.rechazadas_pct}%` : "—"}</span>
               </div>
             </div>
           </div>
@@ -909,19 +785,10 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
           </div>
         </div>
 
-        {/* Mapa de contrataciones por localidad (Bogotá) */}
+        {/* Distribución de registros por localidad */}
         <div className="ad-reports-card">
           <div className="ad-reports-card-header">
-            <h3 className="ad-reports-card-title">Mapa de contrataciones por localidad (Bogotá)</h3>
-            <select
-              className="ad-reports-dropdown-filter"
-              value={mapMetric}
-              onChange={(e) => setMapMetric(e.target.value)}
-            >
-              <option value="contrataciones">Contrataciones</option>
-              <option value="ingresos">Ingresos</option>
-              <option value="usuarios">Usuarios</option>
-            </select>
+            <h3 className="ad-reports-card-title">Perfiles y hogares por localidad</h3>
           </div>
 
           <div className="ad-reports-map-container">
@@ -936,8 +803,8 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                   onMouseEnter={(e) => {
                     setHoveredLocality("suba");
                     const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("suba", 350);
-                    const txt = mapMetric === "ingresos" ? `Suba: $ ${(c * 180000).toLocaleString("es-CO")} COP` : mapMetric === "usuarios" ? `Suba: ${Math.round(c * 1.4)} usuarios` : `Suba: ${c} contrataciones`;
+                    const c = getLocalityCount("suba");
+                    const txt = `Suba: ${c} registros`;
                     setActiveTooltip({ x: r.left + 50, y: r.top, text: txt });
                   }}
                   onMouseLeave={() => {
@@ -957,8 +824,8 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                   onMouseEnter={(e) => {
                     setHoveredLocality("usaquen");
                     const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("usaquen", 220);
-                    const txt = mapMetric === "ingresos" ? `Usaquén: $ ${(c * 210000).toLocaleString("es-CO")} COP` : mapMetric === "usuarios" ? `Usaquén: ${Math.round(c * 1.5)} usuarios` : `Usaquén: ${c} contrataciones`;
+                    const c = getLocalityCount("usaquen");
+                    const txt = `Usaquén: ${c} registros`;
                     setActiveTooltip({ x: r.left + 30, y: r.top, text: txt });
                   }}
                   onMouseLeave={() => {
@@ -978,8 +845,8 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                   onMouseEnter={(e) => {
                     setHoveredLocality("engativa");
                     const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("engativa", 290);
-                    const txt = mapMetric === "ingresos" ? `Engativá: $ ${(c * 170000).toLocaleString("es-CO")} COP` : mapMetric === "usuarios" ? `Engativá: ${Math.round(c * 1.3)} usuarios` : `Engativá: ${c} contrataciones`;
+                    const c = getLocalityCount("engativa");
+                    const txt = `Engativá: ${c} registros`;
                     setActiveTooltip({ x: r.left + 40, y: r.top, text: txt });
                   }}
                   onMouseLeave={() => {
@@ -999,8 +866,8 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                   onMouseEnter={(e) => {
                     setHoveredLocality("chapinero");
                     const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("chapinero", 250);
-                    const txt = mapMetric === "ingresos" ? `Chapinero: $ ${(c * 240000).toLocaleString("es-CO")} COP` : mapMetric === "usuarios" ? `Chapinero: ${Math.round(c * 1.6)} usuarios` : `Chapinero: ${c} contrataciones`;
+                    const c = getLocalityCount("chapinero");
+                    const txt = `Chapinero: ${c} registros`;
                     setActiveTooltip({ x: r.left + 30, y: r.top, text: txt });
                   }}
                   onMouseLeave={() => {
@@ -1020,8 +887,8 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                   onMouseEnter={(e) => {
                     setHoveredLocality("teusaquillo");
                     const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("teusaquillo", 180);
-                    const txt = mapMetric === "ingresos" ? `Teusaquillo: $ ${(c * 190000).toLocaleString("es-CO")} COP` : mapMetric === "usuarios" ? `Teusaquillo: ${Math.round(c * 1.3)} usuarios` : `Teusaquillo: ${c} contrataciones`;
+                    const c = getLocalityCount("teusaquillo");
+                    const txt = `Teusaquillo: ${c} registros`;
                     setActiveTooltip({ x: r.left + 20, y: r.top, text: txt });
                   }}
                   onMouseLeave={() => {
@@ -1041,8 +908,8 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                   onMouseEnter={(e) => {
                     setHoveredLocality("santafe");
                     const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("santafe", 140);
-                    const txt = mapMetric === "ingresos" ? `Santa Fe: $ ${(c * 160000).toLocaleString("es-CO")} COP` : mapMetric === "usuarios" ? `Santa Fe: ${Math.round(c * 1.2)} usuarios` : `Santa Fe: ${c} contrataciones`;
+                    const c = getLocalityCount("santafe");
+                    const txt = `Santa Fe: ${c} registros`;
                     setActiveTooltip({ x: r.left + 30, y: r.top, text: txt });
                   }}
                   onMouseLeave={() => {
@@ -1062,8 +929,8 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                   onMouseEnter={(e) => {
                     setHoveredLocality("kennedy");
                     const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("kennedy", 420);
-                    const txt = mapMetric === "ingresos" ? `Kennedy: $ ${(c * 175000).toLocaleString("es-CO")} COP (Principal)` : mapMetric === "usuarios" ? `Kennedy: ${Math.round(c * 1.8)} usuarios (Principal)` : `Kennedy: ${c} contrataciones (Principal)`;
+                    const c = getLocalityCount("kennedy");
+                    const txt = `Kennedy: ${c} registros`;
                     setActiveTooltip({ x: r.left + 40, y: r.top, text: txt });
                   }}
                   onMouseLeave={() => {
@@ -1083,8 +950,8 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                   onMouseEnter={(e) => {
                     setHoveredLocality("bosa");
                     const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("bosa", 190);
-                    const txt = mapMetric === "ingresos" ? `Bosa: $ ${(c * 150000).toLocaleString("es-CO")} COP` : mapMetric === "usuarios" ? `Bosa: ${Math.round(c * 1.2)} usuarios` : `Bosa: ${c} contrataciones`;
+                    const c = getLocalityCount("bosa");
+                    const txt = `Bosa: ${c} registros`;
                     setActiveTooltip({ x: r.left + 25, y: r.top, text: txt });
                   }}
                   onMouseLeave={() => {
@@ -1114,7 +981,7 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
                     <span className="ad-reports-map-legend-color" style={{ background: loc.color }} />
                     <span>{loc.name}</span>
                   </div>
-                  <span className="ad-reports-map-legend-count">{loc.count}</span>
+                  <span className="ad-reports-map-legend-count">{reportsData ? loc.count : "—"}</span>
                 </div>
               ))}
             </div>
@@ -1140,4 +1007,3 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
 };
 
 export default AdminReportsStats;
-

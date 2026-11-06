@@ -81,7 +81,7 @@ class BecomeProfessionalCertificateTests(TestCase):
         staff.force_authenticate(user=self.staff)
         staff_response = staff.get(url)
         self.assertEqual(staff_response.status_code, 200)
-        staff_response.close()
+        self.assertEqual(b"".join(staff_response.streaming_content), PDF)
         stranger = APIClient()
         stranger.force_authenticate(user=self.stranger)
         self.assertEqual(stranger.get(url).status_code, 404)
@@ -91,8 +91,8 @@ class BecomeProfessionalCertificateTests(TestCase):
         data = {
             "email": "nuevo@cert.example",
             "username": "nuevo.pro",
-            "password": "Registro-Pro-Test-81!",
             "role": UserRole.PROFESSIONAL,
+            "password": PASSWORD,
         }
         data.update(extra)
         return APIClient().post("/api/v1/auth/register/", data, format="multipart")

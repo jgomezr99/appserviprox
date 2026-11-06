@@ -41,7 +41,7 @@ export const SECTION_DEFAULTS: Record<string, Section> = {
   },
   notifications: {
     push_enabled: true,
-    push_provider: "Firebase Cloud Messaging",
+    push_provider: "OneSignal",
     push_key: "",
     sms_enabled: false,
     sms_provider: "Twilio",
@@ -105,7 +105,7 @@ export const SECTION_DEFAULTS: Record<string, Section> = {
     twofa_method: "Aplicación de autenticación (Google Authenticator)",
     idle: "30 minutos",
     max_attempts: "5 intentos",
-    lock: "30 minutos",
+    lock: "2 minutos",
     force_https: true,
     redirect_https: true,
     alert_failed: true,
@@ -114,9 +114,6 @@ export const SECTION_DEFAULTS: Record<string, Section> = {
     alert_location: true,
   },
   integrations: {
-    firebase_enabled: true,
-    firebase_project: "serviprox-prod",
-    firebase_key: "",
     maps_enabled: true,
     maps_key: "",
     smtp_enabled: true,

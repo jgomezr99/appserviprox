@@ -51,6 +51,8 @@ class PQRReportSerializer(serializers.ModelSerializer):
             "pqr_type",
             "reason",
             "status",
+            "priority",
+            "assigned_to",
             "incident_date",
             "amount_disputed",
             "description",
@@ -67,6 +69,9 @@ class PQRReportSerializer(serializers.ModelSerializer):
             "id": f"pqr-{instance.id}",
             "radicadoNumber": instance.radicado_number,
             "status": instance.status,
+            "priority": instance.priority,
+            "assignedTo": instance.assigned_to,
+            "relatedTo": instance.related_to,
             "type": instance.pqr_type,
             "reason": instance.reason,
             "contractorId": instance.contractor_id_ref,
@@ -87,6 +92,7 @@ class PQRReportSerializer(serializers.ModelSerializer):
             "adminResolutionNotes": instance.admin_resolution_notes,
             "estimatedResponseDays": instance.estimated_response_days,
             "createdAt": instance.created_at.isoformat(),
+            "updatedAt": instance.updated_at.isoformat(),
             "messages": [
                 {
                     "id": f"msg-{m.id}",
@@ -122,18 +128,20 @@ class PQRReportSerializer(serializers.ModelSerializer):
             "client_email": data.get("clientEmail", data.get("client_email", "")),
             "client_document_id": data.get("clientDocumentId", data.get("client_document_id", "")),
             "client_address": data.get("clientAddress", data.get("client_address", "")),
-            "contractor_id_ref": str(data.get("contractorId", data.get("contractor_id_ref", "carlos-mendoza"))),
-            "contractor_name": data.get("contractorName", data.get("contractor_name", "Ing. Carlos Mendoza")),
-            "contractor_company": data.get("contractorCompany", data.get("contractor_company", "Mendoza Instalaciones Eléctricas RETIE")),
-            "contractor_specialty": data.get("contractorSpecialty", data.get("contractor_specialty", "Electricidad")),
-            "contractor_avatar": data.get("contractorAvatar", data.get("contractor_avatar", "")),
+            "contractor_id_ref": str(data.get("contractorId", data.get("contractor_id_ref", "")) or ""),
+            "contractor_name": data.get("contractorName", data.get("contractor_name", "")) or "",
+            "contractor_company": data.get("contractorCompany", data.get("contractor_company", "")) or "",
+            "contractor_specialty": data.get("contractorSpecialty", data.get("contractor_specialty", "")) or "",
+            "contractor_avatar": data.get("contractorAvatar", data.get("contractor_avatar", "")) or "",
             "pqr_type": data.get("type", data.get("pqr_type", "queja")),
-            "reason": data.get("reason", "mala_calidad_obra"),
+            "reason": data.get("reason", "") or "",
             "status": data.get("status", "radicado"),
+            "priority": data.get("priority", "") or "",
+            "assigned_to": data.get("assignedTo", data.get("assigned_to", "")) or "",
             "incident_date": inc_date,
             "amount_disputed": amt,
-            "description": data.get("description", "Reclamo formal radicado en la app."),
-            "desired_resolution": data.get("desiredResolution", data.get("desired_resolution", "Mediación formal vinculante.")),
+            "description": data.get("description", "") or "",
+            "desired_resolution": data.get("desiredResolution", data.get("desired_resolution", "")) or "",
             "evidence_files": data.get("evidenceFiles", data.get("evidence_files", [])),
         }
 
@@ -144,13 +152,18 @@ class AppProblemReportSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "ticket_number",
+            "title",
             "category",
             "category_label",
             "description",
             "device_info",
+            "version",
             "reported_by",
             "user_email",
             "status",
+            "priority",
+            "assigned_to",
+            "related_to",
             "response_notes",
             "created_at",
         ]
@@ -159,13 +172,24 @@ class AppProblemReportSerializer(serializers.ModelSerializer):
         return {
             "id": f"prob-{instance.id}",
             "ticketNumber": instance.ticket_number,
+            "title": instance.title,
             "category": instance.category,
             "categoryLabel": instance.category_label,
             "description": instance.description,
             "deviceInfo": instance.device_info,
+            "version": instance.version,
             "reportedBy": instance.reported_by,
+            "reportedByRole": (
+                "Profesional"
+                if instance.user and hasattr(instance.user, "professional_profile")
+                else "Cliente"
+                if instance.user
+                else "Usuario"
+            ),
             "userEmail": instance.user_email or (instance.user.email if instance.user else ""),
             "status": instance.status,
+            "priority": instance.priority,
+            "assignedTo": instance.assigned_to,
             "responseNotes": instance.response_notes,
             "createdAt": instance.created_at.isoformat(),
             "attachments": [
@@ -195,13 +219,17 @@ class AppProblemReportSerializer(serializers.ModelSerializer):
 
         return {
             "ticket_number": ticket,
+            "title": data.get("title", "") or "",
             "category": data.get("category", "error_mapa"),
             "category_label": data.get("categoryLabel", data.get("category_label", "Falla Técnica")),
             "description": data.get("description", "Reporte de problema técnico."),
             "device_info": data.get("deviceInfo", data.get("device_info", "Android / Web")),
+            "version": data.get("version", "") or "",
             "reported_by": data.get("reportedBy", data.get("reported_by", "")),
             "user_email": data.get("userEmail", data.get("user_email", "")),
             "status": data.get("status", "recibido"),
+            "priority": data.get("priority", "") or "",
+            "assigned_to": data.get("assignedTo", data.get("assigned_to", "")) or "",
+            "related_to": data.get("relatedTo", data.get("related_to", "")) or "",
             "response_notes": data.get("responseNotes", data.get("response_notes", "")),
         }
-

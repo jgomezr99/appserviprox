@@ -121,7 +121,10 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, validators=[validate_password, validate_platform_password])
+    password = serializers.CharField(
+        write_only=True,
+        validators=[validate_password, validate_platform_password],
+    )
     role = serializers.ChoiceField(
         choices=(UserRole.CLIENT, UserRole.PROFESSIONAL),
         default=UserRole.CLIENT,
@@ -310,4 +313,3 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 })
         data["user"] = UserSerializer(self.user).data
         return data
-

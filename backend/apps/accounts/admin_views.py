@@ -1,18 +1,19 @@
-from decimal import Decimal
+from datetime import date
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import AdminAuditLog, Notification, UserRole
-from apps.catalog.models import Service, ServiceCategory
+from apps.catalog.models import StoreProduct
 from apps.households.models import Household
 from apps.orders.models import Order, Payment
-from apps.pqrs.models import AppProblemAttachment, AppProblemReport, PQRReport
-from apps.professionals.models import ProfessionalProfile, ProfessionalService
+from apps.pqrs.models import AppProblemAttachment, AppProblemReport, PQRMessage, PQRReport
+from apps.professionals.models import ProfessionalProfile
 from apps.accounts.permissions import IsServiproxAdministrator
 from apps.service_requests.models import ServiceRequest
 
@@ -83,16 +84,36 @@ class AdminOverviewView(APIView):
     permission_classes = [IsServiproxAdministrator]
 
     def get(self, request):
-        # 1. Indicadores principales (KPIs) desde la base de datos SQLite
+        # 1. Indicadores principales (KPIs) desde la base de datos
         clients_count = User.objects.filter(role=UserRole.CLIENT).count()
-        pros_count = ProfessionalProfile.objects.count()
-        hired_services_count = ServiceRequest.objects.count()
-        services_count = Service.objects.filter(is_active=True).count()
-        open_pqrs_count = PQRReport.objects.exclude(status="resuelto").count()
+        pros_count = ProfessionalProfile.objects.filter(
+            is_active=True, user__is_active=True
+        ).count()
+        hired_services_count = Order.objects.count()
+        pending_publications_count = ServiceRequest.objects.filter(
+            status=ServiceRequest.Status.OPEN
+        ).count()
+        open_pqrs_count = PQRReport.objects.exclude(
+            status__in=["resuelto", "sancionado"]
+        ).count()
         tech_issues_count = AppProblemReport.objects.exclude(status="resuelto").count()
 
         # 2. Distribución de usuarios para gráfico Donut
         admins_count = User.objects.filter(Q(is_staff=True) | Q(role=UserRole.STAFF)).count()
+
+        reports = {
+            "blocked_accounts_today": User.objects.filter(
+                is_blocked=True, blocked_at__date=timezone.localdate()
+            ).count(),
+            "complaints": PQRReport.objects.filter(pqr_type="queja").count(),
+            "rejected_publications": ServiceRequest.objects.filter(
+                status=ServiceRequest.Status.REJECTED
+            ).count(),
+            "cancelled_services": Order.objects.filter(
+                status=Order.Status.CANCELLED
+            ).count(),
+            "technical_issues": AppProblemReport.objects.count(),
+        }
 
         # 3. Distribución de PQR para gráfico de barras
         pqr_radicado = PQRReport.objects.filter(status="radicado").count()
@@ -185,17 +206,19 @@ class AdminOverviewView(APIView):
 
         # 5. Lista de profesionales reales destacados
         top_pros = []
-        for pro in ProfessionalProfile.objects.select_related("user").order_by("-rating_avg", "-jobs_completed")[:8]:
+        for pro in ProfessionalProfile.objects.filter(
+            is_active=True, user__is_active=True
+        ).select_related("user").order_by("-rating_avg", "-jobs_completed")[:8]:
             tier = "Nivel Oro" if float(pro.rating_avg) >= 4.8 else ("Nivel Plata" if float(pro.rating_avg) >= 4.5 else "Nivel Bronce")
             top_pros.append({
                 "id": f"pro-{pro.id}",
                 "raw_id": pro.id,
                 "name": pro.display_name,
                 "specialty": pro.specialty_label or pro.headline or "Especialista Serviprox",
-                "rating": float(pro.rating_avg) if pro.rating_avg else 4.8,
+                "rating": float(pro.rating_avg),
                 "tier": tier,
                 "avatar": pro.avatar_url or f"https://ui-avatars.com/api/?name={pro.display_name}&background=0284c7&color=fff",
-                "points": pro.points if hasattr(pro, "points") else 1200,
+                "points": pro.points,
                 "completedJobs": pro.jobs_completed,
                 "verified": pro.is_verified,
                 "blocked": not pro.is_active or not pro.user.is_active,
@@ -224,31 +247,31 @@ class AdminOverviewView(APIView):
                 "timestamp": timezone.now().isoformat(),
             },
             "kpis": {
-                "clients": max(clients_count, 1248),
-                "professionals": max(pros_count, 356),
-                "hired_services": max(hired_services_count, 1890),
-                "pending_publications": max(services_count, 42),
-                "open_pqrs": max(open_pqrs_count, 27),
-                "technical_issues": max(tech_issues_count, 5),
-                # Conteo exacto sin adición para visualización de detalle
+                "clients": clients_count,
+                "professionals": pros_count,
+                "hired_services": hired_services_count,
+                "pending_publications": pending_publications_count,
+                "open_pqrs": open_pqrs_count,
+                "technical_issues": tech_issues_count,
                 "raw_clients": clients_count,
                 "raw_pros": pros_count,
                 "raw_services": hired_services_count,
-                "raw_publications": services_count,
+                "raw_publications": pending_publications_count,
                 "raw_pqrs": open_pqrs_count,
                 "raw_issues": tech_issues_count,
             },
+            "reports": reports,
             "charts": {
                 "user_distribution": {
-                    "clients": max(clients_count, 1248),
-                    "professionals": max(pros_count, 356),
-                    "administrators": max(admins_count, 18),
+                    "clients": clients_count,
+                    "professionals": pros_count,
+                    "administrators": admins_count,
                 },
                 "pqr_chart": {
-                    "radicado": max(pqr_radicado, 6),
-                    "en_revision": max(pqr_revision, 9),
-                    "conciliacion": max(pqr_conciliacion, 4),
-                    "resuelto": max(pqr_resuelto, 8),
+                    "radicado": pqr_radicado,
+                    "en_revision": pqr_revision,
+                    "conciliacion": pqr_conciliacion,
+                    "resuelto": pqr_resuelto,
                 },
             },
             "requests_list": recent_items,
@@ -596,7 +619,7 @@ class AdminActionView(APIView):
 
         elif action_name == "respond_pqr":
             target_str = str(target_id)
-            clean_id = target_str.replace("pqr-", "").replace("fal-", "").replace("#", "")
+            clean_id = target_str.replace("pqr-", "").replace("fal-", "").replace("prob-", "").replace("#", "")
             response_text = request.data.get("response_text", "")
             new_status = request.data.get("new_status", "resuelto")
             send_notification = request.data.get("send_notification", True)
@@ -617,7 +640,20 @@ class AdminActionView(APIView):
                         "is_closed": True,
                     }, status=status.HTTP_400_BAD_REQUEST)
 
-                pqr.status = new_status
+                normalized_status = str(new_status).strip().lower()
+                pqr.status = {
+                    "abierta": "radicado",
+                    "radicado": "radicado",
+                    "en revisión": "en_revision",
+                    "en_revision": "en_revision",
+                    "en proceso": "conciliacion",
+                    "en_proceso": "conciliacion",
+                    "conciliacion": "conciliacion",
+                    "resuelta": "resuelto",
+                    "resuelto": "resuelto",
+                    "cerrada": "resuelto",
+                    "cerrado": "resuelto",
+                }.get(normalized_status, normalized_status)
                 pqr.admin_resolution_notes = response_text
                 pqr.save()
 
@@ -668,7 +704,14 @@ class AdminActionView(APIView):
                         "is_closed": True,
                     }, status=status.HTTP_400_BAD_REQUEST)
 
-                fal.status = new_status
+                normalized_status = str(new_status).strip().lower()
+                fal.status = (
+                    "resuelto"
+                    if normalized_status in {"resuelta", "resuelto", "cerrada", "cerrado"}
+                    else "en_proceso"
+                    if normalized_status in {"en proceso", "en_proceso"}
+                    else "recibido"
+                )
                 fal.response_notes = response_text
                 fal.save()
 
@@ -685,63 +728,137 @@ class AdminActionView(APIView):
                     "notification_sent": send_notification,
                 })
 
-            # Registro genérico si no coincide con ID de base de datos
+            return Response({"ok": False, "message": "No se encontró el PQR o la incidencia técnica."}, status=status.HTTP_404_NOT_FOUND)
+
+        elif action_name == "assign_pqr":
+            target_str = str(target_id or "")
+            clean_id = target_str.replace("pqr-", "").replace("#", "")
+            pqr = PQRReport.objects.filter(id=int(clean_id)).first() if clean_id.isdigit() else None
+            if not pqr:
+                pqr = PQRReport.objects.filter(radicado_number__iexact=target_str.lstrip("#")).first()
+            if not pqr:
+                return Response({"ok": False, "message": "No se encontró el PQR."}, status=status.HTTP_404_NOT_FOUND)
+
+            assigned_to = str(request.data.get("assigned_to", "")).strip()
+            if not assigned_to:
+                return Response({"ok": False, "message": "Indica el responsable del PQR."}, status=status.HTTP_400_BAD_REQUEST)
+            pqr.assigned_to = assigned_to
+            pqr.save(update_fields=["assigned_to", "updated_at"])
+            PQRMessage.objects.create(
+                pqr=pqr,
+                sender="support_agent",
+                sender_name=admin_name,
+                sender_role="Administrador Serviprox",
+                text=f"Caso asignado a {assigned_to}.",
+            )
             AdminAuditLog.objects.create(
                 admin_name=admin_name,
-                action="Respuesta a caso",
-                target=f"Caso {target_id}",
-                reason=response_text[:120],
+                action=f"Asignación de PQR a {assigned_to}",
+                target=f"PQR {pqr.radicado_number}",
+                reason=reason,
             )
-            return Response({
-                "ok": True,
-                "message": f"Respuesta y notificación procesada para el caso {target_id}.",
-                "notification_sent": send_notification,
-            })
+            return Response({"ok": True, "message": f"PQR {pqr.radicado_number} asignado a {assigned_to}."})
+
+        elif action_name == "update_pqr_priority":
+            target_str = str(target_id or "")
+            clean_id = target_str.replace("pqr-", "").replace("#", "")
+            pqr = PQRReport.objects.filter(id=int(clean_id)).first() if clean_id.isdigit() else None
+            if not pqr:
+                pqr = PQRReport.objects.filter(radicado_number__iexact=target_str.lstrip("#")).first()
+            if not pqr:
+                return Response({"ok": False, "message": "No se encontró el PQR."}, status=status.HTTP_404_NOT_FOUND)
+
+            priority = request.data.get("priority", "")
+            if priority not in {"", "Alta", "Media", "Baja"}:
+                return Response({"ok": False, "message": "La prioridad indicada no es válida."}, status=status.HTTP_400_BAD_REQUEST)
+            pqr.priority = priority
+            pqr.save(update_fields=["priority", "updated_at"])
+            AdminAuditLog.objects.create(
+                admin_name=admin_name,
+                action=f"Prioridad de PQR actualizada a {priority or 'sin prioridad'}",
+                target=f"PQR {pqr.radicado_number}",
+                reason=reason,
+            )
+            return Response({"ok": True, "message": f"Prioridad del PQR {pqr.radicado_number} actualizada."})
 
         elif action_name == "assign_problem":
-            clean_fal_id = str(target_id).replace("fal-", "").replace("#", "")
+            clean_fal_id = str(target_id).replace("fal-", "").replace("prob-", "").replace("#", "")
             fal = None
             if clean_fal_id.isdigit():
                 fal = AppProblemReport.objects.filter(id=int(clean_fal_id)).first()
             if not fal:
                 fal = AppProblemReport.objects.filter(ticket_number__iexact=str(target_id)).first()
 
-            assigned_to = request.data.get("assigned_to", "Carlos M.")
-            if fal:
-                if fal.status == "recibido":
-                    fal.status = "en_proceso"
-                fal.response_notes = f"Asignada a {assigned_to}. {fal.response_notes}".strip()
-                fal.save()
+            if not fal:
+                return Response({"ok": False, "message": "No se encontró la incidencia técnica."}, status=status.HTTP_404_NOT_FOUND)
+            assigned_to = str(request.data.get("assigned_to", "")).strip()
+            if not assigned_to:
+                return Response({"ok": False, "message": "Indica el responsable de la incidencia."}, status=status.HTTP_400_BAD_REQUEST)
+            if fal.status == "recibido":
+                fal.status = "en_proceso"
+            fal.assigned_to = assigned_to
+            fal.save(update_fields=["status", "assigned_to"])
 
             AdminAuditLog.objects.create(
                 admin_name=admin_name,
                 action=f"Asignación de incidencia técnica a {assigned_to}",
-                target=f"Ticket {fal.ticket_number if fal else target_id}",
+                target=f"Ticket {fal.ticket_number}",
                 reason=reason or f"Asignado al especialista {assigned_to}",
             )
             return Response({"ok": True, "message": f"Incidencia asignada a {assigned_to} en la base de datos."})
 
+        elif action_name == "add_problem_note":
+            target_str = str(target_id or "")
+            clean_id = target_str.replace("fal-", "").replace("prob-", "").replace("#", "")
+            fal = AppProblemReport.objects.filter(id=int(clean_id)).first() if clean_id.isdigit() else None
+            if not fal:
+                fal = AppProblemReport.objects.filter(ticket_number__iexact=target_str.lstrip("#")).first()
+            if not fal:
+                return Response({"ok": False, "message": "No se encontró la incidencia técnica."}, status=status.HTTP_404_NOT_FOUND)
+
+            note = str(request.data.get("note", "")).strip()
+            if not note:
+                return Response({"ok": False, "message": "El comentario no puede estar vacío."}, status=status.HTTP_400_BAD_REQUEST)
+            fal.response_notes = "\n".join(filter(None, [fal.response_notes, note]))
+            fal.save(update_fields=["response_notes"])
+            AdminAuditLog.objects.create(
+                admin_name=admin_name,
+                action="Nota añadida a incidencia técnica",
+                target=f"Ticket {fal.ticket_number}",
+                reason=note[:120],
+            )
+            if fal.user:
+                Notification.objects.create(
+                    user=fal.user,
+                    title=f"Actualización de incidencia {fal.ticket_number}",
+                    text=note[:240],
+                    notification_type="falla",
+                    target_id=str(fal.ticket_number),
+                    is_read=False,
+                )
+            return Response({"ok": True, "message": "Comentario guardado en la base de datos."})
+
         elif action_name == "update_problem_status":
-            clean_fal_id = str(target_id).replace("fal-", "").replace("#", "")
+            clean_fal_id = str(target_id).replace("fal-", "").replace("prob-", "").replace("#", "")
             fal = None
             if clean_fal_id.isdigit():
                 fal = AppProblemReport.objects.filter(id=int(clean_fal_id)).first()
             if not fal:
                 fal = AppProblemReport.objects.filter(ticket_number__iexact=str(target_id)).first()
 
+            if not fal:
+                return Response({"ok": False, "message": "No se encontró la incidencia técnica."}, status=status.HTTP_404_NOT_FOUND)
             new_status = request.data.get("new_status", "resuelto")
             status_db = "resuelto" if new_status in {"Resuelta", "resuelto", "Cerrada", "cerrada"} else "en_proceso" if new_status in {"En proceso", "en_proceso"} else "recibido"
-
-            if fal:
-                fal.status = status_db
-                if reason:
-                    fal.response_notes = reason
-                fal.save()
+            fal.status = status_db
+            if reason:
+                fal.response_notes = reason
+            fal.save()
 
             AdminAuditLog.objects.create(
                 admin_name=admin_name,
                 action=f"Cambio de estado de incidencia a {new_status}",
-                target=f"Ticket {fal.ticket_number if fal else target_id}",
+                target=f"Ticket {fal.ticket_number}",
                 reason=reason or f"Actualizado a {new_status}",
             )
             return Response({"ok": True, "message": f"Estado de incidencia actualizado a {new_status} en la base de datos."})
@@ -753,21 +870,30 @@ class AdminActionView(APIView):
             if upload_error:
                 return Response({"ok": False, "message": upload_error}, status=status.HTTP_400_BAD_REQUEST)
 
-            ticket_num = request.data.get("ticket_number") or f"#{random.randint(1046, 9999)}"
+            ticket_num = request.data.get("ticket_number")
+            if not ticket_num:
+                from uuid import uuid4
+                ticket_num = f"APP-{date.today().year}-{uuid4().hex[:8].upper()}"
             category_label = request.data.get("category_label") or request.data.get("module") or "General"
             description = request.data.get("description") or "Falla técnica reportada por el administrador"
+            title = request.data.get("title", "")
             reported_by = request.data.get("reported_by") or admin_name
-            device_info = request.data.get("device_info") or "Aplicación móvil (Android)"
+            device_info = request.data.get("device_info", "")
+            version = request.data.get("version", "")
             status_val = request.data.get("status") or "recibido"
+            priority = request.data.get("priority", "")
 
             fal = AppProblemReport.objects.create(
                 ticket_number=ticket_num,
+                title=title,
                 category=category_label.lower().replace(" ", "_"),
                 category_label=category_label,
                 description=description,
                 reported_by=reported_by,
                 device_info=device_info,
+                version=version,
                 status=status_val,
+                priority=priority,
             )
             _save_problem_attachments(fal, uploaded_files)
             AdminAuditLog.objects.create(
@@ -859,10 +985,10 @@ class AdminUsersListView(APIView):
                 "admin_role": admin_role,
                 "is_staff": u.is_staff,
                 "is_superuser": u.is_superuser,
-                "phone": u.phone or "+57 300 123 4567",
-                "city": u.city or "Bogotá",
-                "address": u.address or "Bogotá, Colombia",
-                "document_id": u.document_id or f"CC 1.020.345.{u.id:03d}",
+                "phone": u.phone or "",
+                "city": u.city or "",
+                "address": u.address or "",
+                "document_id": u.document_id or "",
                 "avatar_url": avatar,
                 "is_active": u.is_active,
                 "is_blocked": u.is_blocked,
@@ -1240,301 +1366,221 @@ class AdminNotificationListView(APIView):
 
 
 class AdminReportsStatsView(APIView):
-    """
-    Proporciona las estadísticas y métricas analíticas oficiales consultadas
-    directamente de los registros reales de la base de datos (SQLite / PostgreSQL).
-    """
+    """Calcula estadísticas exclusivamente a partir de registros de la base de datos."""
 
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsServiproxAdministrator]
 
     def get(self, request):
-        now = timezone.now()
+        now = timezone.localtime()
+        month_starts = []
+        for offset in range(9, -1, -1):
+            month_index = now.year * 12 + now.month - 1 - offset
+            year, month_index = divmod(month_index, 12)
+            month_starts.append(date(year, month_index + 1, 1))
 
-        # 1. Indicadores Principales (KPIs)
+        month_labels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+        keys = [month.strftime("%Y-%m") for month in month_starts]
+        labels = [month_labels[month.month - 1] for month in month_starts]
+
+        def percent_change(current, previous):
+            if not previous:
+                return "+100%" if current else "0%"
+            return f"{round((current - previous) * 100 / previous):+d}%"
+
+        def count_trend(values):
+            return percent_change(values[-1], values[-2])
+
+        user_month_rows = User.objects.annotate(month=TruncMonth("date_joined")).values("month").annotate(
+            total=Count("id"),
+            clients=Count("id", filter=Q(role=UserRole.CLIENT)),
+            pros=Count("id", filter=Q(role=UserRole.PROFESSIONAL)),
+        )
+        users_by_month = {row["month"].strftime("%Y-%m"): row for row in user_month_rows}
+        new_users_data = [
+            {
+                "month": label,
+                "clients": users_by_month.get(key, {}).get("clients", 0),
+                "pros": users_by_month.get(key, {}).get("pros", 0),
+            }
+            for key, label in zip(keys, labels)
+        ]
+        user_totals = [users_by_month.get(key, {}).get("total", 0) for key in keys]
+        pro_totals = [users_by_month.get(key, {}).get("pros", 0) for key in keys]
+
+        order_month_rows = Order.objects.annotate(month=TruncMonth("created_at")).values("month").annotate(
+            count=Count("id")
+        )
+        orders_by_month = {row["month"].strftime("%Y-%m"): row["count"] for row in order_month_rows}
+        hires_data = [
+            {"month": label, "val": orders_by_month.get(key, 0)}
+            for key, label in zip(keys, labels)
+        ]
+        hire_totals = [orders_by_month.get(key, 0) for key in keys]
+
+        payment_month_rows = Payment.objects.filter(status=Payment.Status.APPROVED).annotate(
+            month=TruncMonth("created_at")
+        ).values("month").annotate(total_cents=Sum("amount_in_cents"))
+        revenue_by_month = {
+            row["month"].strftime("%Y-%m"): int(row["total_cents"] or 0) // 100
+            for row in payment_month_rows
+        }
+        monthly_revenue = [
+            {
+                "month": label,
+                "amount": f"${revenue_by_month.get(key, 0):,}".replace(",", "."),
+                "val": revenue_by_month.get(key, 0) / 1_000_000,
+            }
+            for key, label in zip(keys, labels)
+        ]
+        revenue_totals = [revenue_by_month.get(key, 0) for key in keys]
+
         total_users = User.objects.count()
-        clients_count = User.objects.filter(role=UserRole.CLIENT).count()
-        pros_registered = User.objects.filter(role=UserRole.PROFESSIONAL).count()
-        active_pros = ProfessionalProfile.objects.filter(is_active=True).count()
-
-        # Productos / Servicios ofrecidos en la plataforma
-        catalog_services = Service.objects.filter(is_active=True).count()
-        pro_services = ProfessionalService.objects.count()
-        total_products = catalog_services + pro_services
-
-        # Contrataciones realizadas (Solicitudes + Órdenes en base de datos)
-        total_requests = ServiceRequest.objects.count()
-        total_orders = Order.objects.count()
-        total_hires = total_requests + total_orders
-
-        # PQR recibidas (Reportes formales + incidencias reportadas)
+        active_pros = ProfessionalProfile.objects.filter(is_active=True, user__is_active=True).count()
+        total_products = StoreProduct.objects.filter(is_active=True).count()
+        total_hires = Order.objects.count()
         pqr_count = PQRReport.objects.count()
         problems_count = AppProblemReport.objects.count()
         total_pqrs = pqr_count + problems_count
+        total_revenue = Payment.objects.filter(status=Payment.Status.APPROVED).aggregate(
+            total=Sum("amount_in_cents")
+        )["total"] or 0
+        total_revenue = int(total_revenue) // 100
 
-        # Ingresos totales en COP calculados desde las órdenes registradas
-        orders_sum = Order.objects.aggregate(s=Sum("final_price"))["s"] or Decimal("0")
-        if orders_sum == Decimal("0"):
-            orders_sum = Order.objects.aggregate(s=Sum("estimate_max"))["s"] or Decimal("0")
-        total_revenue_val = float(orders_sum) if orders_sum > 0 else 84250000.0
+        def formatted_count(value):
+            return f"{value:,}".replace(",", ".")
 
-        def format_currency(val):
-            return f"${int(val):,}".replace(",", ".")
+        def make_kpi(value, trend, sparkline):
+            return {
+                "raw": value,
+                "display": formatted_count(value),
+                "trend": trend,
+                "sparkline": sparkline[-4:],
+            }
 
+        revenue_sparkline = [value / 1_000_000 for value in revenue_totals]
         kpis = {
-            "users": {
-                "raw": total_users,
-                "display": f"{total_users:,}".replace(",", "."),
-                "trend": "+12%",
-                "sparkline": [6, 10, 14, 18],
-            },
-            "pros": {
-                "raw": active_pros,
-                "display": f"{active_pros:,}".replace(",", "."),
-                "trend": "+8%",
-                "sparkline": [8, 11, 13, 15],
-            },
-            "products": {
-                "raw": total_products,
-                "display": f"{total_products:,}".replace(",", "."),
-                "trend": "+15%",
-                "sparkline": [15, 30, 48, 71],
-            },
-            "hires": {
-                "raw": total_hires,
-                "display": f"{total_hires:,}".replace(",", "."),
-                "trend": "+18%",
-                "sparkline": [2, 4, 6, 8],
-            },
-            "pqrs": {
-                "raw": total_pqrs,
-                "display": f"{total_pqrs:,}".replace(",", "."),
-                "trend": "-6%",
-                "sparkline": [9, 8, 8, 7],
-            },
+            "users": make_kpi(total_users, count_trend(user_totals), user_totals),
+            "pros": make_kpi(active_pros, count_trend(pro_totals), pro_totals),
+            "products": make_kpi(total_products, "0%", [total_products] * 4),
+            "hires": make_kpi(total_hires, count_trend(hire_totals), hire_totals),
+            "pqrs": make_kpi(total_pqrs, "0%", [total_pqrs] * 4),
             "revenue": {
-                "raw": int(total_revenue_val),
-                "display": format_currency(total_revenue_val),
-                "trend": "+22%",
-                "sparkline": [5, 8, 12, 18.5],
+                "raw": total_revenue,
+                "display": f"${total_revenue:,}".replace(",", "."),
+                "trend": percent_change(revenue_totals[-1], revenue_totals[-2]),
+                "sparkline": revenue_sparkline[-4:],
             },
         }
 
-        # 2. Contrataciones por mes (10 meses representativos hasta el actual)
-        month_labels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct"]
-        base_hires = [45, 82, 125, 154, 198, 235, 242, 290, 320, 375 + total_hires]
-        hires_data = [{"month": m, "val": v} for m, v in zip(month_labels, base_hires)]
-
-        # 3. Servicios más solicitados desde la base de datos
         service_counts = {}
-        for req in ServiceRequest.objects.all():
-            name = None
-            if req.selected_service:
-                name = req.selected_service.name
-            elif req.selected_category:
-                name = req.selected_category.name
-            elif req.suggested_category:
-                name = req.suggested_category
+        for row in ServiceRequest.objects.values(
+            "selected_service__name", "selected_category__name", "suggested_category"
+        ).annotate(count=Count("id")):
+            name = row["selected_service__name"] or row["selected_category__name"] or row["suggested_category"]
             if name:
-                service_counts[name] = service_counts.get(name, 0) + 1
-
-        for ps in ProfessionalService.objects.select_related("service").all()[:15]:
-            sname = ps.service.name if ps.service else "Mantenimiento general"
-            service_counts[sname] = service_counts.get(sname, 0) + 1
-
-        seed_services = [
-            ("Electricista", 420),
-            ("Plomero", 350),
-            ("Limpieza", 280),
-            ("Mantenimiento", 210),
-            ("Entrenador personal", 190),
-            ("Clases particulares", 150),
-            ("Veterinaria a domicilio", 120),
-            ("Otros", 112),
+                service_counts[name] = service_counts.get(name, 0) + row["count"]
+        max_service_count = max(service_counts.values(), default=0)
+        top_services = [
+            {"name": name, "count": count, "pct": round(count * 100 / max_service_count) if max_service_count else 0}
+            for name, count in sorted(service_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
         ]
-        top_services = []
-        max_svc = 420
-        for name, base_c in seed_services:
-            extra = service_counts.get(name, 0) * 12
-            count = base_c + extra
-            top_services.append({
-                "name": name,
-                "count": count,
-                "pct": int(min(100, round((count / max_svc) * 100))),
-            })
 
-        # 4. Categorías / Productos más publicados
-        seed_products = [
-            ("Tecnología", 520),
-            ("Muebles", 380),
-            ("Multimedia", 310),
-            ("Ropa", 290),
-            ("Deportes", 240),
-            ("Libros", 180),
-            ("Juguetes", 150),
-            ("Herramientas", 120),
-        ]
-        max_prod = 520
+        product_rows = StoreProduct.objects.filter(is_active=True).values("category").annotate(
+            count=Count("id")
+        ).order_by("-count", "category")[:8]
+        product_counts = list(product_rows)
+        max_product_count = max((row["count"] for row in product_counts), default=0)
         top_products = [
             {
-                "name": name,
-                "count": count,
-                "pct": int(min(100, round((count / max_prod) * 100))),
+                "name": row["category"],
+                "count": row["count"],
+                "pct": round(row["count"] * 100 / max_product_count) if max_product_count else 0,
             }
-            for name, count in seed_products
+            for row in product_counts
         ]
 
-        # 5. Nuevos usuarios por mes (Clientes vs Profesionales)
-        new_users_data = [
-            {"month": "Ene", "clients": 140, "pros": 80},
-            {"month": "Feb", "clients": 165, "pros": 95},
-            {"month": "Mar", "clients": 195, "pros": 125},
-            {"month": "Abr", "clients": 150, "pros": 108},
-            {"month": "May", "clients": 200, "pros": 142},
-            {"month": "Jun", "clients": 175, "pros": 120},
-            {"month": "Jul", "clients": 215, "pros": 155},
-            {"month": "Ago", "clients": 265, "pros": 190},
-            {"month": "Sep", "clients": 220, "pros": 165},
-            {"month": "Oct", "clients": 170 + clients_count, "pros": 130 + pros_registered},
-        ]
-
-        # 6. Ingresos mensuales
-        monthly_revenue = [
-            {"month": "Ene", "amount": "5.2M", "val": 5.2},
-            {"month": "Feb", "amount": "5.8M", "val": 5.8},
-            {"month": "Mar", "amount": "6.9M", "val": 6.9},
-            {"month": "Abr", "amount": "8.1M", "val": 8.1},
-            {"month": "May", "amount": "9.5M", "val": 9.5},
-            {"month": "Jun", "amount": "10.4M", "val": 10.4},
-            {"month": "Jul", "amount": "12.2M", "val": 12.2},
-            {"month": "Ago", "amount": "15.8M", "val": 15.8},
-            {"month": "Sep", "amount": "17.5M", "val": 17.5},
-            {"month": "Oct", "amount": "18.8M", "val": 18.8},
-        ]
-
-        # 7. Distribución de PQR real
-        pqr_resuelto = PQRReport.objects.filter(status="resuelto").count() + AppProblemReport.objects.filter(status="resuelto").count()
-        pqr_en_proceso = PQRReport.objects.filter(status__in=["en_revision", "conciliacion"]).count() + AppProblemReport.objects.filter(status="en_proceso").count()
-        pqr_pendiente = PQRReport.objects.filter(status="radicado").count() + AppProblemReport.objects.filter(status__in=["pendiente", "abierto"]).count()
-        pqr_rechazado = PQRReport.objects.filter(status__in=["rechazado", "sancionado"]).count()
-
-        total_pqr_metric = 342 + total_pqrs
-        resueltas_count = int(total_pqr_metric * 0.58) + pqr_resuelto
-        proceso_count = int(total_pqr_metric * 0.24) + pqr_en_proceso
-        pendientes_count = int(total_pqr_metric * 0.12) + pqr_pendiente
-        rechazadas_count = total_pqr_metric - resueltas_count - proceso_count - pendientes_count
-        if rechazadas_count < 0:
-            rechazadas_count = int(total_pqr_metric * 0.06)
-
-        pqr_status = {
-            "total": total_pqr_metric,
-            "raw_total": total_pqrs,
-            "resueltas": resueltas_count,
-            "resueltas_pct": 58,
-            "en_proceso": proceso_count,
-            "en_proceso_pct": 24,
-            "pendientes": pendientes_count,
-            "pendientes_pct": 12,
-            "rechazadas": rechazadas_count,
-            "rechazadas_pct": 6,
+        pqr_states = {
+            "resueltas": PQRReport.objects.filter(status="resuelto").count() + AppProblemReport.objects.filter(status="resuelto").count(),
+            "en_proceso": PQRReport.objects.filter(status__in=["en_revision", "conciliacion"]).count() + AppProblemReport.objects.filter(status="en_proceso").count(),
+            "pendientes": PQRReport.objects.filter(status="radicado").count() + AppProblemReport.objects.filter(status__in=["pendiente", "abierto", "recibido"]).count(),
+            "rechazadas": PQRReport.objects.filter(status__in=["rechazado", "sancionado"]).count() + AppProblemReport.objects.filter(status="rechazado").count(),
         }
+        pqr_status = {"total": total_pqrs, "raw_total": total_pqrs}
+        for key, value in pqr_states.items():
+            pqr_status[key] = value
+            pqr_status[f"{key}_pct"] = round(value * 100 / total_pqrs) if total_pqrs else 0
 
-        # 8. Actividad Reciente Directa desde la Base de Datos
         recent_activity = []
-        audit_records = AdminAuditLog.objects.order_by("-created_at")[:6]
-        for log in audit_records:
-            time_str = log.created_at.strftime("%d/%m/%Y %H:%M")
+        for log in AdminAuditLog.objects.order_by("-created_at")[:6]:
             recent_activity.append({
                 "id": f"audit-{log.id}",
-                "date": time_str,
+                "date": log.created_at.strftime("%d/%m/%Y %H:%M"),
                 "module": "Auditoría / Sistema",
                 "description": f"{log.action} - {log.target}"[:55],
                 "user": log.admin_name or "Administrador",
                 "status": "completado",
             })
-
         for req in ServiceRequest.objects.order_by("-created_at")[:3]:
-            time_str = req.created_at.strftime("%d/%m/%Y %H:%M")
-            cat_name = req.selected_category.name if req.selected_category else (req.suggested_category or "Servicio")
-            client_name = req.client.get_full_name() if req.client else "Cliente"
+            category = req.selected_category.name if req.selected_category else (req.suggested_category or "Servicio")
             recent_activity.append({
                 "id": f"req-{req.id}",
-                "date": time_str,
+                "date": req.created_at.strftime("%d/%m/%Y %H:%M"),
                 "module": "Contrataciones",
-                "description": f"Nueva contratación #{req.id} ({cat_name})",
-                "user": client_name,
+                "description": f"Solicitud #{req.id} ({category})",
+                "user": req.client.get_full_name() if req.client else "Cliente",
                 "status": "completado" if req.status == "completed" else "en_proceso",
             })
-
         for pqr in PQRReport.objects.order_by("-created_at")[:2]:
-            time_str = pqr.created_at.strftime("%d/%m/%Y %H:%M")
             recent_activity.append({
                 "id": f"pqr-{pqr.id}",
-                "date": time_str,
+                "date": pqr.created_at.strftime("%d/%m/%Y %H:%M"),
                 "module": "PQR y Reportes",
                 "description": f"Radicado #{pqr.radicado_number or pqr.id} - {pqr.pqr_type}",
                 "user": pqr.client_name or "Usuario",
                 "status": "resuelto" if pqr.status == "resuelto" else "en_proceso",
             })
-
-        for prob in AppProblemReport.objects.order_by("-created_at")[:2]:
-            time_str = prob.created_at.strftime("%d/%m/%Y %H:%M")
+        for problem in AppProblemReport.objects.order_by("-created_at")[:2]:
             recent_activity.append({
-                "id": f"prob-{prob.id}",
-                "date": time_str,
+                "id": f"prob-{problem.id}",
+                "date": problem.created_at.strftime("%d/%m/%Y %H:%M"),
                 "module": "Fallas Técnicas",
-                "description": f"Ticket #{prob.ticket_number or prob.id}: {prob.category_label}",
-                "user": prob.reported_by or prob.user_email or "Usuario",
-                "status": "resuelto" if prob.status == "resuelto" else "pendiente",
+                "description": f"Ticket #{problem.ticket_number or problem.id}: {problem.category_label}",
+                "user": problem.reported_by or problem.user_email or "Usuario",
+                "status": "resuelto" if problem.status == "resuelto" else "pendiente",
             })
+        recent_activity.sort(key=lambda item: item["date"], reverse=True)
 
-        recent_activity.sort(key=lambda x: x["date"], reverse=True)
-        recent_activity = recent_activity[:7]
-
-        # 9. Localidades de Bogotá calculadas con la base de datos
-        LOCALITY_MAPPING = {
-            "kennedy": ["kennedy", "castilla", "timiza", "tintal", "patio bonito", "carvajal"],
-            "suba": ["suba", "pontevedra", "rincón", "rincon", "niza", "colina", "prado"],
-            "engativa": ["engativa", "engativá", "álamos", "alamos", "minuto", "ferias", "boyacá"],
-            "chapinero": ["chapinero", "chicó", "chico", "antiguo country", "lago", "marly"],
-            "usaquen": ["usaquén", "usaquen", "cedritos", "santa bárbara", "santa barbara", "chicó norte", "chico norte", "san patricio"],
-            "bosa": ["bosa", "brasilia", "el porvenir", "la libertad"],
-            "teusaquillo": ["teusaquillo", "galerías", "galerias", "salitre", "la soledad", "palermo", "quinta paredes"],
-            "santafe": ["santa fe", "santa fé", "las aguas", "la macarena", "las nieves", "germania"],
+        locality_mapping = {
+            "kennedy": ("Kennedy", ["kennedy", "castilla", "timiza", "tintal", "patio bonito", "carvajal"], "#1d4ed8"),
+            "suba": ("Suba", ["suba", "pontevedra", "rincón", "rincon", "niza", "colina", "prado"], "#3b82f6"),
+            "engativa": ("Engativá", ["engativa", "engativá", "álamos", "alamos", "minuto", "ferias", "boyacá"], "#60a5fa"),
+            "chapinero": ("Chapinero", ["chapinero", "chicó", "chico", "antiguo country", "lago", "marly"], "#93c5fd"),
+            "usaquen": ("Usaquén", ["usaquén", "usaquen", "cedritos", "santa bárbara", "santa barbara", "chicó norte", "chico norte", "san patricio"], "#bfdbfe"),
+            "bosa": ("Bosa", ["bosa", "brasilia", "el porvenir", "la libertad"], "#c7d2fe"),
+            "teusaquillo": ("Teusaquillo", ["teusaquillo", "galerías", "galerias", "salitre", "la soledad", "palermo", "quinta paredes"], "#ddd6fe"),
+            "santafe": ("Santa Fe", ["santa fe", "santa fé", "las aguas", "la macarena", "las nieves", "germania"], "#ede9fe"),
         }
-
-        def resolve_loc(neigh):
-            if not neigh:
-                return "otras"
-            n = neigh.lower().strip()
-            for lid, syns in LOCALITY_MAPPING.items():
-                if any(s in n for s in syns):
-                    return lid
-            return "otras"
-
-        db_loc_counts = {k: 0 for k in LOCALITY_MAPPING}
-        db_loc_counts["otras"] = 0
-
-        for h in Household.objects.all():
-            db_loc_counts[resolve_loc(h.neighborhood)] += 1
-        for p in ProfessionalProfile.objects.all():
-            db_loc_counts[resolve_loc(p.neighborhood)] += 1
-
+        locality_counts = {key: 0 for key in locality_mapping}
+        locality_counts["otras"] = 0
+        for neighborhood in list(Household.objects.values_list("neighborhood", flat=True)) + list(
+            ProfessionalProfile.objects.values_list("neighborhood", flat=True)
+        ):
+            value = (neighborhood or "").lower().strip()
+            locality = next(
+                (key for key, (_, aliases, _) in locality_mapping.items() if any(alias in value for alias in aliases)),
+                "otras",
+            )
+            locality_counts[locality] += 1
         localities = [
-            {"id": "kennedy", "name": "Kennedy", "count": 420 + db_loc_counts["kennedy"] * 10, "color": "#1d4ed8"},
-            {"id": "suba", "name": "Suba", "count": 350 + db_loc_counts["suba"] * 10, "color": "#3b82f6"},
-            {"id": "engativa", "name": "Engativá", "count": 290 + db_loc_counts["engativa"] * 10, "color": "#60a5fa"},
-            {"id": "chapinero", "name": "Chapinero", "count": 250 + db_loc_counts["chapinero"] * 10, "color": "#93c5fd"},
-            {"id": "usaquen", "name": "Usaquén", "count": 220 + db_loc_counts["usaquen"] * 10, "color": "#bfdbfe"},
-            {"id": "bosa", "name": "Bosa", "count": 190 + db_loc_counts["bosa"] * 10, "color": "#c7d2fe"},
-            {"id": "teusaquillo", "name": "Teusaquillo", "count": 180 + db_loc_counts["teusaquillo"] * 10, "color": "#ddd6fe"},
-            {"id": "santafe", "name": "Santa Fe", "count": 140 + db_loc_counts["santafe"] * 10, "color": "#ede9fe"},
-            {"id": "otras", "name": "Otras", "count": 112 + db_loc_counts["otras"] * 5, "color": "#f1f5f9"},
+            {"id": key, "name": name, "count": locality_counts[key], "color": color}
+            for key, (name, _, color) in locality_mapping.items()
         ]
+        localities.append({"id": "otras", "name": "Otras", "count": locality_counts["otras"], "color": "#f1f5f9"})
 
         return Response({
             "database_connected": True,
             "database_engine": connection.vendor,
-            "period": "01/05/2026 - 08/30/2026",
+            "period": f"{month_starts[0].strftime('%d/%m/%Y')} - {now.strftime('%d/%m/%Y')}",
             "kpis": kpis,
             "hires_data": hires_data,
             "top_services": top_services,
@@ -1542,7 +1588,6 @@ class AdminReportsStatsView(APIView):
             "new_users_data": new_users_data,
             "monthly_revenue": monthly_revenue,
             "pqr_status": pqr_status,
-            "recent_activity": recent_activity,
+            "recent_activity": recent_activity[:7],
             "localities": localities,
         })
-

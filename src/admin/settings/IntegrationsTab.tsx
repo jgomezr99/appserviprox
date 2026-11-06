@@ -12,7 +12,6 @@ type Integration = {
 };
 
 const INTEGRATIONS: Integration[] = [
-  { id: "firebase", title: "Firebase", sub: "Base de datos y autenticación", category: "Base de datos", icon: "🔥", required: ["firebase_project", "firebase_key"], fields: [{ key: "firebase_project", label: "Proyecto" }, { key: "firebase_key", label: "API Key", kind: "password" }] },
   { id: "maps", title: "Google Maps", sub: "Mapas y ubicación", category: "Mapas", icon: "📍", required: ["maps_key"], fields: [{ key: "maps_key", label: "API Key", kind: "password" }] },
   { id: "smtp", title: "Correo Electrónico (SMTP)", sub: "Comunicaciones", category: "Comunicaciones", icon: "✉️", required: [], fields: [] },
   { id: "whatsapp", title: "WhatsApp Business", sub: "Mensajería", category: "Comunicaciones", icon: "💬", required: ["whatsapp_number", "whatsapp_key"], fields: [{ key: "whatsapp_number", label: "Número" }, { key: "whatsapp_key", label: "Token", kind: "password" }] },
@@ -33,7 +32,6 @@ const WEBHOOK_EVENTS: Array<[string, string]> = [
 ];
 
 const CREDENTIALS: Array<[string, string, string]> = [
-  ["Firebase", "firebase_key", "firebase_enabled"],
   ["Google Maps", "maps_key", "maps_enabled"],
   ["Pasarela de pago", "gateway_key", "gateway_enabled"],
   ["Google Analytics", "analytics_id", "analytics_enabled"],

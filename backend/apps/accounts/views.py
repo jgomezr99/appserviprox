@@ -311,6 +311,8 @@ class CompleteOnboardingView(APIView):
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import CustomTokenObtainPairSerializer
 
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Obtención de token JWT con verificación disciplinaria y aviso de suspensión administrativa."""
+
     serializer_class = CustomTokenObtainPairSerializer

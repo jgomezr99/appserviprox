@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -9,11 +10,11 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from apps.accounts.models import UserRole
+from apps.accounts.models import PlatformSettings, UserRole
 from apps.orders.models import Order
 
 from .geo import annotate_distance, within_radius
-from .models import ProfessionalProfile, ProfessionalService
+from .models import BenefitRedemption, ProfessionalProfile, ProfessionalService
 from .serializers import (
     ProfessionalDetailSerializer,
     ProfessionalListSerializer,
@@ -76,7 +77,7 @@ class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
         return obj
 
     def get_permissions(self):
-        if self.action == "me":
+        if self.action in {"me", "benefit_redemptions"}:
             return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
 
@@ -189,3 +190,81 @@ class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+    @action(detail=False, methods=["get", "post"], url_path="benefit-redemptions")
+    def benefit_redemptions(self, request):
+        if request.user.role != UserRole.PROFESSIONAL:
+            raise PermissionDenied("Solo los profesionales pueden gestionar sus beneficios.")
+
+        profile = getattr(request.user, "professional_profile", None)
+        if not profile:
+            raise NotFound("Perfil profesional no encontrado.")
+
+        if request.method == "GET":
+            redemptions = profile.benefit_redemptions.all()
+            return Response([
+                {
+                    "id": item.id,
+                    "benefit_id": item.benefit_id,
+                    "title": item.title,
+                    "points": item.points,
+                    "recharge_amount": str(item.recharge_amount),
+                    "status": item.status,
+                    "created_at": item.created_at.isoformat(),
+                }
+                for item in redemptions
+            ])
+
+        benefit_id = str(request.data.get("benefit_id", "")).strip()
+        if not benefit_id:
+            raise ValidationError({"benefit_id": "Selecciona un beneficio."})
+
+        settings_data = PlatformSettings.load()
+        catalog = settings_data.get("sections", {}).get("benefit_catalog", {})
+        items = catalog.get("items", []) if isinstance(catalog, dict) else []
+        benefit = next(
+            (
+                item for item in items
+                if isinstance(item, dict) and str(item.get("id", "")) == benefit_id
+            ),
+            None,
+        ) if isinstance(items, list) else None
+        if not benefit:
+            raise NotFound("El beneficio ya no está disponible.")
+
+        try:
+            points = int(benefit.get("points", 0))
+            recharge_amount = Decimal(str(benefit.get("recharge_amount", 0) or 0))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValidationError({"benefit_id": "La configuración del beneficio no es válida."})
+        title = str(benefit.get("title", "")).strip()
+        if points <= 0 or not recharge_amount.is_finite() or recharge_amount < 0 or not title:
+            raise ValidationError({"benefit_id": "La configuración del beneficio no es válida."})
+
+        with transaction.atomic():
+            profile = ProfessionalProfile.objects.select_for_update().get(pk=profile.pk)
+            if profile.points < points:
+                raise ValidationError({"detail": "No tienes puntos suficientes para este beneficio."})
+            profile.points -= points
+            profile.save(update_fields=["points"])
+            redemption = BenefitRedemption.objects.create(
+                profile=profile,
+                benefit_id=benefit_id,
+                title=title[:180],
+                points=points,
+                recharge_amount=recharge_amount,
+            )
+
+        return Response(
+            {
+                "id": redemption.id,
+                "benefit_id": redemption.benefit_id,
+                "title": redemption.title,
+                "points": redemption.points,
+                "recharge_amount": str(redemption.recharge_amount),
+                "status": redemption.status,
+                "created_at": redemption.created_at.isoformat(),
+                "remaining_points": profile.points,
+            },
+            status=status.HTTP_201_CREATED,
+        )

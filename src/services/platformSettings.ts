@@ -33,6 +33,7 @@ export interface PlatformSettings {
   documents?: Record<"terms" | "privacy" | "refunds" | "rules" | "contract", string>;
   last_backup?: string;
   sections?: Record<string, Section>;
+  benefit_catalog?: Section;
   appearance?: Section;
   role_params?: Section;
   system?: {
@@ -192,40 +193,31 @@ export const platformSettingsService = {
   },
   getAdmin: () => api.get<PlatformSettings>("admin/settings/"),
   saveAdmin: async (patch: Partial<PlatformSettings>) => {
-    // 1. Guardar de inmediato en caché local y emitir evento para que toda la app reaccione al instante
-    const currentCache = readCache();
-    const immediateMerged: PlatformSettings = {
-      ...currentCache,
-      ...patch,
-      features: { ...currentCache.features, ...(patch.features || {}) },
-      sections: { ...(currentCache.sections || {}), ...(patch.sections || {}) },
-      role_params:
-        patch.role_params ||
-        patch.sections?.role_params ||
-        currentCache.role_params ||
-        currentCache.sections?.role_params,
+    const saved = await api.patch<PlatformSettings>("admin/settings/", patch);
+    const merged: PlatformSettings = {
+      ...DEFAULT_SETTINGS,
+      ...saved,
+      features: { ...DEFAULT_SETTINGS.features, ...saved.features },
+      sections: { ...(saved.sections || {}) },
+      role_params: saved.role_params || saved.sections?.role_params,
     };
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(immediateMerged));
+      localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
     } catch {
-      /* quota */
+      /* Imágenes grandes pueden exceder la cuota de almacenamiento. */
     }
-    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: immediateMerged }));
-
-    // 2. Persistir en backend Django
-    try {
-      const saved = await api.patch<PlatformSettings>("admin/settings/", patch);
-      await platformSettingsService.fetchPublic().catch(() => undefined);
-      return saved;
-    } catch (err) {
-      console.warn("No se pudo sincronizar configuración con API, se mantiene local:", err);
-      return immediateMerged;
-    }
+    applyAppearance(merged.appearance);
+    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: merged }));
+    return merged;
   },
   systemAction: async (body: Record<string, unknown> & { action: string; confirm?: string; name?: string; enabled?: boolean }): Promise<{ detail: string; settings?: PlatformSettings; last_backup?: string }> => {
     const { action } = body;
+    const result = await api.post<{ detail: string; settings?: PlatformSettings; last_backup?: string }>(
+      "admin/system-action/",
+      body
+    );
 
-    // 1. Limpieza y acciones locales inmediatas según la acción
+    // Mantener sincronizada la caché local solo después de confirmar la acción en el servidor.
     if (action === "clear_cache") {
       try {
         if (typeof localStorage !== "undefined") {
@@ -301,18 +293,14 @@ export const platformSettingsService = {
         console.warn("Error purgando plataforma local:", e);
       }
     } else if (action === "toggle_maintenance") {
-      const enabled = Boolean(body.enabled);
-      const current = readCache();
-      const next: PlatformSettings = {
-        ...current,
-        features: { ...current.features, maintenance: enabled },
-      };
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(next));
-      } catch {
-        /* sin almacenamiento local disponible */
+      if (result.settings) {
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(result.settings));
+        } catch {
+          /* sin almacenamiento local disponible */
+        }
+        window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: result.settings }));
       }
-      window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: next }));
     } else if (action === "restore_backup") {
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(DEFAULT_SETTINGS));
@@ -323,34 +311,7 @@ export const platformSettingsService = {
       }
     }
 
-    try {
-      const res = await api.post<{ detail: string; settings?: PlatformSettings; last_backup?: string }>(
-        "admin/system-action/",
-        body
-      );
-      return res;
-    } catch (err) {
-      console.warn("Backend no respondió a systemAction, fallback local completado:", err);
-      let detail = "Operación completada con éxito.";
-      if (action === "clear_cache") {
-        detail = "Caché de la plataforma limpiada con éxito: pedidos, PQR, reportes técnicos y archivos temporales eliminados.";
-      } else if (action === "reset_services") {
-        detail = "Servicios reiniciados correctamente: conexiones, sockets y colas restablecidas.";
-      } else if (action === "delete_platform") {
-        detail = "Todos los datos de la base de datos y la plataforma fueron eliminados. Sistema restablecido al estado original.";
-      } else if (action === "toggle_maintenance") {
-        detail = body.enabled ? "Modo mantenimiento activado." : "Modo mantenimiento desactivado.";
-      } else if (action === "restore_backup") {
-        detail = "Copia de seguridad restaurada correctamente.";
-      } else if (action === "delete_backup") {
-        detail = 'Copia de seguridad ' + (body.name || '') + ' eliminada.';
-      }
-      return {
-        detail,
-        settings: action === "delete_platform" || action === "restore_backup" ? DEFAULT_SETTINGS : undefined,
-        last_backup: action === "backup_now" ? new Date().toISOString() : undefined,
-      };
-    }
+    return result;
   },
 };
 

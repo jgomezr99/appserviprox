@@ -22,7 +22,7 @@ import {
   shieldCheckmarkOutline,
 } from "ionicons/icons";
 import { useHistory } from "react-router-dom";
-import { ApiError, checkBackendHealth } from "../services/api";
+import { ApiError, checkBackendHealth, getApiBaseUrl } from "../services/api";
 import { authService } from "../services/auth";
 import { useAuth } from "../context/AuthContext";
 import { usePlatformSettings } from "../services/platformSettings";
@@ -36,13 +36,35 @@ import type { BlockedAccountInfo } from "../types/serviprox";
 import styles from "./Login.module.css";
 
 const emailOk = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
-const identifierOk = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  if (trimmed.includes("@")) {
-    return emailOk(trimmed);
+
+const getBackendUnavailableMessage = () => {
+  const apiUrl = getApiBaseUrl();
+  if (!apiUrl) {
+    return "No hay una URL de backend configurada para esta compilación. Configura VITE_API_URL con la dirección HTTPS de la API y vuelve a publicar.";
   }
-  return trimmed.length >= 3;
+
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(?:\/|$)/i.test(apiUrl)) {
+    return "No responde el backend local. Inicia Django y verifica que http://127.0.0.1:8000/api/v1/health/ confirme la conexión con la base de datos.";
+  }
+
+  return "No pudimos conectar con el servidor o la base de datos de Serviprox. Verifica que la URL de API configurada esté disponible.";
+};
+
+const getPasswordRecoveryDeliveryError = (error: unknown) => {
+  if (error instanceof TypeError) return getBackendUnavailableMessage();
+  if (error instanceof ApiError) {
+    if (
+      typeof error.payload === "object" &&
+      error.payload !== null &&
+      "detail" in error.payload
+    ) {
+      return String(error.payload.detail);
+    }
+    if (error.status >= 500) {
+      return "No pudimos enviar el código. Verifica que el backend y el correo estén disponibles.";
+    }
+  }
+  return "No pudimos enviar el código de recuperación. Inténtalo nuevamente.";
 };
 
 const getLoginErrorMessage = (error: unknown) => {
@@ -53,6 +75,13 @@ const getLoginErrorMessage = (error: unknown) => {
   if (isApi) {
     const apiErr = error as ApiError;
     if (apiErr.status === 401) {
+      if (
+        typeof apiErr.payload === "object" &&
+        apiErr.payload !== null &&
+        "detail" in apiErr.payload
+      ) {
+        return String(apiErr.payload.detail);
+      }
       return "Correo o contraseña incorrectos.";
     }
     if (
@@ -61,7 +90,7 @@ const getLoginErrorMessage = (error: unknown) => {
       apiErr.status === 504 ||
       apiErr.status >= 500
     ) {
-      return "No pudimos conectar con el backend de Serviprox. Verifica que esté iniciado en el puerto 8000 (iniciar_serviprox.bat o backend\\start_local.bat).";
+      return getBackendUnavailableMessage();
     }
     if (apiErr.status === 400 && apiErr.payload) {
       if (typeof apiErr.payload === "object" && "detail" in apiErr.payload) {
@@ -78,7 +107,7 @@ const getLoginErrorMessage = (error: unknown) => {
   }
 
   if (error instanceof TypeError) {
-    return "No pudimos conectar con Serviprox. Revisa tu conexión o que el backend esté disponible.";
+    return getBackendUnavailableMessage();
   }
 
   return "No pudimos iniciar sesión. Inténtalo nuevamente.";
@@ -167,7 +196,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
     }
   }, [administrative, history, isAuthenticated, sessionLoading, user]);
 
-  const canSubmit = identifierOk(email) && password.length >= 6 && !isSubmitting;
+  const canSubmit = emailOk(email) && password.length >= 6 && !isSubmitting;
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -253,8 +282,8 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
       await authService.requestPasswordReset(email.trim().toLowerCase());
       setRecoveryStep("code");
       setRecoveryMessage("Si el correo está registrado, recibirás un código de 6 dígitos.");
-    } catch {
-      setRecoveryError("No pudimos enviar el código. Revisa que el backend esté disponible.");
+    } catch (err) {
+      setRecoveryError(getPasswordRecoveryDeliveryError(err));
     } finally {
       setRecoverySubmitting(false);
     }
@@ -301,8 +330,8 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
     try {
       await authService.requestPasswordReset(email.trim().toLowerCase());
       setRecoveryMessage("Enviamos un código nuevo. El código anterior ya no es válido.");
-    } catch {
-      setRecoveryError("No pudimos enviar otro código. Revisa que el backend esté disponible.");
+    } catch (err) {
+      setRecoveryError(getPasswordRecoveryDeliveryError(err));
     } finally {
       setRecoverySubmitting(false);
     }
@@ -409,15 +438,15 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
 
             <form className={styles.form} onSubmit={handleLogin} noValidate>
               <label className={styles.field}>
-                <span>Correo electrónico o usuario</span>
+                <span>Correo electrónico</span>
                 <div className={styles.inputShell}>
                   <IonIcon icon={mailOutline} aria-hidden="true" />
                   <IonInput
-                    type="text"
+                    type="email"
                     value={email}
                     autocomplete="username"
                     enterkeyhint="next"
-                    placeholder="tu@correo.com o admin"
+                    placeholder="tu@correo.com"
                     onIonInput={(event) => setEmail(String(event.detail.value ?? ""))}
                     required
                   />
@@ -455,6 +484,9 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                 className={styles.recoverButton}
                 onClick={() => {
                   setRecoveryOpen(true);
+                  setRecoveryStep("email");
+                  setRecoveryCode("");
+                  setNewPassword("");
                   setRecoveryError("");
                   setRecoveryMessage("");
                 }}
@@ -563,7 +595,6 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                 </IonButton>
               </form>
             ) : (
-              
               <form className={styles.form} onSubmit={confirmRecovery}>
                 <label className={styles.field}>
                   <span>Código de 6 dígitos</span>
