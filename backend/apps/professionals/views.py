@@ -178,7 +178,10 @@ class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
 
         if request.method == "POST":
             if profile:
-                raise ValidationError({"detail": "Ya existe un perfil profesional."})
+                serializer = self.get_serializer(profile, data=request.data, partial=True)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(user=request.user)

@@ -14,7 +14,7 @@ import {
 	eyeOffOutline,
 	eyeOutline,
 	lockClosedOutline,
-	mailOutline,
+	personOutline,
 } from "ionicons/icons";
 import { useHistory } from "react-router-dom";
 import { authService } from "../services/auth";
@@ -40,13 +40,13 @@ const AGENT_AVATAR =
 
 const AdministrativeLoginPage: React.FC = () => {
 	const history = useHistory();
-	const { isAuthenticated, isLoading: sessionLoading, login, user: sessionUser } = useAuth();
-	const [email, setEmail] = useState("");
+	const { isAuthenticated, isLoading: sessionLoading, login, logout, user: sessionUser } = useAuth();
+	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState("");
-	const [recoveryStep, setRecoveryStep] = useState<"email" | "code">("email");
+	const [recoveryStep, setRecoveryStep] = useState<"username" | "code">("username");
 	const [recoveryCode, setRecoveryCode] = useState("");
 	const [newPassword, setNewPassword] = useState("");
 	const [recoveryMessage, setRecoveryMessage] = useState("");
@@ -102,26 +102,32 @@ const AdministrativeLoginPage: React.FC = () => {
 
 	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
-		if (!email.trim() || password.length < 6 || submitting) return;
+		const trimmedUser = username.trim();
+		if (!trimmedUser || password.length < 6 || submitting) return;
 
 		setSubmitting(true);
 		setError("");
 		try {
-			const currentUser = await login({ email: email.trim().toLowerCase(), password });
+			const currentUser = await login({
+				username: trimmedUser,
+				email: trimmedUser,
+				password,
+			});
 			if (!isUserAdmin(currentUser)) {
-				setError("Esta cuenta no tiene permisos administrativos. Acceso denegado.");
+				logout();
+				setError("Acceso denegado. Este portal es exclusivo para personal administrativo de Serviprox. No se permite el acceso a cuentas ni correos de usuarios comunes (clientes o profesionales).");
 				return;
 			}
 			history.replace("/admin");
 		} catch (err: any) {
 			if (err?.status === 401) {
-				setError("Usuario o contraseña incorrectos.");
+				setError("Usuario o contraseña administrativa incorrectos.");
 			} else if (err?.status >= 500 || err?.status === 502 || err?.status === 503) {
 				setError("No pudimos conectar con el servidor backend ni la base de datos.");
 			} else if (err?.message && !err.message.startsWith("API request")) {
 				setError(err.message);
 			} else {
-				setError("No pudimos iniciar sesión. Verifica tu conexión con el backend.");
+				setError("No pudimos iniciar sesión. Verifica tus credenciales de administrador.");
 			}
 		} finally {
 			setSubmitting(false);
@@ -129,25 +135,26 @@ const AdministrativeLoginPage: React.FC = () => {
 	};
 
 	const handlePasswordReset = async () => {
-		if (!email.trim() || recoverySubmitting) return;
+		const trimmedUser = username.trim();
+		if (!trimmedUser || recoverySubmitting) return;
 		setRecoveryMessage("");
 		setRecoveryError("");
 		setRecoverySubmitting(true);
 		try {
-			if (recoveryStep === "email") {
-				await authService.requestPasswordReset(email.trim().toLowerCase());
+			if (recoveryStep === "username") {
+				await authService.requestPasswordReset(trimmedUser);
 				setRecoveryStep("code");
-				setRecoveryMessage("Si el correo está registrado, recibirás un código de 6 dígitos.");
+				setRecoveryMessage("Si el usuario existe, se enviará un código de verificación al correo asociado.");
 			} else {
 				await authService.confirmPasswordReset({
-					email: email.trim().toLowerCase(),
+					email: trimmedUser,
 					code: recoveryCode,
 					new_password: newPassword,
 				});
-				setRecoveryStep("email");
+				setRecoveryStep("username");
 				setRecoveryCode("");
 				setNewPassword("");
-				setRecoveryMessage("Contraseña actualizada. Ya puedes iniciar sesión.");
+				setRecoveryMessage("Contraseña administrativa actualizada correctamente. Ya puedes iniciar sesión con tu usuario.");
 			}
 		} catch (resetError) {
 			const payload = resetError instanceof ApiError
@@ -156,8 +163,8 @@ const AdministrativeLoginPage: React.FC = () => {
 			setRecoveryError(
 				typeof payload?.detail === "string"
 					? payload.detail
-					: recoveryStep === "email"
-						? "No pudimos enviar el código. Verifica que el backend y el correo estén disponibles."
+					: recoveryStep === "username"
+						? "No pudimos enviar el código. Verifica la disponibilidad del backend o contacta soporte."
 						: "No pudimos actualizar la contraseña. Verifica el código e inténtalo nuevamente."
 			);
 		} finally {
@@ -166,13 +173,14 @@ const AdministrativeLoginPage: React.FC = () => {
 	};
 
 	const resendPasswordResetCode = async () => {
-		if (!email.trim() || recoverySubmitting) return;
+		const trimmedUser = username.trim();
+		if (!trimmedUser || recoverySubmitting) return;
 		setRecoveryMessage("");
 		setRecoveryError("");
 		setRecoveryCode("");
 		setRecoverySubmitting(true);
 		try {
-			await authService.requestPasswordReset(email.trim().toLowerCase());
+			await authService.requestPasswordReset(trimmedUser);
 			setRecoveryMessage("Enviamos un código nuevo. El código anterior ya no es válido.");
 		} catch (resetError) {
 			const payload = resetError instanceof ApiError
@@ -313,27 +321,33 @@ const AdministrativeLoginPage: React.FC = () => {
 							className="admin-login-back"
 							onClick={() => history.replace("/login")}
 						>
-							<IonIcon slot="start" icon={arrowBackOutline} /> Volver
+							<IonIcon slot="start" icon={arrowBackOutline} /> Volver al acceso de usuarios
 						</IonButton>
 						<div className="admin-login-logo">
 							<IonImg src={logo} alt="Serviprox" />
 						</div>
 
-					
 						<h1 id="admin-login-title">Login administrativo</h1>
-						<p className="admin-login-subtitle">Ingresa tus credenciales para acceder</p>
+						<p className="admin-login-subtitle">Acceso exclusivo con usuario de administración (no correos de usuarios comunes)</p>
+
+						{error && (
+							<p className="admin-login-error" role="alert" style={{ marginBottom: "16px" }}>
+								{error}
+							</p>
+						)}
 
 						<form onSubmit={handleSubmit} className="admin-login-form">
 							<label>
-								Correo electrónico
+								Usuario administrativo
 								<div className="admin-login-input">
-									<IonIcon icon={mailOutline} />
+									<IonIcon icon={personOutline} />
 									<IonInput
-										type="email"
-										value={email}
-										placeholder="admin@serviprox.com"
+										type="text"
+										value={username}
+										autocomplete="username"
+										placeholder="admin"
 										required
-										onIonInput={(event) => setEmail(String(event.detail.value ?? ""))}
+										onIonInput={(event) => setUsername(String(event.detail.value ?? ""))}
 									/>
 								</div>
 							</label>
@@ -395,7 +409,7 @@ const AdministrativeLoginPage: React.FC = () => {
 								type="submit"
 								expand="block"
 								className="admin-login-submit"
-								disabled={!email.trim() || password.length < 6 || submitting}
+								disabled={!username.trim() || password.length < 6 || submitting}
 							>
 								{submitting ? <IonSpinner name="crescent" /> : "Iniciar sesión"}
 							</IonButton>
@@ -412,7 +426,7 @@ const AdministrativeLoginPage: React.FC = () => {
 								className="admin-login-support"
 								onClick={() => void handlePasswordReset()}
 								disabled={
-									!email.trim() ||
+									!username.trim() ||
 									recoverySubmitting ||
 									(recoveryStep === "code" &&
 										(recoveryCode.length !== 6 || newPassword.length < 6))
@@ -420,8 +434,8 @@ const AdministrativeLoginPage: React.FC = () => {
 							>
 								{recoverySubmitting
 									? "Procesando..."
-									: recoveryStep === "email"
-										? "Enviar código de recuperación"
+									: recoveryStep === "username"
+										? "Recuperar contraseña con usuario"
 										: "Cambiar contraseña"}
 							</button>
 							{recoveryStep === "code" && (

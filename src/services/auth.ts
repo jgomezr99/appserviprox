@@ -41,10 +41,10 @@ export const authService = {
     return api.post<User>("auth/register/", form, { auth: false });
   },
 
-  requestPasswordReset: (email: string) =>
+  requestPasswordReset: (emailOrUsername: string) =>
     api.post<{ detail: string }>(
       "auth/password-reset/request/",
-      { email },
+      { email: emailOrUsername, username: emailOrUsername },
       { auth: false }
     ),
 
@@ -55,7 +55,7 @@ export const authService = {
   }) =>
     api.post<{ detail: string }>(
       "auth/password-reset/confirm/",
-      payload,
+      { ...payload, username: payload.email },
       { auth: false }
     ),
 

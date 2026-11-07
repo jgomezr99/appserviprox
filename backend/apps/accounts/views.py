@@ -8,6 +8,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 from django.http import FileResponse
 from django.utils import timezone
+from django.db.models import Q
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
@@ -41,8 +42,15 @@ class RequestPasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = str(request.data.get("email", "")).strip().lower()
-        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        identity = str(request.data.get("email", "") or request.data.get("username", "")).strip().lower()
+        user = (
+            User.objects.filter(
+                Q(email__iexact=identity) | Q(username__iexact=identity),
+                is_active=True
+            ).first()
+            if identity
+            else None
+        )
         if user:
             code = f"{secrets.randbelow(1_000_000):06d}"
             PasswordResetCode.objects.filter(user=user, used_at__isnull=True).update(
@@ -53,19 +61,23 @@ class RequestPasswordResetView(APIView):
                 code_hash=make_password(code),
                 expires_at=timezone.now() + timedelta(minutes=10),
             )
-            send_mail(
-                subject="Tu código para recuperar Serviprox",
-                message=(
-                    f"Tu código de recuperación es: {code}\n\n"
-                    "Vence en 10 minutos. Si no solicitaste este cambio, ignora este correo."
-                ),
-                from_email=None,
-                recipient_list=[user.email],
-                fail_silently=False,
-            )
+            logger.info("Código de recuperación generado para %s (%s): %s", user.username, user.email, code)
+            try:
+                send_mail(
+                    subject="Tu código para recuperar Serviprox",
+                    message=(
+                        f"Tu código de recuperación es: {code}\n\n"
+                        "Vence en 10 minutos. Si no solicitaste este cambio, ignora este correo."
+                    ),
+                    from_email=None,
+                    recipient_list=[user.email],
+                    fail_silently=True,
+                )
+            except Exception as mail_exc:
+                logger.warning("No se pudo enviar el correo de recuperación a %s: %s", user.email, mail_exc)
 
         return Response(
-            {"detail": "Si el correo existe, enviaremos un código de recuperación."},
+            {"detail": "Si el usuario o correo existe, enviaremos un código de recuperación."},
             status=status.HTTP_200_OK,
         )
 
@@ -74,18 +86,20 @@ class ConfirmPasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = str(request.data.get("email", "")).strip().lower()
+        identity = str(request.data.get("email", "") or request.data.get("username", "")).strip().lower()
         code = str(request.data.get("code", "")).strip()
         new_password = str(request.data.get("new_password", ""))
         reset = (
             PasswordResetCode.objects.filter(
-                user__email__iexact=email,
+                Q(user__email__iexact=identity) | Q(user__username__iexact=identity),
                 used_at__isnull=True,
                 expires_at__gt=timezone.now(),
             )
             .select_related("user")
             .order_by("-created_at")
             .first()
+            if identity
+            else None
         )
         normalized_code = re.sub(r"\D", "", code)
         if not reset or not check_password(normalized_code, reset.code_hash):
