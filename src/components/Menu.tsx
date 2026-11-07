@@ -58,14 +58,14 @@ interface AppPage {
 }
 
 const storePage: AppPage = {
-  title: 'Tienda de productos',
+  title: 'Meko Shop',
   url: '/tienda',
   iosIcon: cartOutline,
   mdIcon: cartSharp,
 };
 
 const publishStorePage: AppPage = {
-  title: 'Publicar en tienda',
+  title: 'Publicar en Meko Shop',
   url: '/tienda?action=publish',
   iosIcon: addCircleOutline,
   mdIcon: addCircleSharp,

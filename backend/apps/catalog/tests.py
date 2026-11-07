@@ -314,16 +314,17 @@ class StoreProductTests(TestCase):
         fake = SimpleUploadedFile("x.png", b"no soy una imagen", content_type="image/png")
         self.assertEqual(self.api.post(self.url, self.payload(image=fake), format="multipart").status_code, 400)
 
-    def test_categories_depend_on_profile(self):
+    def test_categories_allow_any_type_in_each_category(self):
         self.api.force_authenticate(self.user)
-        self.assertEqual(self.api.post(self.url, self.payload(category="Herramientas"), format="multipart").status_code, 400)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Herramientas"), format="multipart").status_code, 201)
         self.assertEqual(self.api.post(self.url, self.payload(category="Ropa"), format="multipart").status_code, 201)
         pro = User.objects.create_user(
             username="store-pro", email="store-pro@example.com", role=UserRole.PROFESSIONAL,
         )
         self.api.force_authenticate(pro)
-        self.assertEqual(self.api.post(self.url, self.payload(category="Ropa"), format="multipart").status_code, 400)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Ropa"), format="multipart").status_code, 201)
         self.assertEqual(self.api.post(self.url, self.payload(category="Herramientas"), format="multipart").status_code, 201)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Tecnología"), format="multipart").status_code, 201)
 
     def test_only_owner_can_delete(self):
         self.api.force_authenticate(self.user)

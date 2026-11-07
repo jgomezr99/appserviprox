@@ -6,7 +6,11 @@ from django.conf.urls.static import static
 from django.db import connection
 from django.http import JsonResponse
 from django.urls import include, path
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+try:
+    from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+except (ImportError, ModuleNotFoundError):
+    SpectacularAPIView = None
+    SpectacularSwaggerView = None
 from rest_framework_simplejwt.views import TokenRefreshView
 
 
@@ -51,13 +55,17 @@ urlpatterns = [
     path("health/", health_check, name="root-health"),
     path("admin/", admin.site.urls),
     path("api/v1/", include(api_v1)),
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path(
-        "api/docs/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
-        name="swagger-ui",
-    ),
 ]
+
+if SpectacularAPIView and SpectacularSwaggerView:
+    urlpatterns += [
+        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path(
+            "api/docs/",
+            SpectacularSwaggerView.as_view(url_name="schema"),
+            name="swagger-ui",
+        ),
+    ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

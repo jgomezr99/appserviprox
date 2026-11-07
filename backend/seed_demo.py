@@ -22,7 +22,7 @@ django.setup()
 from django.db import transaction  # noqa: E402
 
 from apps.accounts.models import AdminAuditLog, User, UserRole  # noqa: E402
-from apps.catalog.models import Service, ServiceCategory  # noqa: E402
+from apps.catalog.models import Service, ServiceCategory, StoreProduct  # noqa: E402
 from apps.diagnosis.models import DiagnosticOption, DiagnosticQuestion  # noqa: E402
 from apps.households.models import Household  # noqa: E402
 from apps.orders.models import Order  # noqa: E402
@@ -697,6 +697,137 @@ def seed_service_requests(categories: dict[str, ServiceCategory]) -> None:
         },
     )
 
+def seed_store_products(admin_user: User) -> None:
+    demo_products = [
+        {
+            "title": "Portátil Lenovo i5",
+            "category": "Tecnología",
+            "price": 1200000,
+            "description": "Intel Core i5 11va gen, 8GB RAM, SSD 256GB. Estado 9/10 en caja con cargador original.",
+            "seller_name": "Carlos Mendoza",
+            "seller_role": "Cliente",
+            "phone": "+57 310 456 7890",
+            "city": "Bogotá",
+        },
+        {
+            "title": "Sofá de 3 puestos",
+            "category": "Muebles",
+            "price": 850000,
+            "description": "Sofá nórdico tapizado en tela antifluidos gris claro, patas en madera roble.",
+            "seller_name": "Valentina Gómez",
+            "seller_role": "Cliente",
+            "phone": "+57 312 987 6543",
+            "city": "Bogotá",
+        },
+        {
+            "title": "iPhone 13 – 128 GB",
+            "category": "Tecnología",
+            "price": 2300000,
+            "description": "Batería al 89%, color azul medianoche, libre para todo operador con factura.",
+            "seller_name": "Andrés Morales",
+            "seller_role": "Cliente",
+            "phone": "+57 300 234 5678",
+            "city": "Medellín",
+        },
+        {
+            "title": "Bicicleta MTB",
+            "category": "Deportes",
+            "price": 700000,
+            "description": "Marco en aluminio talla M, cambios Shimano 21 vel, frenos de disco hidráulicos.",
+            "seller_name": "David Quintero",
+            "seller_role": "Cliente",
+            "phone": "+57 315 876 5432",
+            "city": "Cali",
+        },
+        {
+            "title": "Control PS5 DualSense",
+            "category": "Multimedia",
+            "price": 320000,
+            "description": "Control inalámbrico original blanco, gatillos adaptativos y feedback háptico.",
+            "seller_name": "Sebastián Arias",
+            "seller_role": "Cliente",
+            "phone": "+57 311 345 6789",
+            "city": "Bogotá",
+        },
+        {
+            "title": "Cien Años de Soledad (Edición Ilustrada)",
+            "category": "Libros",
+            "price": 65000,
+            "description": "Tapa dura conmemorativa ilustrada por Luisa Rivera, en perfecto estado.",
+            "seller_name": "Mariana Castro",
+            "seller_role": "Cliente",
+            "phone": "+57 318 654 3210",
+            "city": "Cartagena",
+        },
+        {
+            "title": "Set LEGO Classic Construcción",
+            "category": "Juguetes",
+            "price": 180000,
+            "description": "Caja completa con 790 piezas variadas para niños y coleccionistas.",
+            "seller_name": "Paula Rincón",
+            "seller_role": "Cliente",
+            "phone": "+57 301 789 0123",
+            "city": "Bucaramanga",
+        },
+        {
+            "title": "Chaqueta Térmica e Impermeable",
+            "category": "Ropa",
+            "price": 140000,
+            "description": "Talla M, forro polar interior, capucha desmontable, ideal para clima frío.",
+            "seller_name": "Felipe Vargas",
+            "seller_role": "Cliente",
+            "phone": "+57 316 432 1098",
+            "city": "Pasto",
+        },
+        {
+            "title": "Taladro Percutor Bosch GSB 13 RE 650W",
+            "category": "Herramientas",
+            "price": 380000,
+            "description": "Mandril 1/2 pulgada, velocidad variable y reversible, incluye maletín y brocas.",
+            "seller_name": "Maestro Jorge Ramírez",
+            "seller_role": "Contratista",
+            "phone": "+57 310 890 1234",
+            "city": "Barranquilla",
+        },
+        {
+            "title": "Escalera Telescópica 3.8m Aluminio",
+            "category": "Equipos",
+            "price": 420000,
+            "description": "Capacidad 150 kg, extensible de 80 cm hasta 3.80 metros, traba de seguridad.",
+            "seller_name": "Andrés Ruiz",
+            "seller_role": "Contratista",
+            "phone": "+57 313 567 8901",
+            "city": "Pereira",
+        },
+        {
+            "title": "Sierra Circular Profesional 7-1/4\"",
+            "category": "Herramientas",
+            "price": 490000,
+            "description": "Potencia 1800W con disco de carburo para madera y metales. Envíos a todo el país.",
+            "seller_name": "Administrador Serviprox",
+            "seller_role": "Administrador",
+            "phone": "+57 300 999 8877",
+            "city": "Toda Colombia",
+        },
+    ]
+
+    for item in demo_products:
+        StoreProduct.objects.update_or_create(
+            title=item["title"],
+            defaults={
+                "owner": admin_user,
+                "category": item["category"],
+                "price": item["price"],
+                "description": item["description"],
+                "seller_name": item["seller_name"],
+                "seller_role": item["seller_role"],
+                "phone": item["phone"],
+                "city": item["city"],
+                "is_active": True,
+            },
+        )
+
+
 @transaction.atomic
 def run(reset: bool = False) -> None:
     if reset:
@@ -710,6 +841,7 @@ def run(reset: bool = False) -> None:
     seed_app_problems()
     seed_audit_logs(admin_user)
     seed_service_requests(categories)
+    seed_store_products(admin_user)
 
 
 if __name__ == "__main__":

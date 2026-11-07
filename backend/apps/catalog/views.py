@@ -68,8 +68,8 @@ class StoreProductViewSet(
     serializer_class = StoreProductSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     pagination_class = None
-    filterset_fields = ["category"]
-    search_fields = ["title", "description", "seller_name"]
+    filterset_fields = ["category", "city"]
+    search_fields = ["title", "description", "seller_name", "city"]
     queryset = StoreProduct.objects.filter(is_active=True)
 
     def get_permissions(self):

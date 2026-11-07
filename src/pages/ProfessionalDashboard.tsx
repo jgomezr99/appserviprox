@@ -395,15 +395,15 @@ const ProfessionalDashboard: React.FC = () => {
               <article className="sp-card">
                 <div className="sp-card-header">
                   <div className="sp-card-title">
-                    <h2>Tienda de Herramientas</h2>
-                    <p>Compra y consulta herramientas, materiales y equipamiento de trabajo.</p>
+                    <h2>Meko Shop</h2>
+                    <p>Compra, vende y consulta productos de cualquier tipo en cada categoría (tecnología, herramientas, muebles y más) en toda Colombia.</p>
                   </div>
                   <span className="sp-icon-tile">
                     <IonIcon icon={cartOutline} />
                   </span>
                 </div>
                 <IonButton routerLink="/tienda" className="sp-primary-button">
-                  Ir a la tienda
+                  Ir a Meko Shop
                 </IonButton>
               </article>
               )}
@@ -412,15 +412,15 @@ const ProfessionalDashboard: React.FC = () => {
               <article className="sp-card">
                 <div className="sp-card-header">
                   <div className="sp-card-title">
-                    <h2>Publicar en tienda</h2>
-                    <p>Publica tus herramientas o materiales en venta/alquiler para la comunidad.</p>
+                    <h2>Publicar en Meko Shop</h2>
+                    <p>Publica cualquier tipo de producto o herramienta en cada categoría para la comunidad.</p>
                   </div>
                   <span className="sp-icon-tile">
                     <IonIcon icon={addCircleOutline} />
                   </span>
                 </div>
                 <IonButton routerLink="/tienda?action=publish" className="sp-primary-button">
-                  Publicar herramienta
+                  Publicar producto en Meko Shop
                 </IonButton>
               </article>
               )}

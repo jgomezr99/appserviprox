@@ -812,7 +812,11 @@ const STORE_CATEGORIES = [
   "Repuestos",
   "Tecnología",
   "Muebles",
+  "Multimedia",
+  "Libros",
   "Ropa",
+  "Juguetes",
+  "Deportes",
   "Electrodomésticos",
   "Hogar y decoración",
   "Otros",
@@ -3662,7 +3666,7 @@ export const AdminDashboard: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1.003 1.003 0 0 0 20 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z" />
               </svg>
-              <span>Tienda</span>
+              <span>Meko Shop</span>
             </button>
 
             {/* Grupo: Publicaciones */}
@@ -7104,9 +7108,9 @@ export const AdminDashboard: React.FC = () => {
                 }}
               >
                 <div>
-                  <h2 className="ad-view-header-title">🛍️ Gestión y Publicación de Productos (Tienda)</h2>
+                  <h2 className="ad-view-header-title">🛍️ Gestión y Publicación de Productos (Meko Shop)</h2>
                   <p className="ad-view-header-subtitle">
-                    Controla, publica y modera las herramientas, equipos y materiales disponibles en la tienda oficial.
+                    Controla, publica y modera los productos y artículos disponibles en la tienda oficial Meko Shop.
                   </p>
                 </div>
                 <div>
@@ -7512,7 +7516,7 @@ export const AdminDashboard: React.FC = () => {
                                 textDecoration: "none",
                               }}
                             >
-                              Ver en Tienda
+                              Ver en Meko Shop
                             </a>
                             <button
                               type="button"
@@ -7586,7 +7590,7 @@ export const AdminDashboard: React.FC = () => {
                           ⊕
                         </div>
                         <div>
-                          <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800 }}>Publicar Producto en Tienda</h3>
+                          <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800 }}>Publicar Producto en Meko Shop</h3>
                           <span style={{ fontSize: "0.8rem", color: "#64748b" }}>Como Administrador de Serviprox</span>
                         </div>
                       </div>
@@ -7660,11 +7664,28 @@ export const AdminDashboard: React.FC = () => {
                           </label>
                           <input
                             type="text"
-                            placeholder="Bogotá"
+                            list="admin-colombia-cities"
+                            placeholder="Toda Colombia o ciudad"
                             value={adminProductCity}
                             onChange={(e) => setAdminProductCity(e.target.value)}
                             style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid #cbd5e1", fontSize: "0.95rem" }}
                           />
+                          <datalist id="admin-colombia-cities">
+                            <option value="Toda Colombia" />
+                            <option value="Bogotá" />
+                            <option value="Medellín" />
+                            <option value="Cali" />
+                            <option value="Barranquilla" />
+                            <option value="Cartagena" />
+                            <option value="Bucaramanga" />
+                            <option value="Pereira" />
+                            <option value="Manizales" />
+                            <option value="Santa Marta" />
+                            <option value="Cúcuta" />
+                            <option value="Ibagué" />
+                            <option value="Villavicencio" />
+                            <option value="Pasto" />
+                          </datalist>
                         </div>
                         <div>
                           <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px" }}>

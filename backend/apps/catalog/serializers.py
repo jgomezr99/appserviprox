@@ -4,17 +4,6 @@ from .models import Service, ServiceCategory, StoreProduct
 
 MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024
 
-# Cada perfil publica en sus propias categorías; el administrador puede usar todas.
-PROFESSIONAL_STORE_CATEGORIES = {
-    StoreProduct.Category.TOOLS,
-    StoreProduct.Category.SAFETY,
-    StoreProduct.Category.MATERIALS,
-    StoreProduct.Category.PARTS,
-    StoreProduct.Category.EQUIPMENT,
-}
-CLIENT_STORE_CATEGORIES = set(StoreProduct.Category) - PROFESSIONAL_STORE_CATEGORIES
-
-
 class StoreProductSerializer(serializers.ModelSerializer):
     image = serializers.ImageField(write_only=True, required=False, allow_null=True)
     image_url = serializers.SerializerMethodField()
@@ -46,14 +35,9 @@ class StoreProductSerializer(serializers.ModelSerializer):
         return value
 
     def validate_category(self, value: str) -> str:
-        request = self.context.get("request")
-        role = getattr(getattr(request, "user", None), "role", "")
-        if role == "staff":
-            return value
-        if role == "professional" and value not in PROFESSIONAL_STORE_CATEGORIES:
-            raise serializers.ValidationError("Los profesionales solo publican herramientas, equipos y materiales de trabajo.")
-        if role != "professional" and value not in CLIENT_STORE_CATEGORIES:
-            raise serializers.ValidationError("Los clientes publican tecnología, muebles, ropa y otros artículos, no herramientas.")
+        # Se permite cualquier tipo de producto en cada categoría para todos los perfiles (profesional, cliente, staff)
+        if value not in StoreProduct.Category.values:
+            raise serializers.ValidationError("Selecciona una categoría válida.")
         return value
 
     def validate_price(self, value: int) -> int:
