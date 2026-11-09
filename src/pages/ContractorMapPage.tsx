@@ -32,7 +32,6 @@ import {
 
 import {
   BOGOTA_LOCALITIES,
-  CONTRACTORS_MAP_DATA,
   USER_PROJECT_LOCATION,
   WORK_SPECIALTIES,
   type MapContractor,
@@ -256,9 +255,10 @@ const ContractorMapPage: React.FC = () => {
   const [filterPolicy, setFilterPolicy] = useState(false);
   const [radiusKm, setRadiusKm] = useState(50);
   const [showCoverageRadius, setShowCoverageRadius] = useState(true);
-  const [selectedContractorId, setSelectedContractorId] = useState<string>("cerrajeria-express");
+  const [selectedContractorId, setSelectedContractorId] = useState<string>("");
   const [mobileView, setMobileView] = useState<"map" | "list">("map");
-  const [contractors, setContractors] = useState<MapContractor[]>(CONTRACTORS_MAP_DATA);
+  const [contractors, setContractors] = useState<MapContractor[]>([]);
+  const [isLoadingContractors, setIsLoadingContractors] = useState(true);
   const [projectLocation, setProjectLocation] = useState<UserProjectLocation>(USER_PROJECT_LOCATION);
 
   // ── PQR State ─────────────────────────────────────────────────────────────
@@ -342,46 +342,72 @@ const ContractorMapPage: React.FC = () => {
 
   useEffect(() => {
     let active = true;
-    const distFromBogota = getDistanceFromLatLonInKm(
-      projectLocation.lat,
-      projectLocation.lng,
-      USER_PROJECT_LOCATION.lat,
-      USER_PROJECT_LOCATION.lng
-    );
-    const searchLat = distFromBogota <= 50 ? projectLocation.lat : USER_PROJECT_LOCATION.lat;
-    const searchLng = distFromBogota <= 50 ? projectLocation.lng : USER_PROJECT_LOCATION.lng;
 
-    professionalSearchService
-      .list({
-        lat: searchLat,
-        lng: searchLng,
-        radius_km: 50,
-      })
-      .then((professionals) => {
-        if (!active || !professionals || !professionals.length) return;
-        const validPros = professionals.filter(
-          (p) => p.latitude !== null && p.latitude !== undefined &&
-                 p.longitude !== null && p.longitude !== undefined &&
-                 Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude))
-        );
-        if (!validPros.length) return;
+    const fetchLiveContractors = () => {
+      const distFromBogota = getDistanceFromLatLonInKm(
+        projectLocation.lat,
+        projectLocation.lng,
+        USER_PROJECT_LOCATION.lat,
+        USER_PROJECT_LOCATION.lng
+      );
+      const searchLat = distFromBogota <= 50 ? projectLocation.lat : USER_PROJECT_LOCATION.lat;
+      const searchLng = distFromBogota <= 50 ? projectLocation.lng : USER_PROJECT_LOCATION.lng;
 
-        const nextContractors = validPros.map((professional, index) =>
-          toMapContractor(professional, index, projectLocation)
-        );
-        if (nextContractors.length > 0) {
-          setContractors(nextContractors);
-          setSelectedContractorId(String(nextContractors[0].id));
-        }
-      })
-      .catch(() => {
-        // El mapa conserva los datos demo si la API no está disponible.
-      });
+      professionalSearchService
+        .list({
+          lat: searchLat,
+          lng: searchLng,
+          radius_km: radiusKm || 50,
+        })
+        .then((professionals) => {
+          if (!active) return;
+          setIsLoadingContractors(false);
+          if (!professionals || !professionals.length) {
+            setContractors([]);
+            return;
+          }
+          const validPros = professionals.filter(
+            (p) =>
+              p.latitude !== null &&
+              p.latitude !== undefined &&
+              p.longitude !== null &&
+              p.longitude !== undefined &&
+              Number.isFinite(Number(p.latitude)) &&
+              Number.isFinite(Number(p.longitude))
+          );
+          if (!validPros.length) {
+            setContractors([]);
+            return;
+          }
+
+          const nextContractors = validPros.map((professional, index) =>
+            toMapContractor(professional, index, projectLocation)
+          );
+          if (nextContractors.length > 0) {
+            setContractors(nextContractors);
+            setSelectedContractorId((prev) =>
+              nextContractors.some((c) => c.id === prev) ? prev : String(nextContractors[0].id)
+            );
+          } else {
+            setContractors([]);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setIsLoadingContractors(false);
+          }
+        });
+    };
+
+    fetchLiveContractors();
+    // Actualización continua en tiempo real cada 5 segundos
+    const liveTimer = window.setInterval(fetchLiveContractors, 5000);
 
     return () => {
       active = false;
+      window.clearInterval(liveTimer);
     };
-  }, [projectLocation]);
+  }, [projectLocation, radiusKm]);
 
   useEffect(() => {
     const w = window as Window & { __serviproxGoToContractor?: (contractorId: string) => void };
@@ -563,22 +589,31 @@ const ContractorMapPage: React.FC = () => {
     }
   }, [projectLocation, showCoverageRadius, radiusKm, mapReady]);
 
-  // Update Contractor Markers
+  // Update Contractor Markers in real time
   useEffect(() => {
     const map = mapInstanceRef.current;
     const markersGroup = markersLayerGroupRef.current;
     if (!map || !markersGroup || !mapReady) return;
 
-    markersGroup.clearLayers();
-    activeMarkerRef.current = {};
+    const currentMarkers = activeMarkerRef.current || {};
+    const nextMarkers: Record<string, L.Marker> = {};
+    const nextIds = new Set(filteredContractors.map((c) => String(c.id)));
+
+    // Eliminar marcadores de contratistas que salieron del filtro
+    Object.keys(currentMarkers).forEach((id) => {
+      if (!nextIds.has(id)) {
+        currentMarkers[id].remove();
+      }
+    });
 
     filteredContractors.forEach((contractor) => {
       const lat = Number(contractor.lat);
       const lng = Number(contractor.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
+      const idStr = String(contractor.id);
       const isSelected = contractor.id === selectedContractorId;
-      const safeId = String(contractor.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const safeId = idStr.replace(/[^a-zA-Z0-9_-]/g, "_");
 
       const markerHtml = `
         <div class="sp-map-marker-item ${isSelected ? "is-selected" : ""}" id="marker-cont-${safeId}">
@@ -586,7 +621,7 @@ const ContractorMapPage: React.FC = () => {
             <span class="sp-marker-name">${contractor.shortName}</span>
             <span class="sp-marker-star">★</span>
             <span class="sp-marker-rating-num">${contractor.rating.toFixed(1)}</span>
-            <span class="sp-marker-zone-tag">En Zona</span>
+            <span class="sp-marker-zone-tag">En Vivo</span>
           </div>
 
           <div class="sp-marker-pin-head">
@@ -595,7 +630,6 @@ const ContractorMapPage: React.FC = () => {
         </div>
       `;
 
-
       const icon = L.divIcon({
         className: "sp-custom-marker-wrapper",
         html: markerHtml,
@@ -603,37 +637,51 @@ const ContractorMapPage: React.FC = () => {
         iconAnchor: [0, 0],
       });
 
-      const marker = L.marker([lat, lng], {
-        icon,
-        zIndexOffset: isSelected ? 1000 : 200,
-      });
+      let marker = currentMarkers[idStr];
+      if (marker) {
+        // Actualización fluida en tiempo real de coordenadas y popup
+        marker.setLatLng([lat, lng]);
+        marker.setIcon(icon);
+        marker.setZIndexOffset(isSelected ? 1000 : 200);
+        marker.setPopupContent(buildContractorPopupHtml(contractor));
+      } else {
+        marker = L.marker([lat, lng], {
+          icon,
+          zIndexOffset: isSelected ? 1000 : 200,
+        });
 
-      marker.on("click", () => {
-        setSelectedContractorId(contractor.id);
-        marker.openPopup();
-        const cardElem = document.getElementById(`contractor-card-${contractor.id}`);
-        if (cardElem) {
-          cardElem.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
-      });
+        marker.on("click", () => {
+          setSelectedContractorId(contractor.id);
+          marker.openPopup();
+          const cardElem = document.getElementById(`contractor-card-${contractor.id}`);
+          if (cardElem) {
+            cardElem.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        });
 
-      marker.bindPopup(buildContractorPopupHtml(contractor), {
-        closeButton: false,
-        className: "sp-leaflet-custom-popup",
-        offset: [0, -70],
-        autoPan: true,
-        autoPanPadding: [25, 25],
-      });
+        marker.bindPopup(buildContractorPopupHtml(contractor), {
+          closeButton: false,
+          className: "sp-leaflet-custom-popup",
+          offset: [0, -70],
+          autoPan: true,
+          autoPanPadding: [25, 25],
+        });
 
-      marker.addTo(markersGroup);
-      activeMarkerRef.current[contractor.id] = marker;
+        marker.addTo(markersGroup);
+      }
+
+      nextMarkers[idStr] = marker;
     });
 
-    if (selectedContractorId && activeMarkerRef.current[selectedContractorId]) {
-      const selectedMarker = activeMarkerRef.current[selectedContractorId];
-      window.setTimeout(() => {
-        selectedMarker.openPopup();
-      }, 150);
+    activeMarkerRef.current = nextMarkers;
+
+    if (selectedContractorId && nextMarkers[selectedContractorId]) {
+      const selectedMarker = nextMarkers[selectedContractorId];
+      if (!selectedMarker.isPopupOpen()) {
+        window.setTimeout(() => {
+          selectedMarker.openPopup();
+        }, 150);
+      }
     }
   }, [filteredContractors, selectedContractorId, mapReady]);
 
@@ -830,6 +878,10 @@ const ContractorMapPage: React.FC = () => {
               <div className="sp-top-pill sp-top-pill--available">
                 <span className="sp-pill-dot">●</span>
                 <span>{filteredContractors.filter((c) => c.isAvailableInZone).length} Disponibles en Zona</span>
+              </div>
+              <div className="sp-top-pill sp-top-pill--live" style={{ background: "#ecfdf5", color: "#047857", borderColor: "#a7f3d0", fontWeight: 700 }}>
+                <span className="sp-pill-dot" style={{ color: "#10b981" }}>●</span>
+                <span>GPS en tiempo real</span>
               </div>
             </div>
 
@@ -1051,8 +1103,18 @@ const ContractorMapPage: React.FC = () => {
 
             {/* Results Header */}
             <div className="sp-results-header">
-              <span className="sp-results-count">
-                {filteredContractors.length} contratistas disponibles
+              <span className="sp-results-count flex items-center gap-2">
+                {isLoadingContractors && contractors.length === 0 ? (
+                  <span className="text-slate-500 text-sm">Consultando base de datos...</span>
+                ) : (
+                  <>
+                    <span>{filteredContractors.length} contratistas disponibles</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Base de Datos
+                    </span>
+                  </>
+                )}
               </span>
               <span className="sp-results-sort">
                 Ordenados por cercanía y calificación
@@ -1061,7 +1123,12 @@ const ContractorMapPage: React.FC = () => {
 
             {/* Contractors List */}
             <div className="sp-contractors-list">
-              {filteredContractors.length > 0 ? (
+              {isLoadingContractors && contractors.length === 0 ? (
+                <div className="p-8 text-center text-slate-500">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-3 border-indigo-600 border-t-transparent mb-2"></div>
+                  <p className="text-xs font-medium">Cargando contratistas desde la base de datos...</p>
+                </div>
+              ) : filteredContractors.length > 0 ? (
                 filteredContractors.map((contractor) => {
                   const isSelected = contractor.id === selectedContractorId;
                   return (
@@ -1282,25 +1349,6 @@ const ContractorMapPage: React.FC = () => {
               />
             </div>
           </div>
-        )}
-
-        {/* ── Floating PQR button ───────────────────────────────────────────── */}
-        {!showPqrListView && (
-          <button
-            id="btn-floating-pqr"
-            type="button"
-            onClick={() => setShowPqrListView(true)}
-            className="fixed bottom-24 right-4 z-30 bg-neutral-900 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-[11px] px-3.5 py-2.5 rounded-2xl shadow-xl transition-all flex items-center gap-2 cursor-pointer border border-white/10"
-            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-          >
-            <IonIcon icon={shieldCheckmarkOutline} />
-            <span>Chat de Reporte en Vivo</span>
-            {(pqrReports.length + appProblemReports.length) > 0 && (
-              <span className="bg-rose-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                {pqrReports.length + appProblemReports.length}
-              </span>
-            )}
-          </button>
         )}
       </IonContent>
 

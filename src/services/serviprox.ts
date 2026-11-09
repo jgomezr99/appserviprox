@@ -77,6 +77,11 @@ export const professionalProfileService = {
     api.post<ProfessionalProfile>("professionals/me/", payload),
   updateMine: (payload: Partial<ProfessionalProfilePayload>) =>
     api.patch<ProfessionalProfile>("professionals/me/", payload),
+  updateLiveLocation: (latitude: number, longitude: number) =>
+    api.post<{ status: string; latitude: number; longitude: number }>(
+      "professionals/location/",
+      { latitude, longitude }
+    ),
 };
 
 export const professionalSearchService = {

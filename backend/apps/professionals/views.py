@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
+from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status, viewsets
@@ -77,7 +78,7 @@ class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
         return obj
 
     def get_permissions(self):
-        if self.action in {"me", "benefit_redemptions"}:
+        if self.action in {"me", "benefit_redemptions", "live_location"}:
             return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
 
@@ -193,6 +194,34 @@ class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+    @action(detail=False, methods=["post", "patch"], url_path="location")
+    def live_location(self, request):
+        """Actualiza las coordenadas GPS en tiempo real del profesional."""
+        if not request.user.is_authenticated or request.user.role != UserRole.PROFESSIONAL:
+            raise PermissionDenied("Solo los profesionales pueden actualizar su ubicación.")
+        profile = getattr(request.user, "professional_profile", None)
+        if not profile:
+            raise NotFound("Perfil profesional no encontrado.")
+        try:
+            lat = float(request.data["latitude"])
+            lng = float(request.data["longitude"])
+        except (KeyError, TypeError, ValueError):
+            return Response({"detail": "latitude y longitude son obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            return Response({"detail": "Coordenadas fuera de rango válido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile.latitude = lat
+        profile.longitude = lng
+        profile.save(update_fields=["latitude", "longitude"])
+        return Response({
+            "status": "ok",
+            "professional_id": profile.id,
+            "latitude": lat,
+            "longitude": lng,
+            "updated_at": timezone.now().isoformat(),
+        }, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get", "post"], url_path="benefit-redemptions")
     def benefit_redemptions(self, request):

@@ -152,6 +152,10 @@ class OrderViewSet(viewsets.ModelViewSet):
                 and -90 <= order.professional_latitude <= 90 and -180 <= order.professional_longitude <= 180):
             return Response({"detail": "Las coordenadas no son válidas."}, status=400)
         order.save(update_fields=["professional_latitude", "professional_longitude", "updated_at"])
+        if order.professional:
+            order.professional.latitude = order.professional_latitude
+            order.professional.longitude = order.professional_longitude
+            order.professional.save(update_fields=["latitude", "longitude"])
         return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
 
     @action(detail=True, methods=["post"], url_path="evidence")

@@ -26,7 +26,7 @@ services:
       SERVIPROX_DATABASE: postgres
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-    command: sh -c "python manage.py migrate --no-input && python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "python manage.py migrate --no-input && (python -c \"import os, django; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings'); django.setup(); from apps.professionals.models import ProfessionalProfile; import sys; sys.exit(0 if ProfessionalProfile.objects.exists() else 1)\" || python manage.py loaddata full_seed.json) && python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
     volumes:

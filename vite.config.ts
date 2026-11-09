@@ -2,7 +2,7 @@
 
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/postcss'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -30,7 +30,7 @@ export default defineConfig({
         }
       },
     },
-    react(),
+    react()as any,
   ],
   server: {
     host: true,

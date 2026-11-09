@@ -7,6 +7,7 @@ import Menu from './components/Menu';
 import Login from './pages/Login';
 import ClientHome from './pages/ClientHome';
 import { GlobalChatButton } from './components/GlobalChatButton';
+import { ProfessionalLocationTracker } from './components/ProfessionalLocationTracker';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { PaymentHoldBanner } from './components/PaymentHoldBanner';
 import { SplashScreen } from './components/SplashScreen';
@@ -397,6 +398,9 @@ const App: React.FC = () => {
 
           {/* ── Global floating "Chat de Reporte en Vivo" button ── */}
           <GlobalChatButton />
+
+          {/* ── Rastreo GPS en tiempo real para profesionales ── */}
+          <ProfessionalLocationTracker />
 
           {/* ── Global Database & Backend Connection Monitor ── */}
           <ConnectionBanner />
