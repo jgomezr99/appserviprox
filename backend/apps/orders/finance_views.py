@@ -8,7 +8,8 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.platform_views import IsPlatformStaff
+from apps.accounts.models import PlatformSettings
+from apps.accounts.platform_views import IsPlatformStaff, _audit
 
 from .finance import (
     FinanceError,
@@ -22,6 +23,9 @@ from .finance import (
     monthly_series,
     money,
     order_price,
+    payment_gross,
+    payment_method_stats,
+    rejection_alerts,
     platform_summary,
     professional_balance,
     resolve_refund,
@@ -30,7 +34,7 @@ from .finance import (
 )
 from .holds import CLIENT_HOLD_MESSAGE, PROFESSIONAL_HOLD_MESSAGE, unpaid_completed_orders
 from .models import Order, Payment, Refund, Withdrawal
-from .wompi import wompi_ready
+from .wompi import WOMPI_METHOD_CODES, wompi_connection_report, wompi_lookup, wompi_method_check, wompi_ready
 
 PAGE_LIMIT = 200
 WOMPI_STATUS = {
@@ -82,6 +86,7 @@ def payment_row(p: Payment) -> dict:
         "professional": order.professional.display_name,
         "service": service_label(order),
         "amount": p.amount_in_cents / 100,
+        "discount": num(p.discount_amount),
         "status": p.status,
         "status_label": p.get_status_display(),
         "can_verify": p.status in (Payment.Status.PENDING, Payment.Status.ERROR)
@@ -95,6 +100,7 @@ def related_payments():
         "order__professional",
         "order__service_request__selected_service",
         "order__service_request__selected_category",
+        "order__service_request__household",
     )
 
 
@@ -130,24 +136,49 @@ class PaymentHoldView(APIView):
 # ── Cliente ─────────────────────────────────────────────────────────────────
 
 
+def client_receipt_row(p: Payment) -> dict:
+    """Datos del comprobante tomados directamente de la base de datos."""
+    client = p.client or p.order.client
+    row = payment_row(p)
+    row["receipt_available"] = True
+    row["client_email"] = client.email
+    row["client_phone"] = client.phone
+    row["client_document"] = client.document_id
+    row["client_name"] = person_name(client)
+    row["scheduled_for"] = iso(p.order.scheduled_for)
+    row["order_status_label"] = p.order.get_status_display()
+    request = p.order.service_request
+    household = request.household
+    row["service_category"] = request.selected_category.name
+    row["service_description"] = request.description
+    row["service_address"] = ", ".join(
+        part for part in (household.address_line, household.neighborhood, household.city) if part
+    )
+    row["paid_at"] = iso(p.order.payment_confirmed_at)
+    row["transaction_id"] = p.wompi_transaction_id
+    row["discount"] = num(p.discount_amount)
+    row["subtotal"] = num(payment_gross(p))
+    return row
+
+
 class ClientPaymentHistoryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         rows = related_payments().filter(client=request.user)[:PAGE_LIMIT]
-        data = []
-        for p in rows:
-            row = payment_row(p)
-            row["receipt_available"] = p.status in (
-                Payment.Status.APPROVED,
-                Payment.Status.REFUNDED,
-            )
-            row["client_email"] = request.user.email
-            row["client_name"] = person_name(request.user)
-            row["scheduled_for"] = iso(p.order.scheduled_for)
-            row["order_status_label"] = p.order.get_status_display()
-            data.append(row)
-        return Response(data)
+        return Response([client_receipt_row(p) for p in rows])
+
+
+class ClientPaymentReceiptView(APIView):
+    """Comprobante de un pago del cliente autenticado, con datos frescos de la base de datos."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        payment = related_payments().filter(pk=pk, client=request.user).first()
+        if payment is None:
+            return Response({"detail": "Comprobante no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(client_receipt_row(payment))
 
 
 # ── Profesional ─────────────────────────────────────────────────────────────
@@ -247,6 +278,97 @@ class AdminPaymentListView(APIView):
 
     def get(self, request):
         return Response([payment_row(p) for p in related_payments()[:PAGE_LIMIT]])
+
+
+class AdminPaymentDetailView(APIView):
+    """Detalle completo de un pago, con cliente, servicio y reparto de comisión, leído de la base de datos."""
+
+    permission_classes = [IsPlatformStaff]
+
+    def get(self, request, pk):
+        payment = related_payments().select_related("order__client").filter(pk=pk).first()
+        if payment is None:
+            return Response({"detail": "Pago no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        order = payment.order
+        row = client_receipt_row(payment)
+        row["can_verify"] = payment.status in (Payment.Status.PENDING, Payment.Status.ERROR) and not payment.reference.startswith("DEV-")
+        row.update(
+            {
+                "test_mode": payment.test_mode,
+                "created_at": iso(payment.created_at),
+                "updated_at": iso(payment.updated_at),
+                "order_status": order.status,
+                "payment_status": order.payment_status,
+                "commission_rate": num(order.commission_rate) if order.commission_rate is not None else None,
+                "commission_amount": num(order.commission_amount) if order.commission_amount is not None else None,
+                "professional_amount": num(order.professional_amount) if order.professional_amount is not None else None,
+                "payout_status": order.payout_status,
+                "payout_status_label": order.get_payout_status_display(),
+                "professional_email": order.professional.user.email if order.professional.user_id else "",
+            }
+        )
+        return Response(row)
+
+
+class AdminPaymentConnectionView(APIView):
+    """Prueba real de conexión con la pasarela para un método de pago del panel."""
+
+    permission_classes = [IsPlatformStaff]
+
+    def post(self, request):
+        method = str(request.data.get("method") or "")
+        if method not in WOMPI_METHOD_CODES:
+            return Response({"detail": "Método de pago desconocido."}, status=status.HTTP_400_BAD_REQUEST)
+        report = wompi_connection_report(method)
+        _audit(request, f"Prueba de conexión de pagos ({method}): {'correcta' if report['ok'] else 'con errores'}", "Pagos")
+        return Response(report)
+
+
+METHOD_LABELS_PANEL = {"pse": "PSE", "card": "Tarjetas", "transfer": "Transferencia", "wallet": "Billetera", "other": "Otros"}
+
+
+class AdminPaymentHealthView(APIView):
+    """Estado de conexión de cada método y alertas para el panel de métodos de pago."""
+
+    permission_classes = [IsPlatformStaff]
+
+    def get(self, request):
+        cfg = PlatformSettings.load()["sections"].get("payments", {})
+        lookup = wompi_lookup()
+        methods = {}
+        alerts = []
+        for method in WOMPI_METHOD_CODES:
+            enabled = cfg.get(f"{method}_enabled") is not False
+            check = wompi_method_check(lookup, method)
+            status_name = "disabled" if not enabled else ("ok" if check["ok"] else "error")
+            methods[method] = {"status": status_name, "ok": check["ok"], "detail": check["detail"], "enabled": enabled}
+            if enabled and not check["ok"]:
+                alerts.append({"level": "error", "method": method, "message": f"{METHOD_LABELS_PANEL[method]}: {check['detail']}"})
+        alerts += rejection_alerts(payment_method_stats(days=7), METHOD_LABELS_PANEL)
+        return Response(
+            {
+                "checked_at": timezone.now().isoformat(),
+                "configured": lookup["configured"],
+                "mode": lookup["mode"],
+                "merchant": (lookup["merchant"] or {}).get("name", ""),
+                "methods": methods,
+                "alerts": alerts,
+            }
+        )
+
+
+class AdminPaymentStatsView(APIView):
+    """Pagos por método: aprobados, rechazados, monto cobrado y porcentaje de aprobación."""
+
+    permission_classes = [IsPlatformStaff]
+
+    def get(self, request):
+        try:
+            days = min(max(int(request.query_params.get("days", 30)), 1), 365)
+        except ValueError:
+            days = 30
+        include_test = request.query_params.get("include_test") in ("1", "true")
+        return Response({"days": days, "include_test": include_test, "methods": payment_method_stats(days, include_test)})
 
 
 class AdminPaymentVerifyView(APIView):

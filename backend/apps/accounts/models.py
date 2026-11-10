@@ -286,7 +286,7 @@ class PlatformSettings(models.Model):
     def maintenance_state(data: dict) -> tuple[bool, str]:
         """Mantenimiento manual o programado, y el mensaje a mostrar."""
         cfg = data.get("sections", {}).get("maintenance", {})
-        active = bool(data["features"]["maintenance"])
+        active = bool(data.get("features", {}).get("maintenance", False))
         start = parse_datetime(str(cfg.get("window_start") or ""))
         end = parse_datetime(str(cfg.get("window_end") or ""))
         if start and end:
@@ -295,7 +295,7 @@ class PlatformSettings(models.Model):
             if timezone.is_naive(end):
                 end = timezone.make_aware(end)
             active = active or start <= timezone.now() <= end
-        message = cfg.get("description") or data["maintenance_message"]
+        message = cfg.get("description") or data.get("maintenance_message") or DEFAULT_PLATFORM_SETTINGS["maintenance_message"]
         return active, message
 
     @classmethod

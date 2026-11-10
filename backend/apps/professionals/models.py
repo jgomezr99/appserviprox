@@ -7,6 +7,8 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.catalog.models import Service
 
+from .geo import city_center
+
 
 class ProfessionalProfile(models.Model):
     user = models.OneToOneField(
@@ -63,6 +65,18 @@ class ProfessionalProfile(models.Model):
     def initials(self) -> str:
         parts = self.display_name.split()
         return "".join(p[0] for p in parts[:2]).upper() if parts else "SP"
+
+    def save(self, *args, **kwargs):
+        # Sin GPS el profesional no aparecería en ningún mapa: se ubica en el centro de su ciudad
+        # hasta que la app envíe su posición real.
+        if self.latitude is None or self.longitude is None:
+            center = city_center(self.city)
+            if center:
+                self.latitude, self.longitude = center
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    kwargs["update_fields"] = {*update_fields, "latitude", "longitude"}
+        super().save(*args, **kwargs)
 
 
 class BenefitRedemption(models.Model):

@@ -124,6 +124,8 @@ class PQRViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="messages")
     def add_message(self, request, pk=None):
+        if not _is_platform_admin(request.user):
+            require_feature("pqr", "Los PQR están deshabilitados temporalmente.")
         pqr = self.get_object()
         CLOSED_PQR_STATUSES = {"resuelto", "resuelta", "cerrado", "cerrada", "sancionado", "sancionada", "rechazado", "cancelado"}
         if pqr.status and str(pqr.status).lower().strip() in CLOSED_PQR_STATUSES:
@@ -186,6 +188,7 @@ class AppProblemViewSet(viewsets.ModelViewSet):
         return qs.none()
 
     def perform_create(self, serializer):
+        require_feature("pqr", "Los reportes de problemas están deshabilitados temporalmente.")
         user = self.request.user if self.request.user.is_authenticated else None
         extra = {}
         user_email = serializer.validated_data.get("user_email")

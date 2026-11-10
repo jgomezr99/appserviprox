@@ -1,8 +1,9 @@
-import React from "react";
-import { financeService, type FinanceSummary } from "../../services/finance";
-import { KpiCard, Notice, money, useRemote } from "./shared";
+import React, { useEffect, useState } from "react";
+import { financeService, type FinanceSummary, type PaymentRow } from "../../services/finance";
+import { KpiCard, Notice, Pill, formatDateTime, money, useRemote } from "./shared";
 
 const EMPTY: FinanceSummary | null = null;
+const NO_ROWS: PaymentRow[] = [];
 
 const STATUS_LABELS: Array<[string, string, string]> = [
   ["approved", "Aprobados", "#15803d"],
@@ -14,11 +15,24 @@ const STATUS_LABELS: Array<[string, string, string]> = [
 ];
 
 export const OverviewTab: React.FC<{ onNavigate: (tab: string) => void }> = ({ onNavigate }) => {
-  const { data, loading, error, reload } = useRemote<FinanceSummary | null>(financeService.admin.summary, EMPTY);
+  const { data, loading, error, errorText, reload } = useRemote<FinanceSummary | null>(financeService.admin.summary, EMPTY);
+  const { data: payments, reload: reloadPayments } = useRemote(financeService.admin.payments, NO_ROWS);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    if (data) setUpdatedAt(new Date());
+  }, [data]);
 
   if (!data) {
     return error ? (
-      <Notice kind="error">No se pudo cargar el resumen financiero. Verifica la conexión con el servidor.</Notice>
+      <div>
+        <Notice kind="error">
+          No se pudo cargar el resumen financiero. {errorText || "Verifica la conexión con el servidor."}
+        </Notice>
+        <button type="button" className="ad-btn ad-btn-secondary" onClick={() => void reload()}>
+          ↻ Reintentar
+        </button>
+      </div>
     ) : (
       <p>{loading ? "Cargando resumen financiero..." : ""}</p>
     );
@@ -35,13 +49,17 @@ export const OverviewTab: React.FC<{ onNavigate: (tab: string) => void }> = ({ o
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
-        <button type="button" className="ad-btn ad-btn-secondary" onClick={() => void reload()}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
+        <span style={{ color: "#166534", fontWeight: 600, fontSize: "0.85rem" }}>
+          ● Conectado a la base de datos · {data.payments_total ?? 0} transacciones registradas
+          {updatedAt ? ` · actualizado ${updatedAt.toLocaleTimeString("es-CO")}` : ""}
+        </span>
+        <button type="button" className="ad-btn ad-btn-secondary" onClick={() => { void reload(); void reloadPayments(); }}>
           ↻ Actualizar
         </button>
       </div>
 
-      <div className="ad-kpi-grid" style={{ marginBottom: "24px" }}>
+      <div className="ad-kpi-grid" style={{ marginBottom: "24px", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}>
         <KpiCard label="Recaudado (aprobado)" value={money(data.collected)} icon="✅" tone="teal" />
         <KpiCard label="Pendiente de cobro" value={money(data.pending_collection)} icon="⏳" tone="orange" />
         <KpiCard label={`Comisiones Serviprox (${data.commission_rate}%)`} value={money(data.commissions)} icon="🏷️" tone="blue" />
@@ -50,6 +68,7 @@ export const OverviewTab: React.FC<{ onNavigate: (tab: string) => void }> = ({ o
         <KpiCard label="Liquidado (saldos)" value={money(data.settled)} icon="🧾" tone="teal" />
         <KpiCard label="Retiros en trámite" value={money(data.withdrawals_open_amount)} icon="🔄" tone="blue" />
         <KpiCard label="Reembolsado" value={money(data.refunds_total)} icon="↩️" tone="purple" />
+        <KpiCard label="Descuentos otorgados" value={money(data.discounts_total)} icon="🎟️" tone="orange" />
       </div>
 
       {alerts.length > 0 && (
@@ -69,6 +88,38 @@ export const OverviewTab: React.FC<{ onNavigate: (tab: string) => void }> = ({ o
           </div>
         </div>
       )}
+
+      <div className="ad-card" style={{ padding: "16px 20px", marginBottom: "24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+          <h3 style={{ margin: 0 }}>Últimas transacciones</h3>
+          <button type="button" className="ad-btn ad-btn-secondary" onClick={() => onNavigate("transactions")}>
+            Ver todas y su detalle →
+          </button>
+        </div>
+        {payments.length === 0 ? (
+          <p style={{ margin: 0, color: "#64748b" }}>Aún no hay transacciones registradas.</p>
+        ) : (
+          <div className="ad-table-responsive">
+            <table className="ad-table">
+              <thead>
+                <tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Método</th><th>Monto</th><th>Estado</th></tr>
+              </thead>
+              <tbody>
+                {payments.slice(0, 5).map((row) => (
+                  <tr key={row.id}>
+                    <td>{formatDateTime(row.date)}</td>
+                    <td>{row.user}</td>
+                    <td>{row.service}</td>
+                    <td>{row.method}</td>
+                    <td style={{ fontWeight: 700 }}>{money(row.amount)}</td>
+                    <td><Pill status={row.status} label={row.status_label} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
         <div className="ad-card" style={{ padding: "16px 20px" }}>

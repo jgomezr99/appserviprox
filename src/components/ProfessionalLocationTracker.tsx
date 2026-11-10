@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { professionalProfileService } from "../services/serviprox";
 
@@ -12,6 +12,8 @@ export const ProfessionalLocationTracker: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const lastSentRef = useRef<number>(0);
   const lastCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const [gpsBlocked, setGpsBlocked] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || !user || user.role !== "professional") {
@@ -43,6 +45,7 @@ export const ProfessionalLocationTracker: React.FC = () => {
 
       try {
         await professionalProfileService.updateLiveLocation(lat, lng);
+        setGpsBlocked(false);
       } catch (err) {
         // En caso de fallo transitorio de red, se reintentará en la siguiente lectura
       }
@@ -54,7 +57,7 @@ export const ProfessionalLocationTracker: React.FC = () => {
         if (!active) return;
         void sendLocation(pos.coords.latitude, pos.coords.longitude, true);
       },
-      () => {},
+      () => setGpsBlocked(true),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
 
@@ -88,5 +91,23 @@ export const ProfessionalLocationTracker: React.FC = () => {
     };
   }, [isAuthenticated, user?.role, user?.id]);
 
-  return null;
+  if (!gpsBlocked || dismissed || !isAuthenticated || user?.role !== "professional") return null;
+
+  return (
+    <div
+      role="alert"
+      style={{
+        position: "fixed", left: 12, right: 12, bottom: 12, zIndex: 9000, maxWidth: 520, margin: "0 auto",
+        background: "#fff7e6", border: "1px solid #ffd591", color: "#ad6800", borderRadius: 14,
+        padding: "10px 14px", fontSize: "0.85rem", fontWeight: 600, display: "flex", gap: 10, alignItems: "center",
+      }}
+    >
+      <span style={{ flex: 1 }}>
+        📍 Activa la ubicación (GPS) del navegador para aparecer en el mapa con tu posición exacta. Mientras tanto
+        los clientes te ven en el centro de tu ciudad.
+      </span>
+      <button type="button" onClick={() => setDismissed(true)} aria-label="Cerrar aviso"
+        style={{ border: 0, background: "transparent", color: "inherit", fontSize: "1.1rem", cursor: "pointer" }}>✕</button>
+    </div>
+  );
 };

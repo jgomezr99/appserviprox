@@ -4,6 +4,7 @@ from django.utils.text import slugify
 
 from apps.catalog.models import Service, ServiceCategory
 
+from .geo import is_city_center
 from .models import AvailabilitySlot, PortfolioItem, ProfessionalProfile, ProfessionalService
 
 
@@ -90,9 +91,13 @@ class ProfessionalListSerializer(serializers.ModelSerializer):
     phone = serializers.CharField(source="user.phone", read_only=True)
     company_name = serializers.CharField(source="headline", read_only=True)
     has_certificate = serializers.SerializerMethodField()
+    location_approximate = serializers.SerializerMethodField()
 
     def get_has_certificate(self, obj) -> bool:
         return bool(obj.certificate_file)
+
+    def get_location_approximate(self, obj) -> bool:
+        return is_city_center(obj.latitude, obj.longitude, obj.city)
 
     class Meta:
         model = ProfessionalProfile
@@ -101,6 +106,7 @@ class ProfessionalListSerializer(serializers.ModelSerializer):
             "slug",
             "display_name",
             "initials",
+            "location_approximate",
             "is_own_profile",
             "headline",
             "company_name",

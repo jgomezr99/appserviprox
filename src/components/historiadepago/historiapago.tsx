@@ -19,13 +19,15 @@ import {
   cardOutline,
   checkmarkCircleOutline,
   closeOutline,
+  downloadOutline,
   printOutline,
   receiptOutline,
   refreshOutline,
 } from "ionicons/icons";
 import { useAuth } from "../../context/AuthContext";
-import { orderService } from "../../services/serviprox";
+import { orderService, type DemoPaymentDetails } from "../../services/serviprox";
 import { usePlatformSettings } from "../../services/platformSettings";
+import { ApiError } from "../../services/api";
 import { apiMessage } from "../../utils/workflow";
 import {
   financeService,
@@ -41,6 +43,12 @@ import "../finanzas/finanzas.css";
 import "./historiadepago.css";
 import ServiceProgress from "../serviprox/ServiceProgress";
 import ServiceButtonContent from "../serviprox/ServiceButtonContent";
+import { resolvePaymentForm } from "../../services/paymentForm";
+import { PAYMENT_CHANGED_EVENT } from "../PaymentHoldBanner";
+import PaymentResultBanner from "./PaymentResultBanner";
+import ReceiptDataForm, { type ReceiptClientData } from "./ReceiptDataForm";
+import TestPaymentForm from "./TestPaymentForm";
+import { downloadReceiptPdf, receiptNumber } from "./receiptPdf";
 
 const formatMoney = (value: string | null) => {
   if (!value) return "Monto por definir";
@@ -65,6 +73,9 @@ const historyColor = (status: PaymentStatus) =>
         ? "medium"
         : "danger";
 
+// Sin nombre en el perfil el backend devuelve el correo como nombre.
+const missingName = (row: ClientPaymentRow) => !row.client_name || row.client_name === row.client_email;
+
 const HISTORY_FILTERS: Array<[string, string]> = [
   ["all", "Todos"],
   ["approved", "Aprobados"],
@@ -75,8 +86,9 @@ const HISTORY_FILTERS: Array<[string, string]> = [
 
 const PaymentPage: React.FC = () => {
   const location = useLocation();
-  const { user } = useAuth();
-  const { test_payment_enabled: testPaymentEnabled } = usePlatformSettings();
+  const { user, updateMe } = useAuth();
+  const { test_payment_enabled: testPaymentEnabled, payment_form: paymentFormRaw } = usePlatformSettings();
+  const paymentForm = useMemo(() => resolvePaymentForm(paymentFormRaw), [paymentFormRaw]);
   const showDemoPayment = import.meta.env.DEV || testPaymentEnabled === true;
   const orderId = useMemo(() => new URLSearchParams(location.search).get("order"), [location.search]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -90,13 +102,48 @@ const PaymentPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [receipt, setReceipt] = useState<ClientPaymentRow | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [savingData, setSavingData] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<{ kind: "approved" | "declined"; orderId: number } | null>(null);
+
+  const saveClientData = async (data: ReceiptClientData) => {
+    if (!receipt || savingData) return;
+    setSavingData(true);
+    try {
+      await updateMe(data);
+      const fresh = await financeService.clientReceipt(receipt.id);
+      setReceipt(fresh);
+      void loadHistory();
+      setToast("Datos guardados. Ya puedes descargar tu comprobante.");
+    } catch (err) {
+      setToast(apiMessage(err, "No pudimos guardar tus datos."));
+    } finally {
+      setSavingData(false);
+    }
+  };
+
+  const downloadPdf = async (row: ClientPaymentRow) => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      // El PDF se llena con el registro actual de la base de datos, no con la lista en pantalla.
+      await downloadReceiptPdf(await financeService.clientReceipt(row.id));
+    } catch {
+      setToast("No pudimos generar el comprobante en PDF.");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   const loadHistory = useCallback(async () => {
     try {
-      setHistory(await financeService.clientHistory());
+      const rows = await financeService.clientHistory();
+      setHistory(rows);
       setHistoryError(false);
+      return rows;
     } catch {
       setHistoryError(true);
+      return [];
     }
   }, []);
 
@@ -137,6 +184,7 @@ const PaymentPage: React.FC = () => {
         setOrders([next]);
         if (next.payment_status === "paid" || tries >= 6) {
           window.clearInterval(timer);
+          window.dispatchEvent(new Event(PAYMENT_CHANGED_EVENT));
           void loadHistory();
         }
       } catch {
@@ -161,20 +209,30 @@ const PaymentPage: React.FC = () => {
     }
   };
 
-  const confirmPayment = async (target: Order) => {
+  const confirmPayment = async (target: Order, details: DemoPaymentDetails) => {
     if (processing) return;
     setProcessing(true);
     setError("");
+    setPaymentResult(null);
     try {
-      const nextOrder = await orderService.confirmDemoPayment(target.id);
+      const nextOrder = await orderService.confirmDemoPayment(target.id, details);
       setSelectedOrder(nextOrder);
       setOrders((current) =>
         current.map((order) => (order.id === nextOrder.id ? nextOrder : order))
       );
-      setToast("Pago confirmado en modo desarrollo");
-      void loadHistory();
+      setPaymentResult({ kind: "approved", orderId: nextOrder.id });
+      window.dispatchEvent(new Event(PAYMENT_CHANGED_EVENT));
+      // Al pagar se muestra de inmediato el comprobante con su descarga en PDF.
+      const rows = await loadHistory();
+      const paid = rows.find((row) => row.order_id === nextOrder.id && row.status === "approved");
+      if (paid) setReceipt(paid);
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : "No pudimos confirmar el pago de esta orden.");
+      if (err instanceof ApiError && err.status === 402) {
+        setPaymentResult({ kind: "declined", orderId: target.id });
+        void loadHistory();
+      } else {
+        setToast(apiMessage(err, "No pudimos confirmar el pago de esta orden."));
+      }
     } finally {
       setProcessing(false);
     }
@@ -201,6 +259,19 @@ const PaymentPage: React.FC = () => {
           {order.status_label}
         </span>
       </div>
+      {Number(order.discount_preview) > 0 && order.amount_due && (
+        <p className="sp-payment-discount">
+          Descuento aplicado: <strong>-{formatMoney(order.discount_preview ?? null)}</strong> · Total a pagar:{" "}
+          <strong>{formatMoney(order.amount_due)}</strong>
+        </p>
+      )}
+      {paymentResult && paymentResult.orderId === order.id && paymentForm[paymentResult.kind].position === "form" && (
+        <PaymentResultBanner
+          kind={paymentResult.kind}
+          result={paymentForm[paymentResult.kind]}
+          onClose={() => setPaymentResult(null)}
+        />
+      )}
       <ServiceProgress status={order.status} />
       {order.payment_status === "pending" && order.status !== "completed" ? (
         <p className="sp-muted">
@@ -210,27 +281,44 @@ const PaymentPage: React.FC = () => {
       ) : order.payment_status === "pending" ? (
         <div className="sp-payment-demo">
           {!order.final_price && <p>El profesional debe registrar el valor acordado antes de iniciar el pago.</p>}
-          <IonButton
-            className="sp-primary-button"
-            onClick={() => void payWithWompi(order)}
-            disabled={processing || order.status !== "completed" || !order.final_price}
-          >
-            <ServiceButtonContent busy={processing} icon={cardOutline}
-              label="Pagar con Wompi" busyLabel="Procesando..." />
-          </IonButton>
+          {!testPaymentEnabled && (
+            <IonButton
+              className="sp-primary-button"
+              onClick={() => void payWithWompi(order)}
+              disabled={processing || order.status !== "completed" || !order.final_price}
+            >
+              <ServiceButtonContent busy={processing} icon={cardOutline}
+                label="Pagar con Wompi" busyLabel="Procesando..." />
+            </IonButton>
+          )}
           {showDemoPayment && (
-            <>
-              <p>Confirmación simulada para pruebas. No genera un cobro real.</p>
-              <IonButton fill="outline" onClick={() => void confirmPayment(order)} disabled={processing}>
-                Confirmar pago demo
-              </IonButton>
-            </>
+            <TestPaymentForm
+              config={paymentForm}
+              amountLabel={formatMoney(order.amount_due ?? order.final_price)}
+              busy={processing}
+              onSubmit={(details) => confirmPayment(order, details)}
+            />
           )}
         </div>
       ) : (
-        <p className="sp-muted">
-          Referencia: {order.payment_reference || "Confirmación registrada"}
-        </p>
+        <>
+          <p className="sp-muted">
+            Referencia: {order.payment_reference || "Confirmación registrada"}
+          </p>
+          {history.some((row) => row.order_id === order.id) && (
+            <IonButton
+              className="sp-primary-button"
+              onClick={() => {
+                const row = history.find((item) => item.order_id === order.id && item.status === "approved")
+                  ?? history.find((item) => item.order_id === order.id);
+                if (row) setReceipt(row);
+              }}
+            >
+              <IonIcon slot="start" icon={receiptOutline} />
+              Ver comprobante de pago
+            </IonButton>
+          )}
+        </>
       )}
       <IonButton fill="outline" routerLink={`/seguimiento/${order.id}`}>Volver al seguimiento</IonButton>
     </article>
@@ -279,6 +367,13 @@ const PaymentPage: React.FC = () => {
             </section>
           ) : (
             <>
+              {paymentResult && paymentForm[paymentResult.kind].position === "top" && (
+                <PaymentResultBanner
+                  kind={paymentResult.kind}
+                  result={paymentForm[paymentResult.kind]}
+                  onClose={() => setPaymentResult(null)}
+                />
+              )}
               {loading ? (
                 <div className="sp-card sp-route-loading">
                   <IonSpinner name="crescent" />
@@ -421,7 +516,7 @@ const PaymentPage: React.FC = () => {
             {receipt && (
               <div className="fin-receipt" id="fin-receipt-print">
                 <h2>Serviprox</h2>
-                <p className="sp-muted">Comprobante de pago · {receipt.reference}</p>
+                <p className="sp-muted">Comprobante {receiptNumber(receipt)} · {receipt.reference}</p>
                 <dl>
                   <dt>Estado</dt>
                   <dd>{receipt.status_label}</dd>
@@ -429,8 +524,14 @@ const PaymentPage: React.FC = () => {
                   <dd>{formatDate(receipt.date)}</dd>
                   <dt>Cliente</dt>
                   <dd>
-                    {receipt.client_name} ({receipt.client_email})
+                    {receipt.client_name}
                   </dd>
+                  <dt>Documento</dt>
+                  <dd>{receipt.client_document || "—"}</dd>
+                  <dt>Teléfono</dt>
+                  <dd>{receipt.client_phone || "—"}</dd>
+                  <dt>Correo</dt>
+                  <dd>{receipt.client_email}</dd>
                   <dt>Servicio contratado</dt>
                   <dd>
                     {receipt.service} · Orden #{receipt.order_id}
@@ -442,9 +543,28 @@ const PaymentPage: React.FC = () => {
                   <dt>Valor pagado</dt>
                   <dd className="fin-receipt-total">{formatCop(receipt.amount)}</dd>
                 </dl>
-                <IonButton expand="block" className="sp-primary-button fin-no-print" onClick={() => window.print()}>
+                {(missingName(receipt) || !receipt.client_document || !receipt.client_phone) && (
+                  <ReceiptDataForm
+                    key={receipt.id}
+                    needsName={missingName(receipt)}
+                    needsDocument={!receipt.client_document}
+                    needsPhone={!receipt.client_phone}
+                    busy={savingData}
+                    onSave={saveClientData}
+                  />
+                )}
+                <IonButton
+                  expand="block"
+                  className="sp-primary-button fin-no-print"
+                  disabled={pdfBusy || missingName(receipt) || !receipt.client_document || !receipt.client_phone}
+                  onClick={() => void downloadPdf(receipt)}
+                >
+                  <IonIcon slot="start" icon={downloadOutline} />
+                  {pdfBusy ? "Generando PDF..." : "Descargar comprobante PDF"}
+                </IonButton>
+                <IonButton expand="block" fill="outline" className="fin-no-print" onClick={() => window.print()}>
                   <IonIcon slot="start" icon={printOutline} />
-                  Imprimir o guardar como PDF
+                  Imprimir
                 </IonButton>
               </div>
             )}

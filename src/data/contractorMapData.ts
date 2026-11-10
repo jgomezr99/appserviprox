@@ -10,6 +10,7 @@ export interface MapContractor {
   locality: string;
   neighborhood: string;
   city: string;
+  locationApproximate?: boolean;
   distanceKm: number;
   estimatedMinutes: number;
   visitPriceCop: number | null;
@@ -41,18 +42,32 @@ export const USER_PROJECT_LOCATION: UserProjectLocation = {
   lng: -74.0780,
 };
 
-export const BOGOTA_LOCALITIES = [
-  "Todas",
-  "Chapinero",
-  "Usaquén",
-  "Suba",
-  "Teusaquillo",
-  "Engativá",
-  "Fontibón",
-  "Kennedy",
-  "Puente Aranda",
-  "Santa Fe",
+export interface MapCity {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  zoom: number;
+}
+
+/** Ciudades en las que opera Serviprox, con su centro para ubicar y filtrar el mapa. */
+export const MAP_CITIES: MapCity[] = [
+  { id: "bogota", name: "Bogotá", lat: 4.711, lng: -74.0721, zoom: 12 },
+  { id: "medellin", name: "Medellín", lat: 6.2442, lng: -75.5812, zoom: 12 },
+  { id: "cali", name: "Cali", lat: 3.4516, lng: -76.532, zoom: 12 },
+  { id: "cartagena", name: "Cartagena", lat: 10.391, lng: -75.4794, zoom: 12 },
+  { id: "cundinamarca", name: "Cundinamarca", lat: 4.86, lng: -74.04, zoom: 10 },
 ];
+
+export const DEFAULT_MAP_CITY = MAP_CITIES[0];
+
+/** Ciudad cuyo centro queda más cerca de unas coordenadas (Cundinamarca solo se elige a mano). */
+export const nearestMapCity = (lat: number, lng: number): MapCity => {
+  const distance = (c: MapCity) => Math.hypot(c.lat - lat, (c.lng - lng) * Math.cos((lat * Math.PI) / 180));
+  const candidates = MAP_CITIES.filter((c) => c.id !== "cundinamarca");
+  const best = candidates.reduce((a, b) => (distance(a) <= distance(b) ? a : b));
+  return distance(best) <= 0.8 ? best : DEFAULT_MAP_CITY;
+};
 
 export const WORK_SPECIALTIES = [
   "Todas las Especialidades",

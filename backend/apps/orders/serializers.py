@@ -1,5 +1,8 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from django.db import transaction
+from django.utils import timezone
 
 from apps.professionals.serializers import ProfessionalListSerializer
 from apps.professionals.models import ProfessionalService
@@ -7,8 +10,9 @@ from apps.accounts.models import UserRole
 from apps.service_requests.models import ServiceRequest
 from apps.service_requests.services import professional_offers_service
 
+from .finance import compute_discount, method_label, money, payment_gross
 from .holds import assert_client_can_hire, assert_professional_can_work
-from .models import Order, OrderEvent, Review, WorkEvidence
+from .models import Order, OrderEvent, Payment, Review, WorkEvidence
 from .services import ALLOWED_TRANSITIONS, refresh_rating, is_assigned_professional, is_order_client, price_bounds, valid_price_bounds
 
 
@@ -21,6 +25,93 @@ class OrderTransitionSerializer(serializers.Serializer):
 
 class OrderPriceSerializer(serializers.Serializer):
     final_price = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=1)
+
+
+def _luhn_valid(number: str) -> bool:
+    total = 0
+    for index, digit in enumerate(reversed(number)):
+        value = int(digit)
+        if index % 2:
+            value *= 2
+            if value > 9:
+                value -= 9
+        total += value
+    return total % 10 == 0
+
+
+DECLINED_TEST_CARD = "4000000000000002"
+DECLINED_TEST_REFERENCE = "RECHAZADO"
+
+
+class DemoPaymentSerializer(serializers.Serializer):
+    """Datos del formulario de pago de prueba. Nunca se guardan: solo se validan."""
+
+    METHOD_CODES = {"credit": "DEV_CREDIT", "debit": "DEV_DEBIT", "transfer": "DEV_TRANSFER"}
+
+    method = serializers.ChoiceField(choices=list(METHOD_CODES), required=False)
+    card_number = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    card_holder = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    expiry = serializers.CharField(max_length=7, required=False, allow_blank=True)
+    cvv = serializers.CharField(max_length=4, required=False, allow_blank=True)
+    installments = serializers.IntegerField(min_value=1, max_value=36, required=False, default=1)
+    bank = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    account_type = serializers.ChoiceField(choices=["savings", "checking"], required=False)
+    document_type = serializers.ChoiceField(choices=["CC", "CE", "NIT", "PP"], required=False)
+    document_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    transfer_reference = serializers.CharField(max_length=40, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        method = attrs.get("method")
+        if not method:
+            return attrs
+        errors = {}
+        if method in ("credit", "debit"):
+            number = "".join(ch for ch in attrs.get("card_number", "") if ch not in " -")
+            if not number.isdigit() or not 13 <= len(number) <= 19 or not _luhn_valid(number):
+                errors["card_number"] = "El número de tarjeta no es válido."
+            if len((attrs.get("card_holder") or "").strip()) < 3:
+                errors["card_holder"] = "Ingresa el nombre como aparece en la tarjeta."
+            if not attrs.get("cvv", "").isdigit() or len(attrs["cvv"]) not in (3, 4):
+                errors["cvv"] = "El código de seguridad debe tener 3 o 4 dígitos."
+            expiry = attrs.get("expiry", "").replace(" ", "")
+            try:
+                month_text, year_text = expiry.split("/")
+                month, year = int(month_text), int(year_text)
+                year += 2000 if year < 100 else 0
+                if not 1 <= month <= 12:
+                    raise ValueError
+                now = timezone.now()
+                if (year, month) < (now.year, now.month):
+                    errors["expiry"] = "La tarjeta está vencida."
+            except ValueError:
+                errors["expiry"] = "Usa el formato MM/AA."
+        else:
+            if not attrs.get("bank", "").strip():
+                errors["bank"] = "Selecciona el banco."
+            if not attrs.get("account_type"):
+                errors["account_type"] = "Selecciona el tipo de cuenta."
+            if not attrs.get("document_type"):
+                errors["document_type"] = "Selecciona el tipo de documento."
+            document = attrs.get("document_number", "")
+            if not document.isalnum() or not 5 <= len(document) <= 15:
+                errors["document_number"] = "El número de documento no es válido."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
+    @property
+    def simulate_decline(self) -> bool:
+        """Tarjeta o referencia de prueba que simula un pago rechazado."""
+        data = self.validated_data
+        if data.get("method") in ("credit", "debit"):
+            return "".join(ch for ch in data.get("card_number", "") if ch not in " -") == DECLINED_TEST_CARD
+        if data.get("method") == "transfer":
+            return data.get("transfer_reference", "").strip().upper() == DECLINED_TEST_REFERENCE
+        return False
+
+    @property
+    def payment_method(self) -> str:
+        return self.METHOD_CODES.get(self.validated_data.get("method"), "DEV")
 
 
 class OrderEventSerializer(serializers.ModelSerializer):
@@ -67,6 +158,9 @@ class OrderSerializer(serializers.ModelSerializer):
     viewer_role = serializers.SerializerMethodField()
     price_bounds = serializers.SerializerMethodField()
     can_set_final_price = serializers.SerializerMethodField()
+    discount_preview = serializers.SerializerMethodField()
+    amount_due = serializers.SerializerMethodField()
+    payment_info = serializers.SerializerMethodField()
     available_transitions = serializers.SerializerMethodField()
     arrival_code = serializers.SerializerMethodField()
     professional = ProfessionalListSerializer(read_only=True)
@@ -94,6 +188,9 @@ class OrderSerializer(serializers.ModelSerializer):
             "viewer_role",
             "price_bounds",
             "can_set_final_price",
+            "discount_preview",
+            "amount_due",
+            "payment_info",
             "payment_status",
             "payment_status_label",
             "payment_confirmed_at",
@@ -118,6 +215,36 @@ class OrderSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+    def get_discount_preview(self, obj):
+        if obj.payment_status != Order.PaymentStatus.PENDING or not obj.final_price:
+            return "0.00"
+        return str(compute_discount(obj.final_price))
+
+    def get_amount_due(self, obj):
+        if obj.payment_status != Order.PaymentStatus.PENDING or not obj.final_price:
+            return None
+        return str(obj.final_price - compute_discount(obj.final_price))
+
+    def get_payment_info(self, obj):
+        """Pago registrado de la orden, visible para el cliente y el profesional."""
+        if obj.payment_status == Order.PaymentStatus.PENDING:
+            return None
+        payments = [p for p in obj.payments.all() if p.status in (Payment.Status.APPROVED, Payment.Status.REFUNDED)]
+        if not payments:
+            return None
+        payment = payments[0]
+        request = self.context.get("request")
+        return {
+            "amount": str(money(Decimal(payment.amount_in_cents) / 100)),
+            "discount": str(money(payment.discount_amount)),
+            "subtotal": str(payment_gross(payment)),
+            "method": method_label(payment.payment_method),
+            "reference": payment.reference,
+            "paid_at": obj.payment_confirmed_at,
+            # Solo el cliente puede abrir el comprobante, que incluye sus datos personales.
+            "receipt_id": payment.id if request and is_order_client(obj, request.user) else None,
+        }
 
     def get_arrival_code(self, obj):
         request = self.context.get("request")

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { ApiError } from "../../services/api";
 
 export const PILL_COLORS: Record<string, { bg: string; color: string }> = {
   approved: { bg: "#dcfce7", color: "#15803d" },
@@ -97,36 +98,63 @@ export const EmptyRow: React.FC<{ colSpan: number; loading: boolean; message: st
   </tr>
 );
 
+const KPI_TONES: Record<string, { bg: string; fg: string }> = {
+  blue: { bg: "#dbeafe", fg: "#1d4ed8" },
+  teal: { bg: "#ccfbf1", fg: "#0f766e" },
+  orange: { bg: "#ffedd5", fg: "#c2410c" },
+  purple: { bg: "#ede9fe", fg: "#6d28d9" },
+};
+
 export const KpiCard: React.FC<{ label: string; value: React.ReactNode; icon: string; tone: string }> = ({
   label,
   value,
   icon,
   tone,
-}) => (
-  <div className="ad-kpi-card">
-    <div className="ad-kpi-info">
-      <span className="ad-kpi-label">{label}</span>
-      <span className="ad-kpi-value" style={{ fontSize: "1.1rem" }}>
-        {value}
-      </span>
+}) => {
+  const colors = KPI_TONES[tone] ?? KPI_TONES.blue;
+  return (
+    <div className="ad-kpi-card" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+        <span className="ad-kpi-label">{label}</span>
+        <span className="ad-kpi-value" style={{ fontSize: "1.35rem", whiteSpace: "nowrap" }}>
+          {value}
+        </span>
+      </div>
+      <div
+        aria-hidden="true"
+        style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", background: colors.bg, color: colors.fg }}
+      >
+        {icon}
+      </div>
     </div>
-    <div className={`ad-kpi-icon ${tone}`}>{icon}</div>
-  </div>
-);
+  );
+};
+
+/** Explica por qué falló una consulta; un error 500 suele indicar migraciones pendientes en el servidor. */
+export const describeFailure = (failure: unknown): string => {
+  if (failure instanceof ApiError && failure.status >= 500) {
+    return "El servidor devolvió un error interno. Si acabas de actualizar la aplicación, ejecuta «python manage.py migrate» en el backend y reinícialo.";
+  }
+  if (failure instanceof ApiError && failure.status === 403) return "Tu cuenta no tiene permiso para ver esta información.";
+  return failure instanceof Error && failure.message ? failure.message : "";
+};
 
 /** Carga datos del backend y expone recarga manual; el fetcher debe ser estable por pestaña. */
 export function useRemote<T>(fetcher: () => Promise<T>, initial: T) {
   const [data, setData] = useState<T>(initial);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [errorText, setErrorText] = useState("");
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
       setData(await fetcher());
       setError(false);
-    } catch {
+      setErrorText("");
+    } catch (failure) {
       setError(true);
+      setErrorText(describeFailure(failure));
     } finally {
       setLoading(false);
     }
@@ -137,7 +165,7 @@ export function useRemote<T>(fetcher: () => Promise<T>, initial: T) {
     void reload();
   }, [reload]);
 
-  return { data, loading, error, reload };
+  return { data, loading, error, errorText, reload };
 }
 
 export interface DialogField {

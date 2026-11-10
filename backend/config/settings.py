@@ -82,6 +82,7 @@ if MEDIA_STORAGE == "s3":
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    "apps.accounts.maintenance.MaintenanceMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -188,6 +189,10 @@ else:
     raise ImproperlyConfigured(
         "SERVIPROX_DATABASE debe ser 'sqlite' o 'postgres'."
     )
+
+if DEBUG and DATABASE_ENGINE == "sqlite":
+    # Desarrollo local: una base SQLite desactualizada se pone al día sola en la primera petición.
+    MIDDLEWARE.insert(0, "config.auto_migrate.AutoMigrateMiddleware")
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -340,6 +345,7 @@ EMAIL_PORT = env_int("EMAIL_PORT", 587)
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT", 10)
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND",
     "django.core.mail.backends.smtp.EmailBackend"

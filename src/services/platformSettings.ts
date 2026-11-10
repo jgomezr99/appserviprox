@@ -29,6 +29,7 @@ export interface PlatformSettings {
   features: PlatformFeatures;
   maintenance_message: string;
   test_payment_enabled?: boolean;
+  payment_form?: unknown;
   email?: { host: string; port: string; cipher: string; sender: string; sender_name: string; requires_auth: boolean };
   social?: Record<"facebook" | "instagram" | "x" | "youtube" | "linkedin", string>;
   documents?: Record<"terms" | "privacy" | "refunds" | "rules" | "contract", string>;

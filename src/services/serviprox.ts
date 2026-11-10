@@ -123,11 +123,28 @@ export const serviceRequestService = {
   reject: (id: number | string) => api.post<ServiceRequest>(`requests/${id}/reject/`),
 };
 
+export type DemoPaymentMethod = "credit" | "debit" | "transfer" | "wallet";
+
+export interface DemoPaymentDetails {
+  method?: DemoPaymentMethod;
+  card_number?: string;
+  card_holder?: string;
+  expiry?: string;
+  cvv?: string;
+  installments?: number;
+  bank?: string;
+  account_type?: "savings" | "checking";
+  document_type?: "CC" | "CE" | "NIT" | "PP";
+  document_number?: string;
+  transfer_reference?: string;
+  phone?: string;
+}
+
 export const orderService = {
   list: (params: { status?: string } = {}) => listAllPages<Order>("orders/", params),
   get: (id: number | string) => api.get<Order>(`orders/${id}/`),
-  confirmDemoPayment: (id: number | string) =>
-    api.post<Order>(`orders/${id}/confirm-demo-payment/`),
+  confirmDemoPayment: (id: number | string, details: DemoPaymentDetails = {}) =>
+    api.post<Order>(`orders/${id}/confirm-demo-payment/`, details),
   wompiCheckout: (id: number | string) =>
     api.post<{ checkout_url: string; reference: string; amount_in_cents: number }>(
       `orders/${id}/wompi-checkout/`

@@ -12,6 +12,7 @@ export interface PaymentRow {
   professional: string;
   service: string;
   amount: number;
+  discount?: number;
   status: PaymentStatus;
   status_label: string;
   can_verify: boolean;
@@ -20,6 +21,15 @@ export interface PaymentRow {
 export interface ClientPaymentRow extends PaymentRow {
   receipt_available: boolean;
   client_email: string;
+  client_phone: string;
+  client_document: string;
+  service_category: string;
+  service_description: string;
+  service_address: string;
+  paid_at: string | null;
+  transaction_id: string;
+  discount: number;
+  subtotal: number;
   client_name: string;
   scheduled_for: string | null;
   order_status_label: string;
@@ -110,6 +120,8 @@ export interface RefundRow {
 
 export interface FinanceSummary {
   commission_rate: number;
+  discounts_total?: number;
+  payments_total?: number;
   collected: number;
   pending_collection: number;
   commissions: number;
@@ -124,6 +136,20 @@ export interface FinanceSummary {
   refunds_total: number;
   payments_by_status: Record<string, number>;
   series: Array<{ month: string; commissions: number; collected: number }>;
+}
+
+export interface AdminPaymentDetail extends ClientPaymentRow {
+  test_mode: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+  order_status: string;
+  payment_status: string;
+  commission_rate: number | null;
+  commission_amount: number | null;
+  professional_amount: number | null;
+  payout_status: string;
+  payout_status_label: string;
+  professional_email: string;
 }
 
 export interface FinanceReport {
@@ -150,6 +176,7 @@ export interface PaymentHold {
 export const financeService = {
   paymentHold: () => api.get<PaymentHold>("payments/hold/"),
   clientHistory: () => api.get<ClientPaymentRow[]>("payments/history/"),
+  clientReceipt: (id: number) => api.get<ClientPaymentRow>(`payments/${id}/receipt/`),
 
   earnings: () => api.get<ProfessionalEarnings>("professional/earnings/"),
   requestWithdrawal: (amount: number, destination: string) =>
@@ -158,6 +185,7 @@ export const financeService = {
   admin: {
     summary: () => api.get<FinanceSummary>("admin/finance/summary/"),
     payments: () => api.get<PaymentRow[]>("admin/payments/"),
+    paymentDetail: (id: number) => api.get<AdminPaymentDetail>(`admin/payments/${id}/`),
     verifyPayment: (id: number) => api.post<{ detail: string }>(`admin/payments/${id}/verify/`),
     payouts: () => api.get<PayoutRow[]>("admin/payouts/"),
     settle: (body: { order_ids: number[] } | { all: true }) =>

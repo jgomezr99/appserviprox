@@ -9,7 +9,7 @@ from .models import PlatformSettings
 
 def require_feature(name: str, message: str) -> None:
     """Rechaza la operación si el administrador desactivó la función."""
-    if not PlatformSettings.load()["features"].get(name, True):
+    if not PlatformSettings.load().get("features", {}).get(name, True):
         raise PermissionDenied(message)
 
 

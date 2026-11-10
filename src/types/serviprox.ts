@@ -188,6 +188,7 @@ export interface Professional {
   accepts_urgent: boolean;
   neighborhood: string;
   city: string;
+  location_approximate?: boolean;
   latitude: number | null;
   longitude: number | null;
   distance_km?: number;
@@ -307,6 +308,17 @@ export interface Order {
   viewer_role?: "client" | "professional" | "staff" | "none";
   price_bounds?: { min: string | null; max: string | null };
   can_set_final_price?: boolean;
+  discount_preview?: string;
+  payment_info?: {
+    amount: string;
+    discount: string;
+    subtotal: string;
+    method: string;
+    reference: string;
+    paid_at: string | null;
+    receipt_id: number | null;
+  } | null;
+  amount_due?: string | null;
   id: number;
   service_request: number;
   professional: Professional;

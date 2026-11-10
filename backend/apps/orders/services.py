@@ -135,7 +135,7 @@ def set_final_price(order: Order, amount, user) -> Order:
 
 
 @transaction.atomic
-def confirm_development_payment(order: Order, user=None) -> Order:
+def confirm_development_payment(order: Order, user=None, method: str = "DEV") -> Order:
     """Marca como pagada una orden real para desarrollo/demo, sin pasarela externa."""
     order = Order.objects.select_for_update().get(pk=order.pk)
     if order.payment_status != Order.PaymentStatus.PENDING:
@@ -151,10 +151,10 @@ def confirm_development_payment(order: Order, user=None) -> Order:
             "updated_at",
         ]
     )
-    from .finance import ensure_dev_payment, register_split
+    from .finance import ensure_dev_payment, payment_gross, register_split
 
-    payment = ensure_dev_payment(order, user)
-    register_split(order, payment.amount_in_cents / 100)
+    payment = ensure_dev_payment(order, user, method)
+    register_split(order, payment_gross(payment), payment.discount_amount)
     return order
 
 

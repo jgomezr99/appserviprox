@@ -108,6 +108,7 @@ class Payment(models.Model):
     )
     reference = models.CharField(max_length=80, unique=True)
     amount_in_cents = models.BigIntegerField()
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     currency = models.CharField(max_length=3, default="COP")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     wompi_transaction_id = models.CharField(max_length=80, blank=True)
@@ -213,6 +214,21 @@ class OrderEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.order_id} → {self.status}"
+
+
+class OrderAdminNote(models.Model):
+    """Nota interna del equipo administrativo sobre una contratación; no la ven clientes ni profesionales."""
+
+    order = models.ForeignKey(Order, related_name="admin_notes", on_delete=models.CASCADE)
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    author_name = models.CharField(max_length=150, blank=True)
+    text = models.TextField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
 
 
 class Review(models.Model):

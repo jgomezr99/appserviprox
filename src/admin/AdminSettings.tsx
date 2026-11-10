@@ -218,7 +218,21 @@ export const AdminSettings: React.FC<{ onChanged?: () => void }> = ({ onChanged 
       toggleMaintenance(!form.features.maintenance);
       return;
     }
-    set("features", { ...form.features, [key]: !form.features[key] });
+    const enabled = !form.features[key];
+    const label = FEATURE_LABELS.find(([k]) => k === key)?.[1] ?? String(key);
+    const previous = form.features;
+    set("features", { ...previous, [key]: enabled });
+    run(async () => {
+      try {
+        const saved = await platformSettingsService.saveAdmin({ features: { ...previous, [key]: enabled } });
+        setForm((prev) => ({ ...prev, features: saved.features }));
+        onChanged?.();
+        return `${label}: ${enabled ? "activado" : "desactivado"}. Ya se aplicó en la app.`;
+      } catch (err) {
+        set("features", previous);
+        throw err;
+      }
+    });
   };
 
   const backupNow = () => runAction({ action: "backup_now" });
@@ -378,7 +392,7 @@ export const AdminSettings: React.FC<{ onChanged?: () => void }> = ({ onChanged 
                   {renderSwitch(form.features[key], label, () => toggleFeature(key))}
                 </div>
               ))}
-              {saveButton}
+              <p className="as-sub" style={{ marginTop: 8 }}>Cada interruptor se aplica al instante en la app.</p>
             </div>
 
             <div className="as-side">

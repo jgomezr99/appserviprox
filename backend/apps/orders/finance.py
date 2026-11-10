@@ -1,5 +1,7 @@
 """Reglas financieras: reparto de comisión, liquidaciones, retiros y reembolsos."""
 import json
+import secrets
+from datetime import timedelta
 import urllib.error
 import urllib.request
 from decimal import ROUND_HALF_UP, Decimal
@@ -31,6 +33,9 @@ METHOD_LABELS = {
     "BANCOLOMBIA_TRANSFER": "Transferencia Bancolombia",
     "BANCOLOMBIA_COLLECT": "Corresponsal Bancolombia",
     "DEV": "Pago simulado",
+    "DEV_CREDIT": "Tarjeta de crédito (prueba)",
+    "DEV_DEBIT": "Tarjeta débito (prueba)",
+    "DEV_TRANSFER": "Transferencia bancaria (prueba)",
 }
 
 
@@ -55,6 +60,26 @@ def commission_rate() -> Decimal:
     return min(max(rate, Decimal("0")), Decimal("100"))
 
 
+MIN_PAYMENT = Decimal("1500")
+
+
+def compute_discount(price) -> Decimal:
+    """Descuento configurado por el administrador. La plataforma lo asume: nunca supera su comisión."""
+    price = money(price)
+    cfg = PlatformSettings.load()["sections"].get("payments", {})
+    if cfg.get("discount_enabled") is not True or price <= 0:
+        return Decimal("0.00")
+    try:
+        value = Decimal(str(cfg.get("discount_value") or 0))
+    except Exception:
+        return Decimal("0.00")
+    if value <= 0:
+        return Decimal("0.00")
+    raw = price * min(value, Decimal("100")) / 100 if cfg.get("discount_type") == "percent" else value
+    commission = money(price * commission_rate() / 100)
+    return max(Decimal("0.00"), money(min(raw, commission, price - MIN_PAYMENT)))
+
+
 def order_price(order: Order) -> Decimal:
     return money(order.final_price or order.estimate_max or order.estimate_min)
 
@@ -68,14 +93,19 @@ def order_gross(order: Order) -> Decimal:
     return order_price(order)
 
 
-def register_split(order: Order, gross: Decimal | None = None) -> Order:
-    """Fija comisión de Serviprox y ganancia del profesional sobre el pago confirmado."""
+def register_split(order: Order, gross: Decimal | None = None, discount: Decimal = Decimal("0")) -> Order:
+    """Fija comisión de Serviprox y ganancia del profesional sobre el pago confirmado.
+
+    `gross` es el valor del servicio antes del descuento; la plataforma asume el descuento
+    con su comisión, así que la ganancia del profesional no cambia.
+    """
     gross = money(gross if gross is not None else order_gross(order))
+    discount = money(discount)
     rate = commission_rate()
-    commission = money(gross * rate / 100)
+    full_commission = money(gross * rate / 100)
     order.commission_rate = rate
-    order.commission_amount = commission
-    order.professional_amount = gross - commission
+    order.commission_amount = max(Decimal("0.00"), full_commission - discount)
+    order.professional_amount = gross - full_commission
     order.save(
         update_fields=[
             "commission_rate",
@@ -87,6 +117,11 @@ def register_split(order: Order, gross: Decimal | None = None) -> Order:
     return order
 
 
+def payment_gross(payment: Payment) -> Decimal:
+    """Valor del servicio antes del descuento."""
+    return money(Decimal(payment.amount_in_cents) / 100 + payment.discount_amount)
+
+
 def backfill_splits() -> None:
     """Completa el reparto de órdenes pagadas antes de existir este módulo."""
     legacy = Order.objects.filter(
@@ -96,19 +131,39 @@ def backfill_splits() -> None:
         register_split(order)
 
 
-def ensure_dev_payment(order: Order, user=None) -> Payment:
+def record_declined_dev_payment(order: Order, user=None, method: str = "DEV") -> Payment:
+    """Registra un intento de pago de prueba rechazado; la orden sigue pendiente de pago."""
+    price = order_price(order)
+    discount = compute_discount(price)
+    return Payment.objects.create(
+        order=order,
+        client=user or order.client,
+        reference=f"DEV-DECL-{order.pk}-{secrets.token_hex(3)}",
+        amount_in_cents=int((price - discount) * 100),
+        discount_amount=discount,
+        status=Payment.Status.DECLINED,
+        payment_method=method,
+        test_mode=True,
+    )
+
+
+def ensure_dev_payment(order: Order, user=None, method: str = "DEV") -> Payment:
     """Garantiza una fila de Payment para pagos simulados, así el historial siempre la muestra."""
     existing = order.payments.filter(status=Payment.Status.APPROVED).first()
     if existing:
         return existing
-    cents = int(order_price(order) * 100)
+    price = order_price(order)
+    discount = compute_discount(price)
+    cents = int((price - discount) * 100)
     return Payment.objects.create(
         order=order,
         client=user or order.client,
         reference=order.payment_reference or f"DEV-{order.pk}",
         amount_in_cents=cents,
+        discount_amount=discount,
         status=Payment.Status.APPROVED,
-        payment_method="DEV",
+        payment_method=method,
+        test_mode=True,
     )
 
 
@@ -135,7 +190,7 @@ def apply_payment_update(
                 "updated_at",
             ]
         )
-        register_split(order, Decimal(payment.amount_in_cents) / 100)
+        register_split(order, payment_gross(payment), payment.discount_amount)
     return payment
 
 
@@ -329,8 +384,11 @@ def platform_summary() -> dict:
     open_withdrawals = Withdrawal.objects.filter(
         status__in=[Withdrawal.Status.PENDING, Withdrawal.Status.APPROVED]
     )
+    discounts = payments.filter(status=Payment.Status.APPROVED).aggregate(total=Sum("discount_amount"))["total"]
     return {
         "commission_rate": float(commission_rate()),
+        "discounts_total": money(discounts),
+        "payments_total": payments.count(),
         "collected": money(Decimal(approved_cents) / 100),
         "pending_collection": money(Decimal(pending_cents) / 100),
         "commissions": _sum(paid, "commission_amount"),
@@ -383,3 +441,59 @@ def monthly_series(months: int = 6) -> list[dict]:
             }
         )
     return series
+
+
+# Código de método registrado en un pago -> método del panel administrativo.
+STATS_METHOD_GROUPS = {
+    "CARD": "card", "DEV_CREDIT": "card", "DEV_DEBIT": "card",
+    "PSE": "pse",
+    "BANCOLOMBIA_TRANSFER": "transfer", "DEV_TRANSFER": "transfer",
+    "NEQUI": "wallet", "DAVIPLATA": "wallet",
+}
+REJECTION_ALERT_RATE = Decimal("0.4")
+REJECTION_ALERT_MIN_ATTEMPTS = 5
+
+
+def payment_method_stats(days: int = 30, include_test: bool = False) -> dict:
+    """Pagos agrupados por método del panel: aprobados, rechazados, monto y % de aprobación."""
+    since = timezone.now() - timedelta(days=days)
+    rows: dict[str, dict] = {}
+    for payment in Payment.objects.filter(created_at__gte=since).only(
+        "status", "payment_method", "amount_in_cents", "test_mode"
+    )[:20000]:
+        code = (payment.payment_method or "").upper()
+        if not include_test and (payment.test_mode or code.startswith("DEV")):
+            continue
+        key = STATS_METHOD_GROUPS.get(code, "other")
+        row = rows.setdefault(
+            key,
+            {"method": key, "total": 0, "approved": 0, "declined": 0, "pending": 0, "approved_amount": Decimal("0")},
+        )
+        row["total"] += 1
+        if payment.status == Payment.Status.APPROVED:
+            row["approved"] += 1
+            row["approved_amount"] += Decimal(payment.amount_in_cents) / 100
+        elif payment.status in (Payment.Status.DECLINED, Payment.Status.ERROR, Payment.Status.VOIDED):
+            row["declined"] += 1
+        elif payment.status == Payment.Status.PENDING:
+            row["pending"] += 1
+    for row in rows.values():
+        finished = row["approved"] + row["declined"]
+        row["approval_rate"] = round(row["approved"] / finished * 100, 1) if finished else None
+        row["approved_amount"] = float(money(row["approved_amount"]))
+    return rows
+
+
+def rejection_alerts(stats: dict, labels: dict[str, str]) -> list[dict]:
+    alerts = []
+    for key, row in stats.items():
+        finished = row["approved"] + row["declined"]
+        if finished >= REJECTION_ALERT_MIN_ATTEMPTS and Decimal(row["declined"]) / finished >= REJECTION_ALERT_RATE:
+            alerts.append(
+                {
+                    "level": "warning",
+                    "method": key,
+                    "message": f"{labels.get(key, key)}: {row['declined']} de {finished} pagos fueron rechazados en los últimos 7 días.",
+                }
+            )
+    return alerts

@@ -101,6 +101,34 @@ export interface ReportsStatsResponse {
     count: number;
     color: string;
   }>;
+  cities?: Array<{
+    id: string;
+    name: string;
+    center: [number, number];
+    zoom: number;
+    households: number;
+    professionals: number;
+    located?: number;
+    zones: Array<{ name: string; count: number }>;
+    points: Array<{ lat: number; lng: number; kind: "home" | "pro" }>;
+  }>;
+  cities_other?: { households: number; professionals: number };
+}
+
+/** El backend pagina de 20 en 20; se recorren todas las páginas para que los totales sean reales. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchAllPages(path: string, params: Record<string, string> = {}): Promise<any[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows: any[] = [];
+  for (let page = 1; page <= 100; page += 1) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await api.get<any>(path, { params: { ...params, page: String(page) } });
+    if (Array.isArray(response)) return response;
+    const results = Array.isArray(response?.results) ? response.results : [];
+    rows.push(...results);
+    if (!response?.next || results.length === 0) break;
+  }
+  return rows;
 }
 
 export const adminService = {
@@ -173,8 +201,7 @@ export const adminService = {
    * Consulta listado de PQRs de la base de datos.
    */
   async getPqrs(): Promise<any[]> {
-    const response = await api.get<any>("pqrs/");
-    return Array.isArray(response) ? response : (Array.isArray(response?.results) ? response.results : []);
+    return fetchAllPages("pqrs/");
   },
 
   async createPqr(params: {
@@ -234,8 +261,7 @@ export const adminService = {
    * Consulta fallas técnicas de la aplicación desde la base de datos.
    */
   async getProblems(): Promise<any[]> {
-    const response = await api.get<any>("app-problems/", { params: { all: "true" } });
-    return Array.isArray(response) ? response : (Array.isArray(response?.results) ? response.results : []);
+    return fetchAllPages("app-problems/", { all: "true" });
   },
 
   /**

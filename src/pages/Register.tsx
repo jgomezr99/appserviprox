@@ -28,6 +28,7 @@ import type { PublicRegisterRole } from "../types/serviprox";
 import { getEntryRoute } from "../utils/routes";
 import logo from "../Assets/logo.png";
 import styles from "./Login.module.css";
+import { usePlatformSettings } from "../services/platformSettings";
 
 const emailOk = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
 
@@ -97,6 +98,10 @@ const roleOptions: Array<{
 const Register: React.FC = () => {
   const history = useHistory();
   const { isAuthenticated, isLoading: sessionLoading, register, user } = useAuth();
+  const platform = usePlatformSettings();
+  const registrationClosed = platform.features.new_users === false || platform.features.maintenance;
+  const professionalsOpen = platform.features.professionals !== false;
+  const visibleRoleOptions = roleOptions.filter((option) => option.value !== "professional" || professionalsOpen);
   const [role, setRole] = useState<PublicRegisterRole>("client");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -146,6 +151,10 @@ const Register: React.FC = () => {
     document.body.setAttribute("data-theme", role);
   }, [role]);
 
+  useEffect(() => {
+    if (!professionalsOpen && role === "professional") setRole("client");
+  }, [professionalsOpen, role]);
+
   const passwordsMatch = password === confirmPassword;
   const canContinue =
     firstName.trim().length > 0 &&
@@ -154,7 +163,7 @@ const Register: React.FC = () => {
     password.length >= 8 &&
     passwordsMatch;
   const certificateOk = role !== "professional" || (profession.trim().length >= 3 && certificate !== null);
-  const canSubmit = canContinue && certificateOk && !isSubmitting;
+  const canSubmit = canContinue && certificateOk && !isSubmitting && !registrationClosed;
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -226,11 +235,19 @@ const Register: React.FC = () => {
               </p>
             </div>
 
-            <form className={styles.form} onSubmit={handleRegister} noValidate>
+            {registrationClosed && (
+              <p role="alert" style={{ background: "#fef3c7", color: "#92400e", borderRadius: 12, padding: "12px 14px", fontWeight: 600 }}>
+                {platform.features.maintenance
+                  ? platform.maintenance_message
+                  : "El registro de nuevos usuarios está deshabilitado por el momento."}
+              </p>
+            )}
+
+            <form className={styles.form} onSubmit={handleRegister} noValidate style={registrationClosed ? { display: "none" } : undefined}>
               {step === 1 && (<>
               <fieldset className={styles.roleGroup}>
                 <legend>¿Qué quieres hacer en Serviprox?</legend>
-                {roleOptions.map((option) => {
+                {visibleRoleOptions.map((option) => {
                   const selected = role === option.value;
                   return (
                     <button

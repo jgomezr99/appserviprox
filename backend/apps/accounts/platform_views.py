@@ -1,4 +1,5 @@
 import json
+import re
 import secrets
 from datetime import timedelta
 
@@ -90,6 +91,148 @@ def _audit(request, action, target, reason=""):
     )
 
 
+PAYMENT_FORM_METHODS = ("credit", "debit", "transfer")
+PAYMENT_FORM_CHOICES = {
+    "button_size": ("medium", "small", "large"),
+    "button_align": ("full", "left", "center", "right"),
+    "button_shape": ("rounded", "square", "pill"),
+}
+PAYMENT_RESULT_CHOICES = {
+    "size": ("medium", "small", "large"),
+    "style": ("soft", "solid", "outline"),
+    "position": ("top", "form"),
+    "align": ("left", "center", "right"),
+    "shape": ("rounded", "square", "pill"),
+}
+HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+PAYMENT_FORM_TEXT_LIMITS = {"title": 80, "note": 240, "submit_label": 60, "transfer_submit_label": 60}
+
+
+def _normalize_payment_form(value: dict) -> str:
+    """Valida el formulario de pago editable por el administrador. Devuelve el error, si lo hay."""
+    form = value.get("payment_form")
+    if form is None:
+        return ""
+    if not isinstance(form, dict):
+        return "El formulario de pago no es válido."
+    clean: dict = {}
+    for key, limit in PAYMENT_FORM_TEXT_LIMITS.items():
+        text = form.get(key, "")
+        if not isinstance(text, str):
+            return "Los textos del formulario de pago no son válidos."
+        clean[key] = text.strip()[:limit]
+    for key, allowed in PAYMENT_FORM_CHOICES.items():
+        choice = form.get(key, allowed[0])
+        if choice not in allowed:
+            return "El diseño del botón de pago no es válido."
+        clean[key] = choice
+    for key in ("button_color", "button_text_color"):
+        color = form.get(key, "")
+        if not isinstance(color, str) or not HEX_COLOR.match(color):
+            return "Los colores del botón de pago deben tener formato #RRGGBB."
+        clean[key] = color.lower()
+    for state in ("approved", "declined"):
+        block = form.get(state)
+        if not isinstance(block, dict):
+            return "Faltan los mensajes de pago aprobado y rechazado."
+        color = block.get("color", "")
+        title, message = block.get("title", ""), block.get("message", "")
+        if not (isinstance(color, str) and HEX_COLOR.match(color) and isinstance(title, str) and isinstance(message, str)):
+            return "Los mensajes de pago aprobado y rechazado no son válidos."
+        entry = {"title": title.strip()[:80], "message": message.strip()[:240], "color": color.lower()}
+        for key, allowed in PAYMENT_RESULT_CHOICES.items():
+            choice = block.get(key, allowed[0])
+            if choice not in allowed:
+                return "El diseño de los mensajes de pago no es válido."
+            entry[key] = choice
+        clean[state] = entry
+    clean["show_installments"] = form.get("show_installments") is not False
+    clean["show_transfer_reference"] = form.get("show_transfer_reference") is not False
+    methods = form.get("methods")
+    if not isinstance(methods, list) or not methods:
+        return "El formulario de pago necesita al menos un método."
+    seen: set = set()
+    clean_methods = []
+    for item in methods:
+        if not isinstance(item, dict) or item.get("id") not in PAYMENT_FORM_METHODS or item["id"] in seen:
+            return "Los métodos del formulario de pago no son válidos."
+        label = item.get("label", "")
+        if not isinstance(label, str):
+            return "Los nombres de los métodos no son válidos."
+        seen.add(item["id"])
+        clean_methods.append({"id": item["id"], "label": label.strip()[:40], "enabled": item.get("enabled") is not False})
+    if not any(m["enabled"] for m in clean_methods):
+        return "Deja al menos un método de pago activo en el formulario."
+    clean["methods"] = clean_methods
+    value["payment_form"] = clean
+    return ""
+
+
+BUILTIN_METHODS = ("pse", "card", "transfer", "wallet")
+CUSTOM_METHOD_ID = re.compile(r"^custom_[a-z0-9]{3,12}$")
+MAX_CUSTOM_METHODS = 8
+
+
+def _normalize_method_catalog(value: dict) -> str:
+    """Valida los métodos agregados por el administrador, su apariencia y su orden."""
+    custom = value.get("custom_methods", [])
+    if not isinstance(custom, list) or len(custom) > MAX_CUSTOM_METHODS or len(set(custom)) != len(custom) or not all(
+        isinstance(item, str) and CUSTOM_METHOD_ID.match(item) for item in custom
+    ):
+        return "Los métodos de pago personalizados no son válidos."
+    value["custom_methods"] = custom
+    known = set(BUILTIN_METHODS) | set(custom)
+
+    ui = value.get("method_ui", {})
+    if not isinstance(ui, dict):
+        return "La apariencia de los métodos de pago no es válida."
+    clean_ui = {}
+    for method_id, item in ui.items():
+        if method_id not in known or not isinstance(item, dict):
+            continue
+        name, description, icon, color = (item.get(k, "") for k in ("name", "description", "icon", "color"))
+        if not all(isinstance(v, str) for v in (name, description, icon, color)):
+            return "La apariencia de los métodos de pago no es válida."
+        if color and not HEX_COLOR.match(color):
+            return "El color del método de pago debe tener formato #RRGGBB."
+        if not name.strip():
+            return "Cada método de pago necesita un nombre."
+        clean_ui[method_id] = {
+            "name": name.strip()[:40],
+            "description": description.strip()[:120],
+            "icon": icon.strip()[:8],
+            "color": color.lower(),
+        }
+    value["method_ui"] = clean_ui
+
+    order = value.get("method_order", [])
+    if not isinstance(order, list) or len(set(order)) != len(order) or not all(item in known for item in order):
+        return "El orden de los métodos de pago no es válido."
+    value["method_order"] = order
+    return ""
+
+
+def _normalize_discount(value: dict) -> str:
+    """Valida el descuento de pagos y lo deja con tipos consistentes. Devuelve el error, si lo hay."""
+    value["discount_enabled"] = value.get("discount_enabled") is True
+    discount_type = value.get("discount_type") or "percent"
+    if discount_type not in ("percent", "fixed"):
+        return "El tipo de descuento debe ser porcentaje o valor fijo."
+    value["discount_type"] = discount_type
+    try:
+        amount = float(value.get("discount_value") or 0)
+    except (TypeError, ValueError):
+        return "El valor del descuento no es válido."
+    if amount != amount or amount < 0 or amount > 100_000_000:
+        return "El valor del descuento no es válido."
+    if discount_type == "percent" and amount > 100:
+        return "El porcentaje de descuento no puede superar 100%."
+    if value["discount_enabled"] and amount <= 0:
+        return "Indica un valor de descuento mayor que cero."
+    value["discount_value"] = amount
+    return ""
+
+
 class PublicPlatformSettingsView(APIView):
     """Parámetros visibles para las apps de cliente y profesional (sin autenticación)."""
 
@@ -105,6 +248,7 @@ class PublicPlatformSettingsView(APIView):
         public["role_params"] = data["sections"].get("role_params", {})
         public["benefit_catalog"] = data["sections"].get("benefit_catalog", {})
         public["test_payment_enabled"] = PlatformSettings.test_payment_enabled()
+        public["payment_form"] = data["sections"].get("payments", {}).get("payment_form")
         return Response(public)
 
 
@@ -186,6 +330,9 @@ class AdminPlatformSettingsView(APIView):
                 if name == "payments":
                     # El pago de prueba solo cambia por AdminTestPaymentView, que valida la clave.
                     value = {**value, "test_payment_enabled": current["sections"].get(name, {}).get("test_payment_enabled", False)}
+                    error = _normalize_discount(value) or _normalize_payment_form(value) or _normalize_method_catalog(value)
+                    if error:
+                        return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
                 current["sections"][name] = value
 
         saved = PlatformSettings.save_data(current)

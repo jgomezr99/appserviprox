@@ -557,7 +557,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
 
             </form>
 
-            {!administrative && <div className={styles.footerPrompt}>
+            {!administrative && platform.features.new_users !== false && <div className={styles.footerPrompt}>
               <span>¿Aún no tienes cuenta?</span>
               <IonButton routerLink="/register" fill="clear" className={styles.linkButton}>
                 Crear cuenta

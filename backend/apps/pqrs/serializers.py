@@ -163,7 +163,6 @@ class AppProblemReportSerializer(serializers.ModelSerializer):
             "status",
             "priority",
             "assigned_to",
-            "related_to",
             "response_notes",
             "created_at",
         ]
@@ -230,6 +229,5 @@ class AppProblemReportSerializer(serializers.ModelSerializer):
             "status": data.get("status", "recibido"),
             "priority": data.get("priority", "") or "",
             "assigned_to": data.get("assignedTo", data.get("assigned_to", "")) or "",
-            "related_to": data.get("relatedTo", data.get("related_to", "")) or "",
             "response_notes": data.get("responseNotes", data.get("response_notes", "")),
         }

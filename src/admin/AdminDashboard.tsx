@@ -7,6 +7,8 @@ import { platformSettingsService, usePlatformSettings } from "../services/platfo
 import AdminSettings from "./AdminSettings";
 import AdminReportsStats from "./AdminReportsStats";
 import AdminPayments from "./AdminPayments";
+import AdminHirings from "./AdminHirings";
+import { computePqrStats, sparklinePath, trendLabel } from "./pqrStats";
 import { AdminCatalogManager } from "./AdminCatalogManager";
 import "./AdminDashboard.css";
 
@@ -188,6 +190,8 @@ export interface PqrItem {
   } | null;
   relatedTo: string;
   date: string;
+  /** Fecha de creación en formato ISO, para estadísticas. */
+  createdAt?: string;
   updatedDate: string;
   priority: "Alta" | "Media" | "Baja" | "No definida";
   status: "En revisión" | "Abierta" | "En proceso" | "Resuelta" | "Cerrada";
@@ -285,6 +289,7 @@ const mapPqrFromDatabase = (p: any): PqrItem => {
     } : null,
     relatedTo: p.relatedTo || p.related_to || p.contractorCompany || p.contractor_company || "",
     date: formatAdminDate(p.createdAt || p.created_at),
+    createdAt: p.createdAt || p.created_at,
     updatedDate: formatAdminDate(p.updatedAt || p.updated_at || p.createdAt || p.created_at),
     priority: p.priority || "No definida",
     status: mapPqrStatus(p.status || ""),
@@ -327,6 +332,7 @@ const mapProblemToPqr = (problem: any): PqrItem => {
     contractor: null,
     relatedTo: problem.deviceInfo || problem.device_info || "",
     date: formatAdminDate(createdAt),
+    createdAt,
     updatedDate: formatAdminDate(createdAt),
     priority: problem.priority || "No definida",
     status: problem.status === "resuelto" ? "Resuelta" : problem.status === "en_proceso" ? "En proceso" : "Abierta",
@@ -3427,6 +3433,9 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Cifras de las tarjetas y pestañas: salen de las solicitudes cargadas desde la base de datos.
+  const pqrStats = computePqrStats(pqrList);
+
   // Filtrado de PQR y Reportes
   const filteredPqrList = pqrList.filter((item) => {
     // Pestañas
@@ -5349,60 +5358,64 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* 4 Tarjetas KPI */}
+              {/* Tarjetas KPI con datos reales de la base de datos */}
               <div className="ad-pqr-kpi-grid">
-                {/* KPI 1: Total de solicitudes */}
                 <div className="ad-pqr-kpi-card blue">
                   <div className="ad-pqr-kpi-footer">
-                    <span className="ad-pqr-trend green">↗ +12%</span>
+                    <span className="ad-pqr-trend green" title="Variación de los últimos 30 días frente a los 30 anteriores">
+                      {trendLabel(pqrStats.total.trend)}
+                    </span>
                   </div>
-                  <div className="ad-pqr-kpi-value">184</div>
+                  <div className="ad-pqr-kpi-value">{pqrStats.total.count.toLocaleString("es-CO")}</div>
                   <p className="ad-pqr-kpi-label">Total de solicitudes</p>
                   <div className="ad-pqr-sparkline">
                     <svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{ width: "100%", height: "32px" }}>
-                      <path d="M 0 24 Q 25 8 50 18 T 100 6" fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
+                      <path d={sparklinePath(pqrStats.total.weekly)} fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
                     </svg>
                   </div>
                 </div>
 
-                {/* KPI 2: Quejas */}
                 <div className="ad-pqr-kpi-card red">
                   <div className="ad-pqr-kpi-footer">
-                    <span className="ad-pqr-trend red">↗ +8%</span>
+                    <span className="ad-pqr-trend red" title="Variación de los últimos 30 días frente a los 30 anteriores">
+                      {trendLabel(pqrStats.queja.trend)}
+                    </span>
                   </div>
-                  <div className="ad-pqr-kpi-value">76</div>
+                  <div className="ad-pqr-kpi-value">{pqrStats.queja.count.toLocaleString("es-CO")}</div>
                   <p className="ad-pqr-kpi-label">Quejas</p>
                   <div className="ad-pqr-sparkline">
                     <svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{ width: "100%", height: "32px" }}>
-                      <path d="M 0 22 Q 25 28 50 14 T 100 8" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" />
+                      <path d={sparklinePath(pqrStats.queja.weekly)} fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" />
                     </svg>
                   </div>
                 </div>
 
-                {/* KPI 3: Reclamos */}
                 <div className="ad-pqr-kpi-card orange">
                   <div className="ad-pqr-kpi-footer">
-                    <span className="ad-pqr-trend orange">↗ +18%</span>
+                    <span className="ad-pqr-trend orange" title="Variación de los últimos 30 días frente a los 30 anteriores">
+                      {trendLabel(pqrStats.reclamo.trend)}
+                    </span>
                   </div>
-                  <div className="ad-pqr-kpi-value">62</div>
+                  <div className="ad-pqr-kpi-value">{pqrStats.reclamo.count.toLocaleString("es-CO")}</div>
                   <p className="ad-pqr-kpi-label">Reclamos</p>
                   <div className="ad-pqr-sparkline">
                     <svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{ width: "100%", height: "32px" }}>
-                      <path d="M 0 25 Q 30 5 60 20 T 100 10" fill="none" stroke="#ea580c" strokeWidth="2.5" strokeLinecap="round" />
+                      <path d={sparklinePath(pqrStats.reclamo.weekly)} fill="none" stroke="#ea580c" strokeWidth="2.5" strokeLinecap="round" />
                     </svg>
                   </div>
                 </div>
 
-                {/* KPI 4: Peticiones */}
                 <div className="ad-pqr-kpi-card purple">
                   <div className="ad-pqr-kpi-footer">
-                    <span className="ad-pqr-trend purple">↘ +5%</span>
+                    <span className="ad-pqr-trend purple" title="Variación de los últimos 30 días frente a los 30 anteriores">
+                      {trendLabel(pqrStats.peticion.trend)}
+                    </span>
                   </div>
-                  <div className="ad-pqr-kpi-value">46</div>
+                  <div className="ad-pqr-kpi-value">{pqrStats.peticion.count.toLocaleString("es-CO")}</div>
                   <p className="ad-pqr-kpi-label">Peticiones</p>
                   <div className="ad-pqr-sparkline">
                     <svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{ width: "100%", height: "32px" }}>
-                      <path d="M 0 10 Q 35 25 70 12 T 100 20" fill="none" stroke="#9333ea" strokeWidth="2.5" strokeLinecap="round" />
+                      <path d={sparklinePath(pqrStats.peticion.weekly)} fill="none" stroke="#9333ea" strokeWidth="2.5" strokeLinecap="round" />
                     </svg>
                   </div>
                 </div>
@@ -5424,35 +5437,35 @@ export const AdminDashboard: React.FC = () => {
                       className={`ad-pqr-tab-btn ${pqrTab === "Todas" ? "active" : ""}`}
                       onClick={() => setPqrTab("Todas")}
                     >
-                      Todas (184)
+                      Todas ({pqrStats.total.count})
                     </button>
                     <button
                       type="button"
                       className={`ad-pqr-tab-btn ${pqrTab === "Quejas" ? "active" : ""}`}
                       onClick={() => setPqrTab("Quejas")}
                     >
-                      Quejas (76)
+                      Quejas ({pqrStats.queja.count})
                     </button>
                     <button
                       type="button"
                       className={`ad-pqr-tab-btn ${pqrTab === "Reclamos" ? "active" : ""}`}
                       onClick={() => setPqrTab("Reclamos")}
                     >
-                      Reclamos (62)
+                      Reclamos ({pqrStats.reclamo.count})
                     </button>
                     <button
                       type="button"
                       className={`ad-pqr-tab-btn ${pqrTab === "Peticiones" ? "active" : ""}`}
                       onClick={() => setPqrTab("Peticiones")}
                     >
-                      Peticiones (46)
+                      Peticiones ({pqrStats.peticion.count})
                     </button>
                     <button
                       type="button"
                       className={`ad-pqr-tab-btn ${pqrTab === "Reportes" ? "active" : ""}`}
                       onClick={() => setPqrTab("Reportes")}
                     >
-                      Reportes (38)
+                      Reportes ({pqrStats.reporte.count})
                     </button>
                   </div>
 
@@ -7768,6 +7781,7 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {activeMenu === "configuracion" && <AdminSettings />}
+          {activeMenu === "contrataciones" && <AdminHirings />}
           {activeMenu === "pagos" && <AdminPayments onOpenSettings={() => setActiveMenu("configuracion")} />}
 
           {/* ═════════════════════════════════════════════════════════════════
@@ -9645,10 +9659,12 @@ export const AdminDashboard: React.FC = () => {
             activeMenu !== "roles" &&
             activeMenu !== "reportes" &&
             activeMenu !== "configuracion" &&
+            activeMenu !== "pagos" &&
+            activeMenu !== "contrataciones" &&
             activeMenu !== "publicaciones_productos" && (
               <div className="ad-card" style={{ padding: "32px", textAlign: "center" }}>
                 <div style={{ fontSize: "3rem", marginBottom: "12px" }}>📋</div>
-                <h3 style={{ margin: "0 0 8px" }}>Módulo de {activeMenu.replace("_", " ").toUpperCase()}</h3>
+                <h3 style={{ margin: "0 0 8px" }}>Módulo de {String(activeMenu).replace("_", " ").toUpperCase()}</h3>
                 <p style={{ color: "#64748b", maxWidth: "500px", margin: "0 auto 20px" }}>
                   Este módulo está conectado a la base de datos de Serviprox. Puedes regresar al panel de control principal o seleccionar otra sección del menú lateral.
                 </p>

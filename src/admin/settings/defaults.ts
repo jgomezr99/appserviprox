@@ -93,6 +93,9 @@ export const SECTION_DEFAULTS: Record<string, Section> = {
     instant_notice: true,
     auto_invoice: true,
     test_payment_enabled: false,
+    discount_enabled: false,
+    discount_type: "percent",
+    discount_value: 0,
   },
   security: {
     pw_enforce: true,

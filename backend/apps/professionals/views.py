@@ -12,6 +12,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 
 from apps.accounts.models import PlatformSettings, UserRole
+from apps.accounts.platform_guard import require_feature
 from apps.orders.models import Order
 
 from .geo import annotate_distance, within_radius
@@ -247,6 +248,7 @@ class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
                 for item in redemptions
             ])
 
+        require_feature("benefits", "El sistema de beneficios está deshabilitado temporalmente.")
         benefit_id = str(request.data.get("benefit_id", "")).strip()
         if not benefit_id:
             raise ValidationError({"benefit_id": "Selecciona un beneficio."})

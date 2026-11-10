@@ -14,6 +14,7 @@ from apps.households.models import Household
 from apps.orders.models import Order, Payment
 from apps.pqrs.models import AppProblemAttachment, AppProblemReport, PQRMessage, PQRReport
 from apps.professionals.models import ProfessionalProfile
+from apps.accounts.city_stats import city_stats
 from apps.accounts.permissions import IsServiproxAdministrator
 from apps.service_requests.models import ServiceRequest
 
@@ -1590,4 +1591,5 @@ class AdminReportsStatsView(APIView):
             "pqr_status": pqr_status,
             "recent_activity": recent_activity[:7],
             "localities": localities,
+            **city_stats(),
         })

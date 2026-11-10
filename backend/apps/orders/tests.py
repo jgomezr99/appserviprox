@@ -58,6 +58,8 @@ class ServiceWorkflowTests(TestCase):
         return self.api.post(f"/api/v1/orders/{order.pk}/transition/", {"status": status, **details}, format="json")
 
     def test_all_modalities_wait_for_professional_acceptance(self):
+        self.profile.refresh_from_db()
+        profile_location = (self.profile.latitude, self.profile.longitude)
         for urgency in ServiceRequest.Urgency.values:
             with self.subTest(urgency=urgency):
                 data = self.send_request(urgency)
@@ -67,7 +69,7 @@ class ServiceWorkflowTests(TestCase):
         self.home.refresh_from_db()
         self.profile.refresh_from_db()
         self.assertIsNone(self.home.latitude)
-        self.assertIsNone(self.profile.latitude)
+        self.assertEqual((self.profile.latitude, self.profile.longitude), profile_location)
 
     def test_unassigned_request_never_fabricates_an_order(self):
         data = self.send_request(directed=False)

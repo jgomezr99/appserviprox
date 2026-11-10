@@ -9,6 +9,7 @@ import { useLivePage } from "../hooks/useLivePage";
 import AuthenticatedImage from "../components/serviprox/AuthenticatedImage";
 import TravelMap from "../components/serviprox/TravelMap";
 import ServiceProgress from "../components/serviprox/ServiceProgress";
+import PaymentReceivedCard from "../components/serviprox/tracking/PaymentReceivedCard";
 import ClientTrackingControls from "../components/serviprox/tracking/ClientTrackingControls";
 import ProfessionalTrackingControls, { type TransitionDetails } from "../components/serviprox/tracking/ProfessionalTrackingControls";
 import { priceBounds } from "../components/serviprox/tracking/priceBounds";
@@ -181,6 +182,7 @@ const WorkTrackingPage: React.FC = () => {
                 </div>
                 {isClient && <p className="tracking-hint">La tarifa la confirma el profesional dentro del rango publicado y aquí se muestra para consulta.</p>}
               </section>
+              <PaymentReceivedCard order={order} isClient={isClient} onMessage={setToast} />
               {status === "completed" && order.payment_status === "pending" && (
                 <section className="tracking-card" aria-label="Pago pendiente">
                   <h2>Pago pendiente</h2>

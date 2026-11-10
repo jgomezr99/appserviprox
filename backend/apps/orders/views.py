@@ -17,9 +17,9 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import PlatformSettings
 
-from .finance import apply_payment_update
+from .finance import apply_payment_update, compute_discount, record_declined_dev_payment
 from .models import Order, Payment, Review, WorkEvidence
-from .serializers import OrderCreateSerializer, OrderSerializer, ReviewSerializer, OrderTransitionSerializer, OrderPriceSerializer
+from .serializers import DemoPaymentSerializer, OrderCreateSerializer, OrderSerializer, ReviewSerializer, OrderTransitionSerializer, OrderPriceSerializer
 from .services import InvalidTransition, confirm_development_payment, transition, set_final_price, is_assigned_professional, is_order_client, validate_price_range, price_bounds
 from .wompi import build_checkout_url, verify_event, wompi_ready
 
@@ -105,7 +105,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({"detail": str(exc)}, status=400)
         if missing_bounds:
             order.save(update_fields=["estimate_min", "estimate_max", "updated_at"])
-        cents = int((Decimal(amount) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        discount = compute_discount(amount)
+        cents = int(((Decimal(amount) - discount) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
         if cents < 150000:
             return Response({"detail": "El monto mínimo de pago es $1.500 COP."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -115,6 +116,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             client=request.user,
             reference=reference,
             amount_in_cents=cents,
+            discount_amount=discount,
             currency="COP",
             test_mode=test_mode,
         )
@@ -139,7 +141,19 @@ class OrderViewSet(viewsets.ModelViewSet):
             )
         if order.payment_status == Order.PaymentStatus.PENDING and order.status != Order.Status.COMPLETED:
             return Response({"detail": PAY_AFTER_COMPLETION}, status=status.HTTP_400_BAD_REQUEST)
-        order = confirm_development_payment(order, user=request.user)
+        payload = DemoPaymentSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        if order.payment_status == Order.PaymentStatus.PENDING and payload.simulate_decline:
+            declined = record_declined_dev_payment(order, user=request.user, method=payload.payment_method)
+            return Response(
+                {
+                    "detail": "Pago rechazado. Verifica los datos o intenta con otro medio de pago.",
+                    "payment_status": "declined",
+                    "reference": declined.reference,
+                },
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+        order = confirm_development_payment(order, user=request.user, method=payload.payment_method)
         return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
 
     @action(detail=True, methods=["post"], url_path="location")

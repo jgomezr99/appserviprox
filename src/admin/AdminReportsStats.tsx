@@ -1,16 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { adminService, ReportsStatsResponse } from "../services/adminService";
+import CityMapCard from "./CityMapCard";
 import "./AdminReportsStats.css";
 
 interface Props {
   onNavigateToAudit?: () => void;
 }
 
+const FALLBACK_CITIES: NonNullable<ReportsStatsResponse["cities"]> = [
+  ["bogota", "Bogotá", [4.711, -74.0721], 11],
+  ["medellin", "Medellín", [6.2442, -75.5812], 12],
+  ["cali", "Cali", [3.4516, -76.532], 12],
+  ["cartagena", "Cartagena", [10.391, -75.4794], 12],
+  ["cundinamarca", "Cundinamarca", [4.86, -74.04], 9],
+].map(([id, name, center, zoom]) => ({
+  id: id as string,
+  name: name as string,
+  center: center as [number, number],
+  zoom: zoom as number,
+  households: 0,
+  professionals: 0,
+  zones: [],
+  points: [],
+}));
+
 export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
   const [dateRange, setDateRange] = useState("");
   const [contratacionesPeriod, setContratacionesPeriod] = useState("10meses");
   const [activeTooltip, setActiveTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
-  const [hoveredLocality, setHoveredLocality] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [reportsData, setReportsData] = useState<ReportsStatsResponse | null>(null);
@@ -54,6 +71,7 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
   const newUsersData = reportsData?.new_users_data ?? [];
   const monthlyRevenue = reportsData?.monthly_revenue ?? [];
   const localities = reportsData?.localities ?? [];
+  const cities = reportsData?.cities?.length ? reportsData.cities : FALLBACK_CITIES;
   const pqrStatus = reportsData?.pqr_status ?? {
     total: 0,
     raw_total: 0,
@@ -77,11 +95,6 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
   };
   const recentActivity = reportsData?.recent_activity ?? [];
 
-  // Helper para contar localidad
-  const getLocalityCount = (id: string) => {
-    const found = localities.find((l) => l.id === id);
-    return reportsData ? found?.count ?? 0 : "—";
-  };
   const renderSparkline = (values: number[], color: string) => {
     const points = values.slice(-4);
     const max = Math.max(...points, 1);
@@ -114,7 +127,10 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
       topProducts.map((p) => `${p.name},${p.count}`).join("\n") +
       "\n\nCONTRATACIONES POR LOCALIDAD (BOGOTÁ)\n" +
       "Localidad,Contrataciones\n" +
-      localities.map((l) => `${l.name},${l.count}`).join("\n");
+      localities.map((l) => `${l.name},${l.count}`).join("\n") +
+      "\n\nHOGARES Y PROFESIONALES POR CIUDAD\n" +
+      "Ciudad,Hogares,Profesionales\n" +
+      cities.map((c) => `${c.name},${c.households},${c.professionals}`).join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -785,207 +801,17 @@ export const AdminReportsStats: React.FC<Props> = ({ onNavigateToAudit }) => {
           </div>
         </div>
 
-        {/* Distribución de registros por localidad */}
+        {/* Perfiles y hogares por ciudad, con un mapa por ciudad */}
         <div className="ad-reports-card">
           <div className="ad-reports-card-header">
-            <h3 className="ad-reports-card-title">Perfiles y hogares por localidad</h3>
+            <h3 className="ad-reports-card-title">Perfiles y hogares por ciudad</h3>
           </div>
-
-          <div className="ad-reports-map-container">
-            {/* Mapa Vectorial Interactivo SVG de Bogotá */}
-            <div className="ad-reports-map-svg-box">
-              <svg viewBox="0 0 320 280" className="ad-reports-map-svg">
-                {/* SUBA (Noroeste) */}
-                <path
-                  d="M 60 50 L 150 25 L 195 55 L 175 105 L 110 115 L 75 95 Z"
-                  fill={hoveredLocality === "suba" ? "#2563eb" : "#3b82f6"}
-                  className="ad-reports-map-path"
-                  onMouseEnter={(e) => {
-                    setHoveredLocality("suba");
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("suba");
-                    const txt = `Suba: ${c} registros`;
-                    setActiveTooltip({ x: r.left + 50, y: r.top, text: txt });
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredLocality(null);
-                    setActiveTooltip(null);
-                  }}
-                />
-                <text x="135" y="75" className="ad-reports-map-text">
-                  Suba
-                </text>
-
-                {/* USAQUÉN (Noreste) */}
-                <path
-                  d="M 195 55 L 260 70 L 250 140 L 205 130 L 175 105 Z"
-                  fill={hoveredLocality === "usaquen" ? "#93c5fd" : "#bfdbfe"}
-                  className="ad-reports-map-path"
-                  onMouseEnter={(e) => {
-                    setHoveredLocality("usaquen");
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("usaquen");
-                    const txt = `Usaquén: ${c} registros`;
-                    setActiveTooltip({ x: r.left + 30, y: r.top, text: txt });
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredLocality(null);
-                    setActiveTooltip(null);
-                  }}
-                />
-                <text x="220" y="105" className="ad-reports-map-text-dark">
-                  Usaquén
-                </text>
-
-                {/* ENGATIVÁ (Oeste) */}
-                <path
-                  d="M 60 110 L 120 115 L 140 160 L 85 175 L 45 145 Z"
-                  fill={hoveredLocality === "engativa" ? "#3b82f6" : "#60a5fa"}
-                  className="ad-reports-map-path"
-                  onMouseEnter={(e) => {
-                    setHoveredLocality("engativa");
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("engativa");
-                    const txt = `Engativá: ${c} registros`;
-                    setActiveTooltip({ x: r.left + 40, y: r.top, text: txt });
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredLocality(null);
-                    setActiveTooltip(null);
-                  }}
-                />
-                <text x="95" y="145" className="ad-reports-map-text">
-                  Engativá
-                </text>
-
-                {/* CHAPINERO (Centro-Este) */}
-                <path
-                  d="M 190 125 L 245 135 L 235 185 L 180 180 L 165 145 Z"
-                  fill={hoveredLocality === "chapinero" ? "#60a5fa" : "#93c5fd"}
-                  className="ad-reports-map-path"
-                  onMouseEnter={(e) => {
-                    setHoveredLocality("chapinero");
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("chapinero");
-                    const txt = `Chapinero: ${c} registros`;
-                    setActiveTooltip({ x: r.left + 30, y: r.top, text: txt });
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredLocality(null);
-                    setActiveTooltip(null);
-                  }}
-                />
-                <text x="210" y="160" className="ad-reports-map-text-dark">
-                  Chapinero
-                </text>
-
-                {/* TEUSAQUILLO (Centro) */}
-                <path
-                  d="M 135 150 L 175 145 L 170 195 L 125 190 Z"
-                  fill={hoveredLocality === "teusaquillo" ? "#c7d2fe" : "#e0e7ff"}
-                  className="ad-reports-map-path"
-                  onMouseEnter={(e) => {
-                    setHoveredLocality("teusaquillo");
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("teusaquillo");
-                    const txt = `Teusaquillo: ${c} registros`;
-                    setActiveTooltip({ x: r.left + 20, y: r.top, text: txt });
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredLocality(null);
-                    setActiveTooltip(null);
-                  }}
-                />
-                <text x="150" y="172" className="ad-reports-map-text-dark" style={{ fontSize: "8.5px" }}>
-                  Teusaquillo
-                </text>
-
-                {/* SANTA FE (Centro-Oriente) */}
-                <path
-                  d="M 180 190 L 245 190 L 230 235 L 175 230 Z"
-                  fill={hoveredLocality === "santafe" ? "#ddd6fe" : "#ede9fe"}
-                  className="ad-reports-map-path"
-                  onMouseEnter={(e) => {
-                    setHoveredLocality("santafe");
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("santafe");
-                    const txt = `Santa Fe: ${c} registros`;
-                    setActiveTooltip({ x: r.left + 30, y: r.top, text: txt });
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredLocality(null);
-                    setActiveTooltip(null);
-                  }}
-                />
-                <text x="208" y="215" className="ad-reports-map-text-dark">
-                  Santa Fe
-                </text>
-
-                {/* KENNEDY (Suroeste - Más oscuro / mayor volumen) */}
-                <path
-                  d="M 85 175 L 155 175 L 150 240 L 75 245 L 60 200 Z"
-                  fill={hoveredLocality === "kennedy" ? "#1e40af" : "#1d4ed8"}
-                  className="ad-reports-map-path"
-                  onMouseEnter={(e) => {
-                    setHoveredLocality("kennedy");
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("kennedy");
-                    const txt = `Kennedy: ${c} registros`;
-                    setActiveTooltip({ x: r.left + 40, y: r.top, text: txt });
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredLocality(null);
-                    setActiveTooltip(null);
-                  }}
-                />
-                <text x="110" y="210" className="ad-reports-map-text" style={{ fontSize: "11px", fontWeight: 800 }}>
-                  Kennedy
-                </text>
-
-                {/* BOSA (Sur) */}
-                <path
-                  d="M 40 230 L 85 235 L 80 270 L 30 260 Z"
-                  fill={hoveredLocality === "bosa" ? "#93c5fd" : "#c7d2fe"}
-                  className="ad-reports-map-path"
-                  onMouseEnter={(e) => {
-                    setHoveredLocality("bosa");
-                    const r = e.currentTarget.getBoundingClientRect();
-                    const c = getLocalityCount("bosa");
-                    const txt = `Bosa: ${c} registros`;
-                    setActiveTooltip({ x: r.left + 25, y: r.top, text: txt });
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredLocality(null);
-                    setActiveTooltip(null);
-                  }}
-                />
-                <text x="60" y="252" className="ad-reports-map-text-dark">
-                  Bosa
-                </text>
-              </svg>
-            </div>
-
-            {/* Lista y Leyenda a la derecha */}
-            <div className="ad-reports-map-legend-list">
-              {localities.map((loc) => (
-                <div
-                  key={loc.id}
-                  className="ad-reports-map-legend-item"
-                  style={{
-                    background: hoveredLocality === loc.id ? "#eff6ff" : "transparent",
-                  }}
-                  onMouseEnter={() => setHoveredLocality(loc.id)}
-                  onMouseLeave={() => setHoveredLocality(null)}
-                >
-                  <div className="ad-reports-map-legend-left">
-                    <span className="ad-reports-map-legend-color" style={{ background: loc.color }} />
-                    <span>{loc.name}</span>
-                  </div>
-                  <span className="ad-reports-map-legend-count">{reportsData ? loc.count : "—"}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <CityMapCard
+            cities={cities}
+            bogotaLocalities={localities.filter((l) => l.id !== "otras").map((l) => ({ name: l.name, count: l.count }))}
+            other={reportsData?.cities_other}
+            loaded={!!reportsData}
+          />
         </div>
       </div>
 

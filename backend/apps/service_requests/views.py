@@ -103,6 +103,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
+        require_feature("hirings", "Las contrataciones están deshabilitadas temporalmente.")
         service_request = self.get_object()
         if request.user.role != UserRole.PROFESSIONAL:
             raise PermissionDenied("Solo el profesional destinatario puede aceptar.")

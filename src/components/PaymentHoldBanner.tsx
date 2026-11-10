@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { financeService, formatMoney, type PaymentHold } from "../services/finance";
 
 const REFRESH_MS = 60_000;
+export const PAYMENT_CHANGED_EVENT = "serviprox:payment-changed";
 
 /** Aviso fijo cuando la cuenta está suspendida por un servicio terminado sin pagar. */
 export const PaymentHoldBanner: React.FC = () => {
@@ -29,7 +30,12 @@ export const PaymentHoldBanner: React.FC = () => {
     }
     void refresh();
     const timer = window.setInterval(() => void refresh(), REFRESH_MS);
-    return () => window.clearInterval(timer);
+    const onPaymentChanged = () => void refresh();
+    window.addEventListener(PAYMENT_CHANGED_EVENT, onPaymentChanged);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(PAYMENT_CHANGED_EVENT, onPaymentChanged);
+    };
   }, [applicable, refresh, location.pathname]);
 
   if (!applicable || !hold?.hold) return null;

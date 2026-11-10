@@ -265,6 +265,20 @@
   background-color: #f8fafc;
 }
 
+/* En pantallas angostas el menú lateral pasa arriba para que el contenido use todo el ancho. */
+@media (max-width: 900px) {
+  .ad-wrapper {
+    flex-direction: column;
+  }
+  .ad-sidebar {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    max-height: 45vh;
+  }
+}
+
 /* ── Encabezado Superior (Top Bar) ── */
 .ad-topbar {
   background-color: #ffffff;

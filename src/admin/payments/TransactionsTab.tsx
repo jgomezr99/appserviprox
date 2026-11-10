@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { financeService, type PaymentRow } from "../../services/finance";
+import PaymentDetailDialog from "./PaymentDetailDialog";
 import { EmptyRow, FilterChips, KpiCard, Notice, Pager, Pill, errorMessage, formatDateTime, money, useRemote } from "./shared";
 
 const STATUS_FILTERS: Array<[string, string]> = [
@@ -16,11 +17,12 @@ const PAGE_SIZE = 10;
 const INITIAL: PaymentRow[] = [];
 
 export const TransactionsTab: React.FC = () => {
-  const { data: rows, loading, error, reload } = useRemote(financeService.admin.payments, INITIAL);
+  const { data: rows, loading, error, errorText, reload } = useRemote(financeService.admin.payments, INITIAL);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [verifying, setVerifying] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ kind: "error" | "ok"; text: string } | null>(null);
 
   useEffect(() => {
@@ -79,7 +81,7 @@ export const TransactionsTab: React.FC = () => {
           </div>
         </div>
 
-        {error && <Notice kind="error">No se pudieron cargar los pagos. Verifica la conexión con el servidor.</Notice>}
+        {error && <Notice kind="error">No se pudieron cargar los pagos. {errorText || "Verifica la conexión con el servidor."}</Notice>}
         {notice && <Notice kind={notice.kind}>{notice.text}</Notice>}
 
         <div className="ad-table-responsive">
@@ -92,6 +94,7 @@ export const TransactionsTab: React.FC = () => {
                 <th>Cliente</th>
                 <th>Profesional</th>
                 <th>Método</th>
+                <th>Descuento</th>
                 <th>Monto</th>
                 <th>Estado</th>
                 <th>Acciones</th>
@@ -100,7 +103,7 @@ export const TransactionsTab: React.FC = () => {
             <tbody>
               {visible.length === 0 ? (
                 <EmptyRow
-                  colSpan={9}
+                  colSpan={10}
                   loading={loading}
                   message={rows.length === 0 ? "Aún no hay transacciones registradas." : "No hay pagos que coincidan con los filtros."}
                 />
@@ -113,17 +116,19 @@ export const TransactionsTab: React.FC = () => {
                     <td>{r.user}</td>
                     <td>{r.professional}</td>
                     <td>{r.method}</td>
+                    <td>{r.discount ? `-${money(r.discount)}` : "—"}</td>
                     <td style={{ fontWeight: 700 }}>{money(r.amount)}</td>
                     <td>
                       <Pill status={r.status} label={r.status_label} />
                     </td>
-                    <td>
-                      {r.can_verify ? (
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <button type="button" className="ad-btn ad-btn-secondary" onClick={() => setDetailId(r.id)}>
+                        Ver detalle
+                      </button>{" "}
+                      {r.can_verify && (
                         <button type="button" className="ad-btn ad-btn-secondary" disabled={verifying === r.id} onClick={() => void verify(r)}>
                           {verifying === r.id ? "Verificando..." : "Verificar pago"}
                         </button>
-                      ) : (
-                        "—"
                       )}
                     </td>
                   </tr>
@@ -132,6 +137,10 @@ export const TransactionsTab: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {detailId !== null && (
+          <PaymentDetailDialog paymentId={detailId} onClose={() => setDetailId(null)} onChanged={() => void reload()} />
+        )}
 
         <Pager page={page} total={filtered.length} pageSize={PAGE_SIZE} noun="pagos" onChange={setPage} />
       </div>

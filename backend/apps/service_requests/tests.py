@@ -335,6 +335,67 @@ class DirectedServiceRequestTests(TestCase):
         self.assertEqual(second.status_code, 400)
         self.assertEqual(Order.objects.filter(service_request=service_request).count(), 1)
 
+    def _completed_order(self, description):
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            household=self.household,
+            selected_category=self.category,
+            selected_service=self.service,
+            professional=self.profile,
+            description=description,
+        )
+        self.api.force_authenticate(user=self.pro_user)
+        self.api.post(f"/api/v1/requests/{service_request.id}/accept/")
+        order = Order.objects.get(service_request=service_request)
+        Order.objects.filter(pk=order.pk).update(status=Order.Status.COMPLETED)
+        self.api.force_authenticate(user=self.client_user)
+        return order
+
+    def test_demo_payment_with_cards_and_transfer(self):
+        card = {
+            "card_number": "4242 4242 4242 4242",
+            "card_holder": "Cliente Prueba",
+            "expiry": "12/45",
+            "cvv": "123",
+        }
+        cases = [
+            ({**card, "method": "credit", "installments": 3}, "DEV_CREDIT"),
+            ({**card, "method": "debit"}, "DEV_DEBIT"),
+            (
+                {
+                    "method": "transfer",
+                    "bank": "Bancolombia",
+                    "account_type": "savings",
+                    "document_type": "CC",
+                    "document_number": "1234567890",
+                },
+                "DEV_TRANSFER",
+            ),
+        ]
+        for body, expected in cases:
+            with self.subTest(method=body["method"]):
+                order = self._completed_order(f"Pago {expected}")
+                response = self.api.post(f"/api/v1/orders/{order.id}/confirm-demo-payment/", body, format="json")
+                self.assertEqual(response.status_code, 200, response.data)
+                order.refresh_from_db()
+                self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+                self.assertEqual(order.payments.get().payment_method, expected)
+
+    def test_demo_payment_rejects_invalid_card_and_transfer_data(self):
+        order = self._completed_order("Datos inválidos")
+        url = f"/api/v1/orders/{order.id}/confirm-demo-payment/"
+        bad_card = self.api.post(
+            url,
+            {"method": "credit", "card_number": "4242 4242 4242 4241", "card_holder": "A", "expiry": "01/20", "cvv": "1"},
+            format="json",
+        )
+        self.assertEqual(bad_card.status_code, 400)
+        self.assertEqual(set(bad_card.data), {"card_number", "card_holder", "expiry", "cvv"})
+        bad_transfer = self.api.post(url, {"method": "transfer"}, format="json")
+        self.assertEqual(bad_transfer.status_code, 400)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PENDING)
+
     def test_confirm_demo_payment_is_idempotent(self):
         service_request = ServiceRequest.objects.create(
             client=self.client_user,
