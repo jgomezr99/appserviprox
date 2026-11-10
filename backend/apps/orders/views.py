@@ -87,7 +87,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({"detail": "La orden ya está pagada."}, status=status.HTTP_400_BAD_REQUEST)
         if order.status != Order.Status.COMPLETED:
             return Response({"detail": PAY_AFTER_COMPLETION}, status=status.HTTP_400_BAD_REQUEST)
-        if not wompi_ready():
+        test_mode = PlatformSettings.test_payment_enabled()
+        if not wompi_ready(test_mode):
             return Response({"detail": "Wompi no está configurado en el servidor."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         payments_cfg = PlatformSettings.load()["sections"].get("payments", {})
         if all(payments_cfg.get(f"{m}_enabled") is False for m in ("pse", "card", "transfer", "wallet")):
@@ -110,12 +111,17 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         reference = f"SPX-{order.pk}-{secrets.token_hex(4)}"
         Payment.objects.create(
-            order=order, client=request.user, reference=reference, amount_in_cents=cents, currency="COP"
+            order=order,
+            client=request.user,
+            reference=reference,
+            amount_in_cents=cents,
+            currency="COP",
+            test_mode=test_mode,
         )
         redirect_url = f"{settings.FRONTEND_URL}/cliente/historialpago?order={order.pk}" if settings.FRONTEND_URL else ""
         return Response(
             {
-                "checkout_url": build_checkout_url(reference, cents, "COP", redirect_url),
+                "checkout_url": build_checkout_url(reference, cents, "COP", redirect_url, test_mode),
                 "reference": reference,
                 "amount_in_cents": cents,
             }
@@ -123,7 +129,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="confirm-demo-payment")
     def confirm_demo_payment(self, request, pk=None):
-        if wompi_ready() and not settings.DEBUG:
+        if wompi_ready() and not settings.DEBUG and not PlatformSettings.test_payment_enabled():
             return Response({"detail": "El pago demo está deshabilitado."}, status=status.HTTP_403_FORBIDDEN)
         order = self.get_object()
         if not is_order_client(order, request.user):

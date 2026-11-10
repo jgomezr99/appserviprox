@@ -304,3 +304,7 @@ class PlatformSettings(models.Model):
         row.data = data
         row.save()
         return cls.load()
+
+    @classmethod
+    def test_payment_enabled(cls) -> bool:
+        return bool(cls.load()["sections"].get("payments", {}).get("test_payment_enabled"))

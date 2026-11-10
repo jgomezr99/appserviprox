@@ -1,4 +1,5 @@
 import json
+import secrets
 from datetime import timedelta
 
 from django.conf import settings as dj_settings
@@ -103,6 +104,7 @@ class PublicPlatformSettingsView(APIView):
         public["appearance"] = data["sections"].get("appearance", {})
         public["role_params"] = data["sections"].get("role_params", {})
         public["benefit_catalog"] = data["sections"].get("benefit_catalog", {})
+        public["test_payment_enabled"] = PlatformSettings.test_payment_enabled()
         return Response(public)
 
 
@@ -181,10 +183,36 @@ class AdminPlatformSettingsView(APIView):
                     continue
                 if len(json.dumps(value)) > SECTION_LIMIT.get(name, DEFAULT_SECTION_LIMIT):
                     return Response({"detail": f"La sección {name} es demasiado grande."}, status=status.HTTP_400_BAD_REQUEST)
+                if name == "payments":
+                    # El pago de prueba solo cambia por AdminTestPaymentView, que valida la clave.
+                    value = {**value, "test_payment_enabled": current["sections"].get(name, {}).get("test_payment_enabled", False)}
                 current["sections"][name] = value
 
         saved = PlatformSettings.save_data(current)
         _audit(request, "Configuración actualizada", "Plataforma")
+        return Response(saved)
+
+
+class AdminTestPaymentView(APIView):
+    """Activa o desactiva el pago de prueba. Activar exige la clave TEST_PAYMENT_KEY."""
+
+    permission_classes = [IsPlatformStaff]
+
+    def post(self, request):
+        enabled = bool(request.data.get("enabled"))
+        if enabled:
+            if not dj_settings.TEST_PAYMENT_KEY:
+                return Response(
+                    {"detail": "El pago de prueba no está configurado en el servidor (TEST_PAYMENT_KEY)."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            key = str(request.data.get("key") or "")
+            if not secrets.compare_digest(key, dj_settings.TEST_PAYMENT_KEY):
+                return Response({"detail": "Clave incorrecta."}, status=status.HTTP_403_FORBIDDEN)
+        data = PlatformSettings.load()
+        data["sections"].setdefault("payments", {})["test_payment_enabled"] = enabled
+        saved = PlatformSettings.save_data(data)
+        _audit(request, "Pago de prueba " + ("activado" if enabled else "desactivado"), "Pagos")
         return Response(saved)
 
 

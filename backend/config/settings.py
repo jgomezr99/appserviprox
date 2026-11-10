@@ -128,6 +128,13 @@ WOMPI_PUBLIC_KEY = os.getenv("WOMPI_PUBLIC_KEY", "").strip()
 WOMPI_PRIVATE_KEY = os.getenv("WOMPI_PRIVATE_KEY", "").strip()
 WOMPI_EVENTS_SECRET = os.getenv("WOMPI_EVENTS_SECRET", "").strip()
 WOMPI_INTEGRITY_SECRET = os.getenv("WOMPI_INTEGRITY_SECRET", "").strip()
+# Llaves sandbox (pub_test_...) para simular pagos cuando el pago de prueba está activo.
+WOMPI_TEST_PUBLIC_KEY = os.getenv("WOMPI_TEST_PUBLIC_KEY", "").strip()
+WOMPI_TEST_PRIVATE_KEY = os.getenv("WOMPI_TEST_PRIVATE_KEY", "").strip()
+WOMPI_TEST_EVENTS_SECRET = os.getenv("WOMPI_TEST_EVENTS_SECRET", "").strip()
+WOMPI_TEST_INTEGRITY_SECRET = os.getenv("WOMPI_TEST_INTEGRITY_SECRET", "").strip()
+# Clave que el administrador debe ingresar para activar el pago de prueba (vacía = desactivado).
+TEST_PAYMENT_KEY = os.getenv("TEST_PAYMENT_KEY", "").strip()
 # URL pública de la app a la que Wompi devuelve al cliente tras pagar.
 FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
 

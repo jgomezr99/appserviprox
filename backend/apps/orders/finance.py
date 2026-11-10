@@ -5,7 +5,6 @@ import urllib.request
 from decimal import ROUND_HALF_UP, Decimal
 from urllib.parse import quote
 
-from django.conf import settings
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
@@ -14,6 +13,7 @@ from apps.accounts.models import PlatformSettings
 from apps.professionals.models import ProfessionalProfile
 
 from .models import Order, Payment, Refund, Withdrawal
+from .wompi import wompi_keys
 
 CENT = Decimal("0.01")
 DEFAULT_COMMISSION = Decimal("10")
@@ -139,9 +139,9 @@ def apply_payment_update(
     return payment
 
 
-def fetch_wompi_transaction(reference: str) -> dict | None:
+def fetch_wompi_transaction(reference: str, test_mode: bool = False) -> dict | None:
     """Consulta a Wompi la transacción asociada a una referencia."""
-    public_key = settings.WOMPI_PUBLIC_KEY
+    public_key = wompi_keys(test_mode)["public"]
     host = "sandbox.wompi.co" if public_key.startswith("pub_test_") else "production.wompi.co"
     url = f"https://{host}/v1/transactions?reference={quote(reference)}"
     try:

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../services/api";
+import { apiMessage } from "../../utils/workflow";
 import { Card, Empty, FieldList, Footer, TabProps, Toggle } from "./ui";
 
 type PaymentRow = {
@@ -27,6 +28,9 @@ export const PaymentsTab: React.FC<TabProps> = ({ form, setForm, sec, setSec, bu
   const [rows, setRows] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [testKey, setTestKey] = useState("");
+  const [testBusy, setTestBusy] = useState(false);
+  const [testError, setTestError] = useState("");
 
   const loadPayments = async () => {
     setLoading(true);
@@ -48,8 +52,46 @@ export const PaymentsTab: React.FC<TabProps> = ({ form, setForm, sec, setSec, bu
     void loadPayments();
   }, []);
 
+  const toggleTestPayment = async (enabled: boolean) => {
+    setTestBusy(true);
+    setTestError("");
+    try {
+      await api.post("admin/settings/test-payment/", { enabled, key: testKey });
+      setSec({ test_payment_enabled: enabled });
+      setTestKey("");
+      notify("ok", enabled ? "Pago de prueba activado." : "Pago de prueba desactivado.");
+    } catch (error) {
+      setTestError(apiMessage(error, "No se pudo cambiar el pago de prueba."));
+    } finally {
+      setTestBusy(false);
+    }
+  };
+
   return (
   <>
+    <Card title="Pago de prueba" icon="🧪" badge={sec.test_payment_enabled ? "Activo" : "Inactivo"}>
+      <p className="as-muted">Permite confirmar pagos sin cobro real para pruebas. Activarlo requiere la clave de administrador.</p>
+      <div className="as-row">
+        <label>
+          Clave de activación
+          <input
+            type="password"
+            autoComplete="off"
+            value={testKey}
+            disabled={testBusy}
+            onChange={(e) => setTestKey(e.target.value)}
+          />
+        </label>
+        <Toggle
+          checked={Boolean(sec.test_payment_enabled)}
+          label="Pago de prueba"
+          disabled={testBusy}
+          onChange={(v) => void toggleTestPayment(v)}
+        />
+      </div>
+      {testError && <p role="alert" style={{ color: "#b91c1c" }}>{testError}</p>}
+    </Card>
+
     <div className="as-card">
       <div className="as-row as-row-top">
         <div>

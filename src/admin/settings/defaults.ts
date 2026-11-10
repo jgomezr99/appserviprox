@@ -92,6 +92,7 @@ export const SECTION_DEFAULTS: Record<string, Section> = {
     pro_settlement: "Cada 7 días",
     instant_notice: true,
     auto_invoice: true,
+    test_payment_enabled: false,
   },
   security: {
     pw_enforce: true,

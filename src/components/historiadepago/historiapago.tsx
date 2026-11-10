@@ -25,6 +25,7 @@ import {
 } from "ionicons/icons";
 import { useAuth } from "../../context/AuthContext";
 import { orderService } from "../../services/serviprox";
+import { usePlatformSettings } from "../../services/platformSettings";
 import { apiMessage } from "../../utils/workflow";
 import {
   financeService,
@@ -75,6 +76,8 @@ const HISTORY_FILTERS: Array<[string, string]> = [
 const PaymentPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
+  const { test_payment_enabled: testPaymentEnabled } = usePlatformSettings();
+  const showDemoPayment = import.meta.env.DEV || testPaymentEnabled === true;
   const orderId = useMemo(() => new URLSearchParams(location.search).get("order"), [location.search]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -215,9 +218,9 @@ const PaymentPage: React.FC = () => {
             <ServiceButtonContent busy={processing} icon={cardOutline}
               label="Pagar con Wompi" busyLabel="Procesando..." />
           </IonButton>
-          {import.meta.env.DEV && (
+          {showDemoPayment && (
             <>
-              <p>Confirmación simulada solo para desarrollo. No genera un cobro real.</p>
+              <p>Confirmación simulada para pruebas. No genera un cobro real.</p>
               <IonButton fill="outline" onClick={() => void confirmPayment(order)} disabled={processing}>
                 Confirmar pago demo
               </IonButton>

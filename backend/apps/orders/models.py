@@ -111,6 +111,7 @@ class Payment(models.Model):
     currency = models.CharField(max_length=3, default="COP")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     wompi_transaction_id = models.CharField(max_length=80, blank=True)
+    test_mode = models.BooleanField(default=False)
     payment_method = models.CharField(max_length=40, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

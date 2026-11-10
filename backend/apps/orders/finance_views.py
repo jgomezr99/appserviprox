@@ -260,13 +260,13 @@ class AdminPaymentVerifyView(APIView):
             return Response({"detail": "Pago no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         if payment.status in (Payment.Status.APPROVED, Payment.Status.REFUNDED):
             return Response({"detail": "El pago ya está confirmado."}, status=status.HTTP_400_BAD_REQUEST)
-        if payment.reference.startswith("DEV-") or not wompi_ready():
+        if payment.reference.startswith("DEV-") or not wompi_ready(payment.test_mode):
             return Response(
                 {"detail": "Este pago no se puede verificar con la pasarela."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            tx = fetch_wompi_transaction(payment.reference)
+            tx = fetch_wompi_transaction(payment.reference, payment.test_mode)
         except FinanceError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
         new_status = WOMPI_STATUS.get((tx or {}).get("status"))
