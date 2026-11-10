@@ -1,6 +1,34 @@
 """Checks de seguridad y contratos de despliegue sobre BD de prueba."""
 from unittest.mock import patch
-from django.test import TestCase, override_settings
+from django.core.exceptions import ImproperlyConfigured
+from django.test import SimpleTestCase, TestCase, override_settings
+from config.settings import parse_postgres_database_url
+
+
+class DatabaseUrlTests(SimpleTestCase):
+    def test_parses_managed_postgres_url(self):
+        credentials, port, sslmode = parse_postgres_database_url(
+            "postgresql://user%40example:pass%2Fword@db.example.com:6432/serviprox?sslmode=require"
+        )
+
+        self.assertEqual(
+            credentials,
+            {
+                "POSTGRES_DB": "serviprox",
+                "POSTGRES_USER": "user@example",
+                "POSTGRES_PASSWORD": "pass/word",
+                "POSTGRES_HOST": "db.example.com",
+            },
+        )
+        self.assertEqual(port, "6432")
+        self.assertEqual(sslmode, "require")
+
+    def test_rejects_non_postgres_database_url(self):
+        with self.assertRaisesMessage(
+            ImproperlyConfigured,
+            "DATABASE_URL debe empezar por postgres:// o postgresql://.",
+        ):
+            parse_postgres_database_url("mysql://user:password@db.example.com/serviprox")
 
 
 @override_settings(
