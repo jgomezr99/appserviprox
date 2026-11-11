@@ -10,6 +10,8 @@ import {
   IonToolbar,
 } from "@ionic/react";
 import { useHistory, useLocation } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { Geolocation, type Position } from "@capacitor/geolocation";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -250,13 +252,17 @@ const ContractorMapPage: React.FC = () => {
   const specialtyScrollRef = useRef<HTMLDivElement | null>(null);
   const activeMarkerRef = useRef<Record<string, L.Marker>>({});
   const [mapReady, setMapReady] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState("Buscando ubicación GPS…");
+  const [hasDeviceLocation, setHasDeviceLocation] = useState(false);
+  const gpsCenteredRef = useRef(false);
+  const geocodeStartedRef = useRef(false);
+  const initialMapFitRef = useRef(false);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const savedCity = useMemo(readSavedCity, []);
   const [selectedCity, setSelectedCity] = useState<MapCity>(savedCity ?? DEFAULT_MAP_CITY);
-  // Con una ciudad elegida a mano, el GPS ya no la reemplaza.
-  const manualCityRef = useRef(Boolean(savedCity));
+  const manualCityRef = useRef(false);
   const [selectedSpecialty, setSelectedSpecialty] = useState("Todas las Especialidades");
 
   useEffect(() => {
@@ -311,53 +317,126 @@ const ContractorMapPage: React.FC = () => {
       .toUpperCase();
 
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    let active = true;
+    let hasDeviceFix = false;
+    let watchId: string | null = null;
 
-    const updateLocation = async ({ coords }: GeolocationPosition) => {
-      // Se usa la ubicación real en cualquier ciudad de Colombia; fuera del país se conserva la de Bogotá.
-      if (!manualCityRef.current && isInColombia(coords.latitude, coords.longitude)) {
-        setSelectedCity(nearestMapCity(coords.latitude, coords.longitude));
+    const updateLocation = async ({ coords }: Position) => {
+      if (!active || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) return;
+      if (!manualCityRef.current) {
+        if (isInColombia(coords.latitude, coords.longitude)) {
+          setSelectedCity(nearestMapCity(coords.latitude, coords.longitude));
+        }
         const location = {
           label: "Mi ubicación",
           address: `Ubicación actual (${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)})`,
           lat: coords.latitude,
           lng: coords.longitude,
         } satisfies UserProjectLocation;
+        hasDeviceFix = true;
         setProjectLocation(location);
+        setHasDeviceLocation(true);
+        setGpsStatus(
+          coords.accuracy > 100
+            ? `Ubicación aproximada (±${Math.round(coords.accuracy)} m)`
+            : `GPS preciso (±${Math.round(coords.accuracy)} m)`
+        );
 
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}&zoom=18&addressdetails=1`,
-            { headers: { Accept: "application/json", "Accept-Language": "es" } }
-          );
-          if (!response.ok) return;
-          const payload = (await response.json()) as { display_name?: string };
-          if (payload.display_name) {
-            setProjectLocation((current) => ({
-              ...current,
-              address: payload.display_name || current.address,
-            }));
+        if (!geocodeStartedRef.current) {
+          geocodeStartedRef.current = true;
+          const requestedLat = coords.latitude;
+          const requestedLng = coords.longitude;
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${requestedLat}&lon=${requestedLng}&zoom=18&addressdetails=1`,
+              { headers: { Accept: "application/json", "Accept-Language": "es" } }
+            );
+            if (!response.ok) return;
+            const payload = (await response.json()) as { display_name?: string };
+            if (payload.display_name && !manualCityRef.current && active) {
+              setProjectLocation((current) => {
+                const stillSameLocation =
+                  current.lat === requestedLat && current.lng === requestedLng;
+                return stillSameLocation
+                  ? { ...current, address: payload.display_name || current.address }
+                  : current;
+              });
+            }
+          } catch {
+            // Conserva las coordenadas GPS si no se puede resolver la dirección.
           }
-        } catch {
-          // Conserva las coordenadas reales si no se puede resolver la dirección.
         }
       }
     };
 
-    const watchId = navigator.geolocation.watchPosition(
-      updateLocation,
-      () => {
-        // Mantiene la ubicación de Bogotá configurada como respaldo.
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+    const reportLocationError = (error: unknown) => {
+      if (!active) return;
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (message.includes("permission") || message.includes("denied")) {
+        setGpsStatus("Permite el acceso a tu ubicación");
+      } else if (hasDeviceFix) {
+        setGpsStatus("No se pudo actualizar el GPS");
+      } else {
+        setGpsStatus("Ubicación GPS no disponible");
       }
-    );
+    };
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    const startTracking = async () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          let permissions = await Geolocation.checkPermissions();
+          if (permissions.location !== "granted" && permissions.coarseLocation !== "granted") {
+            permissions = await Geolocation.requestPermissions({ permissions: ["location"] });
+          }
+          if (permissions.location !== "granted" && permissions.coarseLocation !== "granted") {
+            setGpsStatus("Permite la ubicación precisa en los ajustes del dispositivo");
+            return;
+          }
+          if (permissions.location !== "granted") {
+            setGpsStatus("Ubicación aproximada; activa la ubicación precisa");
+          }
+        }
+
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0,
+          minimumUpdateInterval: 3000,
+        };
+        const initialPosition = await Geolocation.getCurrentPosition(options);
+        if (!active) return;
+        void updateLocation(initialPosition);
+        const nextWatchId = await Geolocation.watchPosition(options, (position, error) => {
+          if (error) {
+            reportLocationError(error);
+          } else if (position) {
+            void updateLocation(position);
+          }
+        });
+        if (!active) {
+          void Geolocation.clearWatch({ id: nextWatchId });
+          return;
+        }
+        watchId = nextWatchId;
+      } catch (error) {
+        reportLocationError(error);
+      }
+    };
+
+    void startTracking();
+
+    return () => {
+      active = false;
+      if (watchId) void Geolocation.clearWatch({ id: watchId });
+    };
   }, []);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !mapReady || !hasDeviceLocation || gpsCenteredRef.current) return;
+    gpsCenteredRef.current = true;
+    map.flyTo([projectLocation.lat, projectLocation.lng], 14, { duration: 0.8 });
+  }, [hasDeviceLocation, mapReady, projectLocation]);
 
   useEffect(() => {
     let active = true;
@@ -495,7 +574,7 @@ const ContractorMapPage: React.FC = () => {
     if (mapInstanceRef.current) return;
 
     const map = L.map(mapContainerRef.current, {
-      center: [4.656, -74.075],
+      center: [projectLocation.lat, projectLocation.lng],
       zoom: 12.6,
       zoomControl: false,
     });
@@ -516,7 +595,7 @@ const ContractorMapPage: React.FC = () => {
       html: `
         <div class="sp-tu-obra-marker-wrap">
           <div class="sp-tu-obra-capsule">
-            <span> 🏠  Hogar </span>
+            <span>🏠  Hogar </span>
           </div>
           <div class="sp-tu-obra-pin-icon">
             <svg width="28" height="38" viewBox="0 0 28 38" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -535,7 +614,7 @@ const ContractorMapPage: React.FC = () => {
       zIndexOffset: 1200,
     })
       .addTo(map)
-      .bindPopup(`<strong>Tu Obra</strong><br/>${projectLocation.address}`);
+      .bindPopup(`<strong>${projectLocation.label}</strong><br/>${projectLocation.address}`);
     homeMarkerRef.current = homeMarker;
 
     mapInstanceRef.current = map;
@@ -546,7 +625,6 @@ const ContractorMapPage: React.FC = () => {
     requestAnimationFrame(() => map.invalidateSize(true));
     const resizeTimer = window.setTimeout(() => {
       map.invalidateSize(true);
-      map.setView([4.656, -74.075], 12.6);
     }, 250);
 
     return () => {
@@ -565,7 +643,7 @@ const ContractorMapPage: React.FC = () => {
   useEffect(() => {
     if (homeMarkerRef.current) {
       homeMarkerRef.current.setLatLng([projectLocation.lat, projectLocation.lng]);
-      homeMarkerRef.current.setPopupContent(`<strong>Tu Obra</strong><br/>${projectLocation.address}`);
+      homeMarkerRef.current.setPopupContent(`<strong>${projectLocation.label}</strong><br/>${projectLocation.address}`);
     }
   }, [projectLocation]);
 
@@ -844,18 +922,20 @@ const ContractorMapPage: React.FC = () => {
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !mapReady) return;
+    if (!manualCityRef.current && hasDeviceLocation) return;
     const timer = window.setTimeout(() => map.setView([selectedCity.lat, selectedCity.lng], selectedCity.zoom), 300);
     return () => window.clearTimeout(timer);
-  }, [selectedCity, mapReady]);
+  }, [selectedCity, mapReady, hasDeviceLocation]);
 
   // Auto-fit initial bounds when map is ready and contractors are loaded
   useEffect(() => {
-    if (!mapReady || !filteredContractors.length) return;
+    if (!mapReady || !filteredContractors.length || hasDeviceLocation || manualCityRef.current || initialMapFitRef.current) return;
+    initialMapFitRef.current = true;
     const timer = window.setTimeout(() => {
       handleFitAll();
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [mapReady, filteredContractors.length]);
+  }, [mapReady, filteredContractors.length, hasDeviceLocation, selectedCity]);
 
   // Scroll horizontal helpers
   const scrollChips = (ref: React.RefObject<HTMLDivElement | null>, offset: number) => {
@@ -903,7 +983,7 @@ const ContractorMapPage: React.FC = () => {
               </div>
               <div className="sp-top-pill sp-top-pill--live" style={{ background: "#ecfdf5", color: "#047857", borderColor: "#a7f3d0", fontWeight: 700 }}>
                 <span className="sp-pill-dot" style={{ color: "#10b981" }}>●</span>
-                <span>GPS en tiempo real</span>
+                <span>{gpsStatus}</span>
               </div>
             </div>
 
@@ -1393,4 +1473,3 @@ const ContractorMapPage: React.FC = () => {
 };
 
 export default ContractorMapPage;
-
