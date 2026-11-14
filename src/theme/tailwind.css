@@ -1,11 +1,3 @@
-/*
- * Utilidades de Tailwind solo para las pantallas que las usan (PQRS y mapa de contratistas).
- * No se importa el preflight para no alterar los estilos base de Ionic, y las utilidades
- * se generan únicamente desde los archivos listados en @source.
- */
-@import "tailwindcss/theme.css";
-@import "tailwindcss/utilities.css" source(none);
-
-@source "../components/pqr";
-@source "../pages/PqrPage.tsx";
-@source "../pages/ContractorMapPage.tsx";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

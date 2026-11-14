@@ -1,14 +1,27 @@
 /// <reference types="vitest" />
 
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/postcss'
+import autoprefixer from 'autoprefixer'
+import tailwindcss from 'tailwindcss'
 import { defineConfig } from 'vitest/config'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   css: {
     postcss: {
-      plugins: [tailwindcss()],
+      plugins: [
+        tailwindcss({
+          content: [
+            './src/components/pqr/**/*.{js,ts,jsx,tsx}',
+            './src/pages/PqrPage.tsx',
+            './src/pages/ContractorMapPage.tsx',
+          ],
+          corePlugins: {
+            preflight: false,
+          },
+        }),
+        autoprefixer(),
+      ],
     },
   },
   plugins: [
