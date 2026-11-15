@@ -1,0 +1,218 @@
+/* Estilos compartidos de las vistas financieras (historial de pagos e ingresos). */
+.fin-section-title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--sp-primary-dark);
+}
+
+.fin-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.fin-kpi {
+  display: grid;
+  gap: 4px;
+}
+
+.fin-kpi span {
+  color: var(--sp-text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.fin-kpi strong {
+  font-size: 1.35rem;
+  color: var(--sp-primary-dark);
+}
+
+.fin-kpi small {
+  color: var(--sp-text-muted);
+}
+
+.fin-kpi--highlight {
+  border: 1px solid var(--sp-primary);
+}
+
+.fin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.fin-chip {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--sp-border, rgba(11, 47, 107, 0.18));
+  background: transparent;
+  color: var(--sp-text);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.fin-chip.is-active {
+  background: var(--sp-primary);
+  border-color: var(--sp-primary);
+  color: #fff;
+}
+
+.fin-search,
+.fin-input {
+  min-width: 220px;
+  flex: 1;
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--sp-border, rgba(11, 47, 107, 0.18));
+  background: var(--sp-surface, #fff);
+  color: var(--sp-text);
+  font-size: 0.9rem;
+}
+
+.fin-empty {
+  padding: 18px 0;
+  text-align: center;
+}
+
+.fin-table-wrap {
+  overflow-x: auto;
+}
+
+.fin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.fin-table th {
+  text-align: left;
+  padding: 10px 8px;
+  color: var(--sp-text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--sp-border, rgba(11, 47, 107, 0.14));
+}
+
+.fin-table td {
+  padding: 12px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--sp-border, rgba(11, 47, 107, 0.08));
+}
+
+.fin-table td small {
+  display: block;
+  color: var(--sp-text-muted);
+}
+
+.fin-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.fin-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.fin-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.fin-receipt h2 {
+  margin: 0;
+}
+
+.fin-receipt dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 16px 0;
+}
+
+.fin-receipt dt {
+  color: var(--sp-text-muted);
+  font-weight: 700;
+}
+
+.fin-receipt dd {
+  margin: 0;
+}
+
+.fin-receipt-total {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .fin-table thead {
+    display: none;
+  }
+
+  .fin-table,
+  .fin-table tbody,
+  .fin-table tr,
+  .fin-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .fin-table tr {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--sp-border, rgba(11, 47, 107, 0.14));
+  }
+
+  .fin-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 0;
+    padding: 5px 0;
+    text-align: right;
+  }
+
+  .fin-table td::before {
+    content: attr(data-label);
+    color: var(--sp-text-muted);
+    font-weight: 700;
+    text-align: left;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #fin-receipt-print,
+  #fin-receipt-print * {
+    visibility: visible;
+  }
+
+  #fin-receipt-print {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+
+  .fin-no-print {
+    display: none !important;
+  }
+}

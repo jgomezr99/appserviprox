@@ -60,7 +60,8 @@
 .as-footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; }
 .as-footer .as-muted { margin-right: auto; }
 .as-row-top { align-items: flex-start; margin-bottom: 8px; }
-.as-inline { flex-direction: row !important; align-items: center; gap: 8px !important; }
+.as-inline { display: flex; flex-direction: row !important; align-items: center; gap: 10px !important; font-size: 0.8rem; font-weight: 600; color: #334155; }
+.as-inline select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 28px 7px 10px; font: inherit; font-weight: 400; font-size: 0.82rem; background: #fff; }
 .as-unit { display: flex; align-items: center; gap: 6px; }
 .as-unit input { flex: 1; min-width: 0; }
 .as-unit em { font-style: normal; color: #64748b; }
@@ -109,3 +110,15 @@
 @media (max-width: 700px) {
   .as-grid, .as-grid-3, .as-grid-4, .as-grid-3b, .as-grid-2b { grid-template-columns: 1fr; }
 }
+
+/* Las tarjetas conservan un ancho legible; en pantallas angostas la lista se desplaza en lugar de cortar el contenido.
+   El margen derecho deja libres los botones flotantes del asistente. */
+.as-view { padding-right: 64px; }
+@media (max-width: 900px) { .as-view { padding: 14px 64px 14px 14px; } }
+.as-inner { min-width: 0; }
+.as-method { min-width: 0; flex: 1; }
+.as-method > span { min-width: 0; overflow-wrap: anywhere; }
+.as-methods-scroll { overflow-x: auto; margin-bottom: 14px; padding-bottom: 4px; }
+.as-methods-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; align-items: start; }
+.as-method-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.as-method-actions .as-badge { margin-left: 0; }

@@ -92,6 +92,8 @@ def transition(order: Order, new_status: str, user=None, note: str = "", schedul
         import secrets
         if not secrets.compare_digest(str(arrival_code).encode("utf-8"), order.arrival_code.encode("utf-8")):
             raise InvalidTransition("El código de llegada es incorrecto. Solicítalo al cliente.")
+    # Se puede terminar con el pago pendiente: el cliente paga al finalizar y, mientras no lo
+    # haga, ambas cuentas quedan suspendidas (ver holds.py).
     order.status = new_status
     order.save(update_fields=["status", "scheduled_for", "updated_at"])
     OrderEvent.objects.create(order=order, status=new_status, note=note, created_by=user)
@@ -133,10 +135,10 @@ def set_final_price(order: Order, amount, user) -> Order:
 
 
 @transaction.atomic
-def confirm_development_payment(order: Order, user=None) -> Order:
+def confirm_development_payment(order: Order, user=None, method: str = "DEV") -> Order:
     """Marca como pagada una orden real para desarrollo/demo, sin pasarela externa."""
     order = Order.objects.select_for_update().get(pk=order.pk)
-    if order.payment_status == Order.PaymentStatus.PAID:
+    if order.payment_status != Order.PaymentStatus.PENDING:
         return order
     order.payment_status = Order.PaymentStatus.PAID
     order.payment_confirmed_at = timezone.now()
@@ -149,6 +151,10 @@ def confirm_development_payment(order: Order, user=None) -> Order:
             "updated_at",
         ]
     )
+    from .finance import ensure_dev_payment, payment_gross, register_split
+
+    payment = ensure_dev_payment(order, user, method)
+    register_split(order, payment_gross(payment), payment.discount_amount)
     return order
 
 

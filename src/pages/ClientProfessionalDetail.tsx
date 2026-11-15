@@ -51,6 +51,7 @@ import "./ClientProfessionalDetail.css";
 import "./RolePages.css";
 import ServiceProgress from "../components/serviprox/ServiceProgress";
 import ServiceButtonContent from "../components/serviprox/ServiceButtonContent";
+import { usePlatformSettings } from "../services/platformSettings";
 
 type RouteParams = {
   id: string;
@@ -308,7 +309,10 @@ const ClientProfessionalDetail: React.FC = () => {
     };
   }, [professional, household]);
 
+  const platform = usePlatformSettings();
+  const hiringsBlocked = platform.features.hirings === false || platform.features.maintenance;
   const canSubmit =
+    !hiringsBlocked &&
     !!professional &&
     !professional.is_own_profile &&
     !!service &&
@@ -714,6 +718,13 @@ const ClientProfessionalDetail: React.FC = () => {
                     )}
 
                     {/* Botones de Acción */}
+                    {hiringsBlocked && (
+                      <p role="alert" style={{ background: "#fff7e6", border: "1px solid #ffd591", color: "#ad6800", borderRadius: 12, padding: "10px 12px", fontWeight: 700 }}>
+                        {platform.features.maintenance
+                          ? platform.maintenance_message
+                          : "Las contrataciones están deshabilitadas temporalmente."}
+                      </p>
+                    )}
                     <div className="sp-request-actions">
                       <button
                         type="submit"

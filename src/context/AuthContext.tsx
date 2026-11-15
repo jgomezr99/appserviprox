@@ -8,7 +8,13 @@ import React, {
 } from "react";
 import { tokenStorage, ApiError } from "../services/api";
 import { authService } from "../services/auth";
-import type { LoginPayload, RegisterPayload, UpdateMePayload, User } from "../types/serviprox";
+import type {
+  LoginPayload,
+  ProfessionalCertificatePayload,
+  RegisterPayload,
+  UpdateMePayload,
+  User,
+} from "../types/serviprox";
 
 const DEMO_SESSION_KEY = "serviprox_demo_user";
 const CACHED_USER_KEY = "serviprox_cached_user";
@@ -113,8 +119,8 @@ const demoUsers: Record<string, User> = {
 
 const getDemoUser = (payload: LoginPayload) => {
   if (!import.meta.env.DEV) return null;
-  const key = payload.email.trim().toLowerCase();
-  const user = demoUsers[key];
+  const key = (payload.email || payload.username || "").trim().toLowerCase();
+  const user = demoUsers[key] || (key === "admin" ? demoUsers["admin@serviprox.com"] : undefined);
   const validPassword = DEMO_PASSWORDS.includes(payload.password);
   return user && validPassword ? user : null;
 };
@@ -128,7 +134,7 @@ type AuthContextValue = {
   logout: () => void;
   refreshSession: () => Promise<User | null>;
   updateMe: (payload: UpdateMePayload) => Promise<User>;
-  becomeProfessional: () => Promise<User>;
+  becomeProfessional: (certificate?: ProfessionalCertificatePayload) => Promise<User>;
   becomeClient: () => Promise<User>;
   becomeStaff: () => Promise<User>;
   completeOnboarding: () => Promise<User>;
@@ -251,8 +257,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     return updatedUser;
   }, [saveUser]);
 
-  const becomeProfessional = useCallback(async () => {
-    const updatedUser = await authService.becomeProfessional();
+  const becomeProfessional = useCallback(async (certificate?: ProfessionalCertificatePayload) => {
+    const updatedUser = await authService.becomeProfessional(certificate);
     saveUser(updatedUser);
     return updatedUser;
   }, [saveUser]);

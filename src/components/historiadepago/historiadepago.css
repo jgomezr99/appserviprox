@@ -21,3 +21,105 @@
   color: #8f1f2f;
   font-weight: 720;
 }
+
+.sp-test-payment {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.sp-test-payment h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.sp-test-payment-methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sp-test-payment-methods button {
+  flex: 1 1 120px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217, 54, 74, 0.3);
+  border-radius: 12px;
+  background: #fff;
+  color: #8f1f2f;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sp-test-payment-methods button.is-active {
+  background: #d9364a;
+  border-color: #d9364a;
+  color: #fff;
+}
+
+.sp-test-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sp-test-payment-grid label {
+  display: grid;
+  gap: 4px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.sp-test-payment-grid .is-wide {
+  grid-column: 1 / -1;
+}
+
+.sp-test-payment-grid input,
+.sp-test-payment-grid select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-weight: 500;
+}
+
+@media (max-width: 520px) {
+  .sp-test-payment-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sp-payment-discount {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #e8f6ec;
+  color: #1c6b3a;
+  font-weight: 600;
+}
+
+.sp-payment-result {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 2px solid;
+  border-radius: 14px;
+}
+
+.sp-payment-result p {
+  margin: 4px 0 0;
+  color: #1f2937;
+}
+
+.sp-payment-result button {
+  border: 0;
+  background: transparent;
+  font-size: 1.1rem;
+  cursor: pointer;
+}

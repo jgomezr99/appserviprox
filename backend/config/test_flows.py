@@ -47,12 +47,28 @@ class DeploymentFlowTests(TestCase):
     def test_register_both_roles_jwt_profile_and_refresh(self):
         for role in [UserRole.CLIENT, UserRole.PROFESSIONAL]:
             email = f"new-{role}@validation.example"
-            payload = {"email": email, "username": f"new-{role}", "role": role,
-                "password": "Random-Validation-81!", "city": "Bogota"}
-            response = self.api.post("/api/v1/auth/register/", payload, format="json")
+            payload = {
+                "email": email,
+                "username": f"new-{role}",
+                "role": role,
+                "password": "Random-Validation-81!",
+                "city": "Bogota",
+            }
+            if role == UserRole.PROFESSIONAL:
+                payload.update(
+                    profession="Plomero",
+                    certificate=SimpleUploadedFile(
+                        "certificado.pdf", b"%PDF-1.4 certificado de prueba"
+                    ),
+                )
+            response = self.api.post("/api/v1/auth/register/", payload, format="multipart")
             self.assertEqual(response.status_code, 201, response.data)
             self.assertNotIn("password", response.data)
-            response = self.api.post("/api/v1/auth/token/", {"email": email, "password": payload["password"]}, format="json")
+            response = self.api.post(
+                "/api/v1/auth/token/",
+                {"email": email, "password": payload["password"]},
+                format="json",
+            )
             self.assertEqual(response.status_code, 200, response.data)
             tokens = response.data
             self.api.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
@@ -60,7 +76,11 @@ class DeploymentFlowTests(TestCase):
             self.assertEqual(me.status_code, 200)
             self.assertEqual(me.data["role"], role)
             self.api.credentials()
-            refreshed = self.api.post("/api/v1/auth/token/refresh/", {"refresh": tokens["refresh"]}, format="json")
+            refreshed = self.api.post(
+                "/api/v1/auth/token/refresh/",
+                {"refresh": tokens["refresh"]},
+                format="json",
+            )
             self.assertEqual(refreshed.status_code, 200, refreshed.data)
             self.assertNotEqual(refreshed.data["refresh"], tokens["refresh"])
             self.api.credentials(HTTP_AUTHORIZATION=f"Bearer {refreshed.data['access']}")
@@ -111,12 +131,12 @@ class DeploymentFlowTests(TestCase):
         self.assertEqual(self.api.get(image_url).status_code, 404)
         self.api.force_authenticate(user=None)
         self.assertEqual(self.api.get(image_url).status_code, 401)
-        self.api.force_authenticate(user=self.client_user)
-        paid = self.api.post(f"/api/v1/orders/{order.id}/confirm-demo-payment/")
-        self.assertEqual(paid.status_code, 200)
         self.api.force_authenticate(user=profile.user)
         completed = self.api.post(f"/api/v1/orders/{order.id}/transition/", {"status": "completed"}, format="json")
         self.assertEqual(completed.status_code, 200, completed.data)
+        self.api.force_authenticate(user=self.client_user)
+        paid = self.api.post(f"/api/v1/orders/{order.id}/confirm-demo-payment/")
+        self.assertEqual(paid.status_code, 200)
         self.api.force_authenticate(user=self.client_user)
         review = self.api.post("/api/v1/reviews/", {"order": order.id, "rating": 5, "comment": "Correcto"}, format="json")
         self.assertEqual(review.status_code, 201, review.data)

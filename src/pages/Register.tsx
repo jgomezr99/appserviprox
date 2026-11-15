@@ -28,8 +28,12 @@ import type { PublicRegisterRole } from "../types/serviprox";
 import { getEntryRoute } from "../utils/routes";
 import logo from "../Assets/logo.png";
 import styles from "./Login.module.css";
+import { usePlatformSettings } from "../services/platformSettings";
 
 const emailOk = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
+
+const MAX_CERTIFICATE_BYTES = 5 * 1024 * 1024;
+const CERTIFICATE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 
 const slugPart = (value: string) =>
   value
@@ -55,6 +59,8 @@ const getApiFieldMessage = (payload: unknown) => {
     username: "Usuario",
     password: "Contraseña",
     role: "Tipo de cuenta",
+    profession: "Profesión",
+    certificate: "Certificado",
   };
   return `${labels[field] || field}: ${message}`;
 };
@@ -92,6 +98,10 @@ const roleOptions: Array<{
 const Register: React.FC = () => {
   const history = useHistory();
   const { isAuthenticated, isLoading: sessionLoading, register, user } = useAuth();
+  const platform = usePlatformSettings();
+  const registrationClosed = platform.features.new_users === false || platform.features.maintenance;
+  const professionalsOpen = platform.features.professionals !== false;
+  const visibleRoleOptions = roleOptions.filter((option) => option.value !== "professional" || professionalsOpen);
   const [role, setRole] = useState<PublicRegisterRole>("client");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -107,7 +117,24 @@ const Register: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
+  const [profession, setProfession] = useState("");
+  const [certificate, setCertificate] = useState<File | null>(null);
+  const [certificateError, setCertificateError] = useState("");
 
+  const pickCertificate = (file: File | null) => {
+    setCertificateError("");
+    if (file && !CERTIFICATE_TYPES.includes(file.type)) {
+      setCertificateError("El certificado debe ser un archivo PDF, JPG o PNG.");
+      setCertificate(null);
+      return;
+    }
+    if (file && file.size > MAX_CERTIFICATE_BYTES) {
+      setCertificateError("El certificado no puede superar 5 MB.");
+      setCertificate(null);
+      return;
+    }
+    setCertificate(file);
+  };
   useEffect(() => {
     if (!sessionLoading && isAuthenticated) {
       history.replace(getEntryRoute(user));
@@ -124,6 +151,10 @@ const Register: React.FC = () => {
     document.body.setAttribute("data-theme", role);
   }, [role]);
 
+  useEffect(() => {
+    if (!professionalsOpen && role === "professional") setRole("client");
+  }, [professionalsOpen, role]);
+
   const passwordsMatch = password === confirmPassword;
   const canContinue =
     firstName.trim().length > 0 &&
@@ -131,7 +162,8 @@ const Register: React.FC = () => {
     emailOk(email) &&
     password.length >= 8 &&
     passwordsMatch;
-  const canSubmit = canContinue && !isSubmitting;
+  const certificateOk = role !== "professional" || (profession.trim().length >= 3 && certificate !== null);
+  const canSubmit = canContinue && certificateOk && !isSubmitting && !registrationClosed;
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -158,20 +190,11 @@ const Register: React.FC = () => {
         address: address.trim(),
         role,
         password,
+        ...(role === "professional" && certificate
+          ? { profession: profession.trim(), certificate }
+          : {}),
       };
-      let currentUser;
-      try {
-        currentUser = await register({ ...payload, username: baseUsername });
-      } catch (err) {
-        const usernameTaken =
-          err instanceof ApiError &&
-          typeof err.payload === "object" &&
-          err.payload !== null &&
-          "username" in err.payload;
-        if (!usernameTaken) throw err;
-        const suffix = Math.floor(100 + Math.random() * 900);
-        currentUser = await register({ ...payload, username: `${baseUsername}${suffix}` });
-      }
+      const currentUser = await register({ ...payload, username: baseUsername });
       history.replace(getEntryRoute(currentUser));
     } catch (err) {
       setError(getRegisterErrorMessage(err));
@@ -212,11 +235,19 @@ const Register: React.FC = () => {
               </p>
             </div>
 
-            <form className={styles.form} onSubmit={handleRegister} noValidate>
+            {registrationClosed && (
+              <p role="alert" style={{ background: "#fef3c7", color: "#92400e", borderRadius: 12, padding: "12px 14px", fontWeight: 600 }}>
+                {platform.features.maintenance
+                  ? platform.maintenance_message
+                  : "El registro de nuevos usuarios está deshabilitado por el momento."}
+              </p>
+            )}
+
+            <form className={styles.form} onSubmit={handleRegister} noValidate style={registrationClosed ? { display: "none" } : undefined}>
               {step === 1 && (<>
               <fieldset className={styles.roleGroup}>
                 <legend>¿Qué quieres hacer en Serviprox?</legend>
-                {roleOptions.map((option) => {
+                {visibleRoleOptions.map((option) => {
                   const selected = role === option.value;
                   return (
                     <button
@@ -391,6 +422,40 @@ const Register: React.FC = () => {
                   </div>
                 </label>
               </div>
+
+              {role === "professional" && (
+                <>
+                  <label className={styles.field}>
+                    <span>Profesión u oficio</span>
+                    <div className={styles.inputShell}>
+                      <IonIcon icon={briefcaseOutline} aria-hidden="true" />
+                      <IonInput
+                        value={profession}
+                        maxlength={120}
+                        placeholder="Ej: Electricista, Plomero, Técnico en aires"
+                        onIonInput={(event) => setProfession(String(event.detail.value ?? ""))}
+                        required
+                      />
+                    </div>
+                  </label>
+
+                  <label className={styles.field}>
+                    <span>Certificado profesional (PDF, JPG o PNG, máx. 5 MB)</span>
+                    <input
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png"
+                      onChange={(event) => pickCertificate(event.target.files?.[0] ?? null)}
+                      required
+                    />
+                    {certificate && <small>Archivo seleccionado: {certificate.name}</small>}
+                  </label>
+                  {certificateError && (
+                    <p className={styles.error} role="alert">
+                      {certificateError}
+                    </p>
+                  )}
+                </>
+              )}
               </>)}
 
               {error && (

@@ -9,7 +9,7 @@ from .models import PlatformSettings
 
 def require_feature(name: str, message: str) -> None:
     """Rechaza la operación si el administrador desactivó la función."""
-    if not PlatformSettings.load()["features"].get(name, True):
+    if not PlatformSettings.load().get("features", {}).get(name, True):
         raise PermissionDenied(message)
 
 
@@ -47,8 +47,8 @@ def lockout_policy() -> tuple[int, int]:
     """(intentos máximos, minutos de bloqueo)"""
     cfg = PlatformSettings.load()["sections"].get("security", {})
     attempts = _first_int(cfg.get("max_attempts", "5"), 5)
-    lock = str(cfg.get("lock", "30 minutos"))
-    minutes = _first_int(lock, 30)
+    lock = str(cfg.get("lock", "2 minutos"))
+    minutes = _first_int(lock, 2)
     if "hora" in lock:
         minutes *= 60
     return attempts, minutes

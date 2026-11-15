@@ -11,6 +11,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import UserRole
 from apps.accounts.platform_guard import require_feature
+from apps.orders.holds import assert_client_can_hire, assert_professional_can_work
 from apps.orders.models import Order
 
 from .models import ServiceRequest, ServiceRequestImage
@@ -72,6 +73,10 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                 )
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        assert_client_can_hire(request.user)
+        target = serializer.validated_data.get("professional")
+        if target is not None:
+            assert_professional_can_work(target)
         with transaction.atomic():
             service_request = serializer.save()
             for image in images:
@@ -98,9 +103,13 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
+        require_feature("hirings", "Las contrataciones están deshabilitadas temporalmente.")
         service_request = self.get_object()
         if request.user.role != UserRole.PROFESSIONAL:
             raise PermissionDenied("Solo el profesional destinatario puede aceptar.")
+        profile = service_request.professional or getattr(request.user, "professional_profile", None)
+        if profile is not None:
+            assert_professional_can_work(profile)
         service_request = accept_request(service_request.id, request.user)
         return Response(ServiceRequestSerializer(service_request, context=self.get_serializer_context()).data)
 

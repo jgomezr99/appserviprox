@@ -1,10 +1,29 @@
 /// <reference types="vitest" />
 
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import autoprefixer from 'autoprefixer'
+import tailwindcss from 'tailwindcss'
+import { defineConfig } from 'vitest/config'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  css: {
+    postcss: {
+      plugins: [
+        tailwindcss({
+          content: [
+            './src/components/pqr/**/*.{js,ts,jsx,tsx}',
+            './src/pages/PqrPage.tsx',
+            './src/pages/ContractorMapPage.tsx',
+          ],
+          corePlugins: {
+            preflight: false,
+          },
+        }),
+        autoprefixer(),
+      ],
+    },
+  },
   plugins: [
     {
       name: "production-api-url",
@@ -24,7 +43,7 @@ export default defineConfig({
         }
       },
     },
-    react(),
+    react()as any,
   ],
   server: {
     host: true,

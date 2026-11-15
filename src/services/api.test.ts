@@ -82,4 +82,14 @@ describe("API de produccion", () => {
     expect(expired).toHaveBeenCalledTimes(1);
     window.removeEventListener("serviprox:auth-expired", expired);
   });
+
+  it("no marca la conexion como activa si la respuesta de salud no confirma la BD", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ status: "ok", database: "disconnected" })));
+    const { checkBackendHealth } = await import("./api");
+
+    await expect(checkBackendHealth()).resolves.toMatchObject({
+      ok: false,
+      database: "disconnected",
+    });
+  });
 });

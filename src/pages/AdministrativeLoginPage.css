@@ -7,8 +7,8 @@
 }
 
 .admin-login-page .admin-login-content {
-  --background: linear-gradient(180deg, #ffffff 0%, #ffffff 16%, #dc2626 40%, #b91024 60%, #ffffff 84%, #ffffff 100%) !important;
-  background: linear-gradient(180deg, #ffffff 0%, #ffffff 16%, #dc2626 40%, #b91024 60%, #ffffff 84%, #ffffff 100%) !important;
+  --background: linear-gradient(180deg, #870909 0%, #eb5959 40%, #df949d 60% 50%, #ffffff 94%, #ffffff 100%) !important;
+  
 }
 
 .admin-login-page .admin-login-layout {

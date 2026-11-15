@@ -1,9 +1,11 @@
+from unittest.mock import patch
+
 from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
 from apps.catalog.models import Service, ServiceCategory
-from apps.professionals.models import ProfessionalProfile, ProfessionalService
+from apps.professionals.models import BenefitRedemption, ProfessionalProfile, ProfessionalService
 
 
 class ProfessionalServiceMatchingTests(TestCase):
@@ -222,3 +224,68 @@ class ProfessionalServiceMatchingTests(TestCase):
             offering.observations,
             "Incluye sifon sencillo; materiales premium se cotizan aparte.",
         )
+
+
+class BenefitRedemptionTests(TestCase):
+    def setUp(self):
+        self.client_api = APIClient()
+        self.user = User.objects.create_user(
+            email="benefit@example.com",
+            username="benefit",
+            password="test-pass-123",
+            role=UserRole.PROFESSIONAL,
+        )
+        self.profile = ProfessionalProfile.objects.create(
+            user=self.user,
+            display_name="Profesional Beneficios",
+            points=500,
+        )
+        self.catalog = {
+            "sections": {
+                "benefit_catalog": {
+                    "items": [
+                        {
+                            "id": "ben-1",
+                            "title": "Bono de prueba",
+                            "points": 250,
+                            "recharge_amount": 50000,
+                        }
+                    ]
+                }
+            }
+        }
+
+    @patch("apps.professionals.views.PlatformSettings.load")
+    def test_redeem_deducts_points_and_persists_redemption(self, load_settings):
+        load_settings.return_value = self.catalog
+        self.client_api.force_authenticate(user=self.user)
+
+        response = self.client_api.post(
+            "/api/v1/professionals/benefit-redemptions/",
+            {"benefit_id": "ben-1"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.points, 250)
+        self.assertEqual(BenefitRedemption.objects.get().benefit_id, "ben-1")
+        self.assertEqual(response.data["remaining_points"], 250)
+
+    @patch("apps.professionals.views.PlatformSettings.load")
+    def test_redeem_rejects_insufficient_points_without_mutation(self, load_settings):
+        load_settings.return_value = self.catalog
+        self.profile.points = 100
+        self.profile.save(update_fields=["points"])
+        self.client_api.force_authenticate(user=self.user)
+
+        response = self.client_api.post(
+            "/api/v1/professionals/benefit-redemptions/",
+            {"benefit_id": "ben-1"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.points, 100)
+        self.assertFalse(BenefitRedemption.objects.exists())

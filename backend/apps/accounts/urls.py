@@ -11,6 +11,7 @@ from .admin_views import (
 from .platform_views import (
     AdminDeleteAccountView,
     AdminPlatformSettingsView,
+    AdminTestPaymentView,
     AdminSystemActionView,
     PublicPlatformSettingsView,
 )
@@ -21,6 +22,7 @@ from .views import (
     ConfirmPasswordResetView,
     DeleteAccountView,
     MeView,
+    ProfessionalCertificateView,
     RegisterView,
     RequestPasswordResetView,
 )
@@ -37,6 +39,11 @@ urlpatterns = [
         name="auth-become-professional",
     ),
     path(
+        "professionals/<int:pk>/certificate/",
+        ProfessionalCertificateView.as_view(),
+        name="professional-certificate",
+    ),
+    path(
         "auth/become-client/",
         BecomeClientView.as_view(),
         name="auth-become-client",
@@ -51,6 +58,7 @@ urlpatterns = [
     path("admin/action/", AdminActionView.as_view(), name="admin-action"),
     path("platform/settings/", PublicPlatformSettingsView.as_view(), name="platform-settings"),
     path("admin/settings/", AdminPlatformSettingsView.as_view(), name="admin-settings"),
+    path("admin/settings/test-payment/", AdminTestPaymentView.as_view(), name="admin-test-payment"),
     path("admin/accounts/<str:kind>/<int:pk>/", AdminDeleteAccountView.as_view(), name="admin-delete-account"),
     path("admin/system-action/", AdminSystemActionView.as_view(), name="admin-system-action"),
     path("admin/users/", AdminUsersListView.as_view(), name="admin-users"),

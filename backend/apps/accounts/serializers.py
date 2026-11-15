@@ -1,6 +1,7 @@
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from .certificates import validate_certificate_upload
 from .models import ClientProfile, User, UserRole
 from .platform_guard import (
     fail_key,
@@ -30,6 +31,11 @@ class UserSerializer(serializers.ModelSerializer):
     initials = serializers.CharField(read_only=True)
     client_profile = ClientProfileSerializer(read_only=True)
     is_currently_blocked = serializers.BooleanField(read_only=True)
+    has_professional_certificate = serializers.SerializerMethodField()
+
+    def get_has_professional_certificate(self, user) -> bool:
+        profile = getattr(user, "professional_profile", None)
+        return bool(profile and profile.certificate_file)
 
     class Meta:
         model = User
@@ -59,6 +65,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_staff",
             "is_superuser",
             "client_profile",
+            "has_professional_certificate",
             "created_at",
         ]
         read_only_fields = [
@@ -114,11 +121,16 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, validators=[validate_password, validate_platform_password])
+    password = serializers.CharField(
+        write_only=True,
+        validators=[validate_password, validate_platform_password],
+    )
     role = serializers.ChoiceField(
         choices=(UserRole.CLIENT, UserRole.PROFESSIONAL),
         default=UserRole.CLIENT,
     )
+    profession = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    certificate = serializers.FileField(write_only=True, required=False)
 
     class Meta:
         model = User
@@ -133,11 +145,22 @@ class RegisterSerializer(serializers.ModelSerializer):
             "address",
             "role",
             "password",
+            "profession",
+            "certificate",
         ]
         extra_kwargs = {"role": {"default": UserRole.CLIENT}}
 
+    def validate(self, attrs):
+        if attrs.get("role") == UserRole.PROFESSIONAL:
+            validate_certificate_upload(
+                attrs.get("certificate"), (attrs.get("profession") or "").strip()
+            )
+        return attrs
+
     def create(self, validated_data):
         password = validated_data.pop("password")
+        profession = (validated_data.pop("profession", "") or "").strip()
+        certificate = validated_data.pop("certificate", None)
         user = User(**validated_data)
         user.set_password(password)
         user.save()
@@ -195,6 +218,14 @@ class RegisterSerializer(serializers.ModelSerializer):
                         start_time=time(8, 0),
                         end_time=time(18, 0),
                     )
+
+            from django.utils import timezone
+
+            prof.certificate_file = certificate
+            prof.certificate_profession = profession
+            prof.certificate_uploaded_at = timezone.now()
+            prof.specialty_label = prof.specialty_label or profession
+            prof.save()
 
         return user
 
@@ -282,4 +313,3 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 })
         data["user"] = UserSerializer(self.user).data
         return data
-

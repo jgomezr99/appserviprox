@@ -13,6 +13,10 @@ import {
   useIonRouter,
   IonHeader,
   IonImg,
+  IonModal,
+  IonTitle,
+  IonToolbar,
+  IonButtons,
   IonToast,
 } from '@ionic/react';
 import { menuController } from '@ionic/core';
@@ -35,6 +39,8 @@ import {
   logOutOutline,
   swapHorizontalOutline,
   closeOutline,
+  cardOutline, cardSharp,
+  walletOutline, walletSharp,
 } from 'ionicons/icons';
 
 
@@ -52,14 +58,14 @@ interface AppPage {
 }
 
 const storePage: AppPage = {
-  title: 'Tienda de productos',
+  title: 'Meko Shop',
   url: '/tienda',
   iosIcon: cartOutline,
   mdIcon: cartSharp,
 };
 
 const publishStorePage: AppPage = {
-  title: 'Publicar en tienda',
+  title: 'Publicar en Meko Shop',
   url: '/tienda?action=publish',
   iosIcon: addCircleOutline,
   mdIcon: addCircleSharp,
@@ -79,12 +85,19 @@ const proPqrPage: AppPage = {
   mdIcon: shieldCheckmarkSharp,
 };
 
+const MAX_CERTIFICATE_BYTES = 5 * 1024 * 1024;
+const CERTIFICATE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+
 const Menu: React.FC = () => {
   const location = useLocation();
   const router = useIonRouter();
   const { becomeClient, becomeProfessional, isAuthenticated, isLoading, logout, user } = useAuth();
   const [roleChangeError, setRoleChangeError] = React.useState('');
   const [roleChanging, setRoleChanging] = React.useState(false);
+  const [certOpen, setCertOpen] = React.useState(false);
+  const [profession, setProfession] = React.useState('');
+  const [certFile, setCertFile] = React.useState<File | null>(null);
+  const [certError, setCertError] = React.useState('');
 
   const isActive = (url: string) => {
     const isPublishing = location.search.includes('action=publish');
@@ -118,18 +131,65 @@ const Menu: React.FC = () => {
     router.push('/login');
   };
 
-  const onBecomeProfessional = async () => {
+  const closeCertificateModal = () => {
+    setCertOpen(false);
+    setCertError('');
+    setProfession('');
+    setCertFile(null);
+  };
+
+  const onPickCertificate = (file: File | null) => {
+    setCertError('');
+    if (file && !CERTIFICATE_TYPES.includes(file.type)) {
+      setCertError('El certificado debe ser un archivo PDF, JPG o PNG.');
+      setCertFile(null);
+      return;
+    }
+    if (file && file.size > MAX_CERTIFICATE_BYTES) {
+      setCertError('El certificado no puede superar 5 MB.');
+      setCertFile(null);
+      return;
+    }
+    setCertFile(file);
+  };
+
+  const onStartBecomeProfessional = () => {
+    if (user?.has_professional_certificate) {
+      void onBecomeProfessional();
+      return;
+    }
+    setCertOpen(true);
+  };
+
+  const onBecomeProfessional = async (certificate?: { profession: string; file: File }) => {
     if (roleChanging) return;
     setRoleChanging(true);
     try {
-      await becomeProfessional();
+      await becomeProfessional(certificate);
+      closeCertificateModal();
       await menuController.close('main-menu');
       router.push('/onboarding/professional');
-    } catch {
-      setRoleChangeError('No pudimos cambiar tu rol. Inténtalo nuevamente.');
+    } catch (err) {
+      const payload = (err as { payload?: Record<string, unknown> })?.payload;
+      const fieldError = payload && (payload.certificate ?? payload.profession);
+      const message = Array.isArray(fieldError) ? String(fieldError[0]) : fieldError ? String(fieldError) : '';
+      if (certificate) {
+        setCertError(message || 'No pudimos enviar tu certificado. Inténtalo nuevamente.');
+      } else {
+        setRoleChangeError(message || 'No pudimos cambiar tu rol. Inténtalo nuevamente.');
+      }
     } finally {
       setRoleChanging(false);
     }
+  };
+
+  const onSubmitCertificate = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!certFile || profession.trim().length < 3) {
+      setCertError('Indica tu profesión y adjunta el certificado.');
+      return;
+    }
+    void onBecomeProfessional({ profession: profession.trim(), file: certFile });
   };
 
   const onBecomeClient = async () => {
@@ -195,6 +255,7 @@ const Menu: React.FC = () => {
       : []),
     { title: 'Favoritos', url: '/cliente/favoritos', iosIcon: heartOutline, mdIcon: heartSharp },
     { title: 'Mis viviendas', url: '/cliente/viviendas', iosIcon: businessOutline, mdIcon: businessSharp },
+    { title: 'Historial de pagos', url: '/cliente/historialpago', iosIcon: cardOutline, mdIcon: cardSharp },
     ...(platform.features.pqr !== false
       ? [{ title: 'PQRS & Quejas', url: '/cliente/pqrs', iosIcon: shieldCheckmarkOutline, mdIcon: shieldCheckmarkSharp }]
       : []),
@@ -216,6 +277,7 @@ const Menu: React.FC = () => {
     ...(platform.features.benefits !== false
       ? [proBenefitsPage]
       : []),
+    { title: 'Mis ingresos', url: '/profesional/ingresos', iosIcon: walletOutline, mdIcon: walletSharp },
     ...(platform.features.pqr !== false
       ? [proPqrPage]
       : []),
@@ -360,19 +422,26 @@ const Menu: React.FC = () => {
           </IonItem>
         ) : null}
 
-        {!ischat && user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (
-          <IonItem lines="none" detail={false} className="role-switch-item">
+        {!ischat && user?.role === 'client' && platform.features.professionals !== false ? (
+          <IonItem
+            lines="none"
+            detail={false}
+            button
+            className="role-switch-item"
+            disabled={roleChanging}
+            onClick={onStartBecomeProfessional}
+          >
             <IonIcon slot="start" icon={briefcaseOutline} />
-            <IonLabel>Ofrecer servicios</IonLabel>
+            <IonLabel>Cambiar a profesional</IonLabel>
             <IonButton
               slot="end"
               fill="clear"
               disabled={roleChanging}
-              aria-label="Ser profesional"
-              title="Ser profesional"
+              aria-label="Cambiar a perfil profesional"
+              title="Cambiar a perfil profesional"
               onClick={(event) => {
                 event.stopPropagation();
-                void onBecomeProfessional();
+                onStartBecomeProfessional();
               }}
             >
               <IonIcon slot="icon-only" icon={swapHorizontalOutline} />
@@ -425,6 +494,51 @@ const Menu: React.FC = () => {
           </IonItem>
         ) : null}
       </IonFooter>
+      <IonModal isOpen={certOpen} onDidDismiss={closeCertificateModal}>
+        <IonHeader>
+          <IonToolbar>
+            <IonTitle>Certificado profesional</IonTitle>
+            <IonButtons slot="end">
+              <IonButton onClick={closeCertificateModal} aria-label="Cerrar">
+                <IonIcon icon={closeOutline} />
+              </IonButton>
+            </IonButtons>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent className="ion-padding">
+          <form onSubmit={onSubmitCertificate} className="role-certificate-form">
+            <p>
+              Para ofrecer servicios en Serviprox debes enviar el certificado, título o constancia de la profesión con la que vas a trabajar.
+              El equipo de Serviprox lo revisará para aprobar tu perfil.
+            </p>
+            <label>
+              Profesión u oficio
+              <input
+                type="text"
+                maxLength={120}
+                value={profession}
+                onChange={(event) => setProfession(event.target.value)}
+                placeholder="Ej: Electricista, Plomero, Técnico en aires"
+                required
+              />
+            </label>
+            <label>
+              Certificado (PDF, JPG o PNG, máx. 5 MB)
+              <input
+                type="file"
+                accept="application/pdf,image/jpeg,image/png"
+                onChange={(event) => onPickCertificate(event.target.files?.[0] ?? null)}
+                required
+              />
+            </label>
+            {certFile && <small>Archivo seleccionado: {certFile.name}</small>}
+            {certError && <p className="role-certificate-error" role="alert">{certError}</p>}
+            <IonButton type="submit" expand="block" disabled={roleChanging || !certFile || profession.trim().length < 3}>
+              {roleChanging ? 'Enviando...' : 'Enviar y continuar'}
+            </IonButton>
+          </form>
+        </IonContent>
+      </IonModal>
       <IonToast
         isOpen={!!roleChangeError}
         message={roleChangeError}

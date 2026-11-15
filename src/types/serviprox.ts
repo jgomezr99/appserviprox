@@ -38,7 +38,13 @@ export interface User {
   is_currently_blocked?: boolean;
   is_staff?: boolean;
   is_superuser?: boolean;
+  has_professional_certificate?: boolean;
   created_at: string;
+}
+
+export interface ProfessionalCertificatePayload {
+  profession: string;
+  file: File;
 }
 
 export interface UpdateMePayload {
@@ -52,7 +58,8 @@ export interface UpdateMePayload {
 }
 
 export interface LoginPayload {
-  email: string;
+  email?: string;
+  username?: string;
   password: string;
 }
 
@@ -77,6 +84,8 @@ export interface RegisterPayload {
   address?: string;
   role: PublicRegisterRole;
   password: string;
+  profession?: string;
+  certificate?: File;
 }
 
 export interface Service {
@@ -179,6 +188,7 @@ export interface Professional {
   accepts_urgent: boolean;
   neighborhood: string;
   city: string;
+  location_approximate?: boolean;
   latitude: number | null;
   longitude: number | null;
   distance_km?: number;
@@ -292,12 +302,23 @@ export interface RequestOrder {
   payment_confirmed_at: string | null;
 }
 
-export type OrderPaymentStatus = "pending" | "paid";
+export type OrderPaymentStatus = "pending" | "paid" | "refunded";
 
 export interface Order {
   viewer_role?: "client" | "professional" | "staff" | "none";
   price_bounds?: { min: string | null; max: string | null };
   can_set_final_price?: boolean;
+  discount_preview?: string;
+  payment_info?: {
+    amount: string;
+    discount: string;
+    subtotal: string;
+    method: string;
+    reference: string;
+    paid_at: string | null;
+    receipt_id: number | null;
+  } | null;
+  amount_due?: string | null;
   id: number;
   service_request: number;
   professional: Professional;

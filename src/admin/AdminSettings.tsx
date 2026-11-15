@@ -11,7 +11,6 @@ import { AppearanceTab } from "./settings/AppearanceTab";
 import { NotificationsTab } from "./settings/NotificationsTab";
 import { PaymentsTab } from "./settings/PaymentsTab";
 import { SecurityTab } from "./settings/SecurityTab";
-import { IntegrationsTab } from "./settings/IntegrationsTab";
 import { AppParamsTab } from "./settings/AppParamsTab";
 import { MaintenanceTab } from "./settings/MaintenanceTab";
 import type { ConfirmRequest, FieldDef, TabProps } from "./settings/ui";
@@ -57,7 +56,6 @@ const TAB_SECTIONS: Record<string, { section: string; Component: React.FC<TabPro
   Notificaciones: { section: "notifications", Component: NotificationsTab },
   "Métodos de pago": { section: "payments", Component: PaymentsTab },
   Seguridad: { section: "security", Component: SecurityTab },
-  Integraciones: { section: "integrations", Component: IntegrationsTab },
   "Personalización": { section: "appearance", Component: AppearanceTab },
   "Parámetros de la app": { section: "app_params", Component: AppParamsTab },
   Mantenimiento: { section: "maintenance", Component: MaintenanceTab },
@@ -75,7 +73,6 @@ const TABS = [
   "Notificaciones",
   "Métodos de pago",
   "Seguridad",
-  "Integraciones",
   "Personalización",
   "Parámetros de la app",
   "Mantenimiento",
@@ -221,7 +218,21 @@ export const AdminSettings: React.FC<{ onChanged?: () => void }> = ({ onChanged 
       toggleMaintenance(!form.features.maintenance);
       return;
     }
-    set("features", { ...form.features, [key]: !form.features[key] });
+    const enabled = !form.features[key];
+    const label = FEATURE_LABELS.find(([k]) => k === key)?.[1] ?? String(key);
+    const previous = form.features;
+    set("features", { ...previous, [key]: enabled });
+    run(async () => {
+      try {
+        const saved = await platformSettingsService.saveAdmin({ features: { ...previous, [key]: enabled } });
+        setForm((prev) => ({ ...prev, features: saved.features }));
+        onChanged?.();
+        return `${label}: ${enabled ? "activado" : "desactivado"}. Ya se aplicó en la app.`;
+      } catch (err) {
+        set("features", previous);
+        throw err;
+      }
+    });
   };
 
   const backupNow = () => runAction({ action: "backup_now" });
@@ -381,7 +392,7 @@ export const AdminSettings: React.FC<{ onChanged?: () => void }> = ({ onChanged 
                   {renderSwitch(form.features[key], label, () => toggleFeature(key))}
                 </div>
               ))}
-              {saveButton}
+              <p className="as-sub" style={{ marginTop: 8 }}>Cada interruptor se aplica al instante en la app.</p>
             </div>
 
             <div className="as-side">

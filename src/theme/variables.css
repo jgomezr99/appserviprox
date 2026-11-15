@@ -365,9 +365,7 @@ ion-menu,
 .theme-client #pqr-report-modal-dialog,
 [data-theme="client"] #pqr-report-modal-dialog,
 .theme-client #pqr-detail-modal-dialog,
-[data-theme="client"] #pqr-detail-modal-dialog,
-.theme-client #live-support-chat-dialog,
-[data-theme="client"] #live-support-chat-dialog {
+[data-theme="client"] #pqr-detail-modal-dialog {
 	background: #FFF5F6 !important;
 	border-color: rgba(220, 38, 38, 0.2) !important;
 }
@@ -377,9 +375,7 @@ ion-menu,
 .theme-professional #pqr-report-modal-dialog,
 [data-theme="professional"] #pqr-report-modal-dialog,
 .theme-professional #pqr-detail-modal-dialog,
-[data-theme="professional"] #pqr-detail-modal-dialog,
-.theme-professional #live-support-chat-dialog,
-[data-theme="professional"] #live-support-chat-dialog {
+[data-theme="professional"] #pqr-detail-modal-dialog {
 	background: #F8FBFF !important;
 	border-color: rgba(11, 47, 107, 0.2) !important;
 }

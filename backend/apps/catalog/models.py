@@ -94,6 +94,10 @@ class StoreProduct(models.Model):
         CLOTHING = "Ropa", "Ropa"
         APPLIANCES = "Electrodomésticos", "Electrodomésticos"
         HOME = "Hogar y decoración", "Hogar y decoración"
+        MULTIMEDIA = "Multimedia", "Multimedia"
+        BOOKS = "Libros", "Libros"
+        TOYS = "Juguetes", "Juguetes"
+        SPORTS = "Deportes", "Deportes"
         OTHER = "Otros", "Otros"
 
     owner = models.ForeignKey(

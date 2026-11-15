@@ -77,6 +77,11 @@ export const professionalProfileService = {
     api.post<ProfessionalProfile>("professionals/me/", payload),
   updateMine: (payload: Partial<ProfessionalProfilePayload>) =>
     api.patch<ProfessionalProfile>("professionals/me/", payload),
+  updateLiveLocation: (latitude: number, longitude: number) =>
+    api.post<{ status: string; latitude: number; longitude: number }>(
+      "professionals/location/",
+      { latitude, longitude }
+    ),
 };
 
 export const professionalSearchService = {
@@ -118,11 +123,28 @@ export const serviceRequestService = {
   reject: (id: number | string) => api.post<ServiceRequest>(`requests/${id}/reject/`),
 };
 
+export type DemoPaymentMethod = "credit" | "debit" | "transfer" | "wallet";
+
+export interface DemoPaymentDetails {
+  method?: DemoPaymentMethod;
+  card_number?: string;
+  card_holder?: string;
+  expiry?: string;
+  cvv?: string;
+  installments?: number;
+  bank?: string;
+  account_type?: "savings" | "checking";
+  document_type?: "CC" | "CE" | "NIT" | "PP";
+  document_number?: string;
+  transfer_reference?: string;
+  phone?: string;
+}
+
 export const orderService = {
   list: (params: { status?: string } = {}) => listAllPages<Order>("orders/", params),
   get: (id: number | string) => api.get<Order>(`orders/${id}/`),
-  confirmDemoPayment: (id: number | string) =>
-    api.post<Order>(`orders/${id}/confirm-demo-payment/`),
+  confirmDemoPayment: (id: number | string, details: DemoPaymentDetails = {}) =>
+    api.post<Order>(`orders/${id}/confirm-demo-payment/`, details),
   wompiCheckout: (id: number | string) =>
     api.post<{ checkout_url: string; reference: string; amount_in_cents: number }>(
       `orders/${id}/wompi-checkout/`
@@ -155,8 +177,7 @@ export const pqrService = {
   list: (params?: { mine?: boolean; email?: string }) =>
     api
       .get<PaginatedResponse<PqrReport> | PqrReport[]>("pqrs/", { params })
-      .then(unwrapList)
-      .catch(() => [] as PqrReport[]),          // graceful fallback if endpoint missing
+      .then(unwrapList),
 
   /** Get single PQR with its message thread */
   get: (id: string) =>
@@ -180,17 +201,8 @@ export const appProblemService = {
   list: (params?: { mine?: boolean; email?: string }) =>
     api
       .get<PaginatedResponse<AppProblemReport> | AppProblemReport[]>("app-problems/", { params })
-      .then(unwrapList)
-      .catch(() => [] as AppProblemReport[]),
+      .then(unwrapList),
 
   create: (payload: Omit<AppProblemReport, "id" | "ticketNumber" | "status" | "createdAt">) =>
-    api
-      .post<AppProblemReport>("app-problems/", payload)
-      .catch(() => ({
-        id: `prob-local-${Date.now()}`,
-        ticketNumber: `APP-BUG-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        status: "recibido" as const,
-        createdAt: new Date().toISOString(),
-        ...payload,
-      } as AppProblemReport)),
+    api.post<AppProblemReport>("app-problems/", payload),
 };

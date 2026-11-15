@@ -7,6 +7,8 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.catalog.models import Service
 
+from .geo import city_center
+
 
 class ProfessionalProfile(models.Model):
     user = models.OneToOneField(
@@ -37,6 +39,11 @@ class ProfessionalProfile(models.Model):
     response_time_minutes = models.PositiveIntegerField(_("tiempo de respuesta"), default=60)
 
     is_verified = models.BooleanField(_("verificado por Serviprox"), default=False)
+    certificate_profession = models.CharField(_("profesión certificada"), max_length=120, blank=True)
+    certificate_file = models.FileField(
+        _("certificado profesional"), upload_to="certificates/%Y/%m/", blank=True
+    )
+    certificate_uploaded_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(_("activo"), default=True)
     accepts_urgent = models.BooleanField(_("atiende urgencias"), default=False)
     points = models.PositiveIntegerField(_("puntos de incentivos"), default=1000)
@@ -58,6 +65,40 @@ class ProfessionalProfile(models.Model):
     def initials(self) -> str:
         parts = self.display_name.split()
         return "".join(p[0] for p in parts[:2]).upper() if parts else "SP"
+
+    def save(self, *args, **kwargs):
+        # Sin GPS el profesional no aparecería en ningún mapa: se ubica en el centro de su ciudad
+        # hasta que la app envíe su posición real.
+        if self.latitude is None or self.longitude is None:
+            center = city_center(self.city)
+            if center:
+                self.latitude, self.longitude = center
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    kwargs["update_fields"] = {*update_fields, "latitude", "longitude"}
+        super().save(*args, **kwargs)
+
+
+class BenefitRedemption(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pendiente")
+        FULFILLED = "fulfilled", _("Entregado")
+        CANCELLED = "cancelled", _("Cancelado")
+
+    profile = models.ForeignKey(
+        ProfessionalProfile,
+        on_delete=models.CASCADE,
+        related_name="benefit_redemptions",
+    )
+    benefit_id = models.CharField(max_length=100)
+    title = models.CharField(max_length=180)
+    points = models.PositiveIntegerField()
+    recharge_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
 
 
 class ProfessionalService(models.Model):

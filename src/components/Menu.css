@@ -423,3 +423,28 @@ ion-menu[menu-id="main-menu"] .menu-footer {
 }
 */
 
+
+.role-certificate-form {
+  display: grid;
+  gap: 14px;
+}
+
+.role-certificate-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.role-certificate-form input[type='text'] {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  font-size: 1rem;
+}
+
+.role-certificate-error {
+  margin: 0;
+  color: var(--ion-color-danger, #b91c1c);
+  font-weight: 700;
+}

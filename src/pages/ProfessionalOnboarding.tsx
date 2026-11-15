@@ -39,6 +39,17 @@ const ProfessionalOnboarding: React.FC = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!user) return;
+    if (!firstName && user.first_name) setFirstName(user.first_name);
+    if (!lastName && user.last_name) setLastName(user.last_name);
+    if (!phone && user.phone) setPhone(user.phone);
+    if ((!city || city === "Bogotá") && user.city) setCity(user.city);
+    if (!displayName && user.first_name) {
+      setDisplayName(`${user.first_name} ${user.last_name || ""}`.trim());
+    }
+  }, [user]);
+
+  useEffect(() => {
     let active = true;
     Promise.allSettled([
       catalogService.listCategories(),
@@ -56,14 +67,14 @@ const ProfessionalOnboarding: React.FC = () => {
         if (profileResult.status === "fulfilled") {
           const profile = profileResult.value;
           setProfileExists(true);
-          setDisplayName(profile.display_name);
-          setHeadline(profile.headline);
-          setBio(profile.bio);
-          setNeighborhood(profile.neighborhood);
-          setCity(profile.city);
-          setCoverageRadiusKm(profile.coverage_radius_km);
-          setAcceptsUrgent(profile.accepts_urgent);
-          setSelectedServices(profile.services.map((service) => service.service));
+          setDisplayName(profile.display_name || "");
+          setHeadline(profile.headline || "");
+          setBio(profile.bio || "");
+          setNeighborhood(profile.neighborhood || "");
+          setCity(profile.city || user?.city || "Bogotá");
+          setCoverageRadiusKm(profile.coverage_radius_km || 8);
+          setAcceptsUrgent(profile.accepts_urgent || false);
+          setSelectedServices(profile.services?.map((service) => service.service) || []);
         }
       })
       .finally(() => {
@@ -72,7 +83,7 @@ const ProfessionalOnboarding: React.FC = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [user]);
 
   const toggleService = (serviceId: number) => {
     setSelectedServices((current) =>
@@ -83,6 +94,17 @@ const ProfessionalOnboarding: React.FC = () => {
   };
 
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
+
+  const validateForm = () => {
+    if (!firstName.trim()) return "Por favor ingresa tu nombre.";
+    if (!lastName.trim()) return "Por favor ingresa tu apellido.";
+    if (!phone.trim()) return "Por favor ingresa tu número de teléfono.";
+    if (!city.trim()) return "Por favor ingresa tu ciudad.";
+    if (!displayName.trim()) return "Por favor ingresa tu nombre público profesional.";
+    if (!headline.trim()) return "Por favor ingresa tu especialidad principal.";
+    if (selectedServices.length === 0) return "Por favor selecciona al menos un servicio del catálogo.";
+    return null;
+  };
 
   const canSubmit =
     firstName.trim() &&
@@ -96,7 +118,11 @@ const ProfessionalOnboarding: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canSubmit) return;
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
 
     setError("");
     setSaving(true);
@@ -112,24 +138,63 @@ const ProfessionalOnboarding: React.FC = () => {
         display_name: displayName.trim(),
         headline: headline.trim(),
         bio: bio.trim(),
-        neighborhood: neighborhood.trim(),
+        neighborhood: neighborhood.trim() || "Bogotá",
         city: city.trim(),
         coverage_radius_km: coverageRadiusKm,
         accepts_urgent: acceptsUrgent,
         service_ids: selectedServices,
       };
 
-      if (profileExists) {
-        await professionalProfileService.updateMine(payload);
-      } else {
-        await professionalProfileService.createMine(payload);
+      try {
+        if (profileExists) {
+          await professionalProfileService.updateMine(payload);
+        } else {
+          await professionalProfileService.createMine(payload);
+        }
+      } catch (profileErr) {
+        // Respaldo de alternancia: si el perfil ya existía o se creó en backend, usar el otro método
+        if (profileErr instanceof ApiError) {
+          if (profileExists) {
+            await professionalProfileService.createMine(payload);
+          } else {
+            await professionalProfileService.updateMine(payload);
+          }
+        } else {
+          throw profileErr;
+        }
       }
 
       await completeOnboarding();
       history.replace("/profesional/inicio");
     } catch (err) {
-      if (err instanceof ApiError && err.status === 400) {
-        setError("Revisa la información requerida antes de continuar.");
+      if (err instanceof ApiError) {
+        const payload = err.payload as Record<string, unknown> | undefined;
+        let detail = "";
+        if (payload && typeof payload === "object") {
+          if (Array.isArray(payload.missing) && payload.missing.length > 0) {
+            const labels: Record<string, string> = {
+              first_name: "Nombre",
+              last_name: "Apellido",
+              phone: "Teléfono",
+              city: "Ciudad",
+              display_name: "Nombre público",
+              headline: "Especialidad principal",
+              services: "Al menos un servicio del catálogo",
+            };
+            const missingLabels = payload.missing.map((k) => labels[String(k)] || String(k));
+            detail = `Falta completar: ${missingLabels.join(", ")}.`;
+          } else if (payload.detail) {
+            detail = String(payload.detail);
+          } else {
+            const firstEntry = Object.entries(payload)[0];
+            if (firstEntry) {
+              const [k, v] = firstEntry;
+              const msg = Array.isArray(v) ? String(v[0]) : String(v);
+              detail = `${k}: ${msg}`;
+            }
+          }
+        }
+        setError(detail || err.message || "Revisa la información requerida antes de continuar.");
       } else {
         setError("No pudimos guardar tu perfil profesional. Inténtalo nuevamente.");
       }

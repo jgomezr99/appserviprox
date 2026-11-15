@@ -62,7 +62,33 @@ class AdminCatalogTests(TestCase):
         with patch.dict(connection.settings_dict, {"NAME": database_path}):
             response = self.api.get("/api/v1/admin/overview/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["database"]["database_name"], str(database_path))
+        data = response.json()
+        self.assertEqual(data["database"]["database_name"], str(database_path))
+        self.assertTrue(data["database"]["connected"])
+        self.assertEqual(data["kpis"]["clients"], 1)
+        self.assertEqual(data["kpis"]["professionals"], 0)
+        self.assertEqual(data["kpis"]["hired_services"], 0)
+        self.assertEqual(data["kpis"]["pending_publications"], 0)
+        self.assertEqual(data["kpis"]["open_pqrs"], 0)
+        self.assertEqual(data["kpis"]["technical_issues"], 0)
+        self.assertEqual(data["charts"]["user_distribution"], {
+            "clients": 1,
+            "professionals": 0,
+            "administrators": 1,
+        })
+        self.assertEqual(data["charts"]["pqr_chart"], {
+            "radicado": 0,
+            "en_revision": 0,
+            "conciliacion": 0,
+            "resuelto": 0,
+        })
+        self.assertEqual(data["reports"], {
+            "blocked_accounts_today": 0,
+            "complaints": 0,
+            "rejected_publications": 0,
+            "cancelled_services": 0,
+            "technical_issues": 0,
+        })
 
     def test_catalog_and_existing_admin_endpoints_require_administrator(self):
         paths = [self.root + "categories/", self.root + "services/", "/api/v1/admin/overview/", "/api/v1/admin/users/"]
@@ -288,16 +314,17 @@ class StoreProductTests(TestCase):
         fake = SimpleUploadedFile("x.png", b"no soy una imagen", content_type="image/png")
         self.assertEqual(self.api.post(self.url, self.payload(image=fake), format="multipart").status_code, 400)
 
-    def test_categories_depend_on_profile(self):
+    def test_categories_allow_any_type_in_each_category(self):
         self.api.force_authenticate(self.user)
-        self.assertEqual(self.api.post(self.url, self.payload(category="Herramientas"), format="multipart").status_code, 400)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Herramientas"), format="multipart").status_code, 201)
         self.assertEqual(self.api.post(self.url, self.payload(category="Ropa"), format="multipart").status_code, 201)
         pro = User.objects.create_user(
             username="store-pro", email="store-pro@example.com", role=UserRole.PROFESSIONAL,
         )
         self.api.force_authenticate(pro)
-        self.assertEqual(self.api.post(self.url, self.payload(category="Ropa"), format="multipart").status_code, 400)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Ropa"), format="multipart").status_code, 201)
         self.assertEqual(self.api.post(self.url, self.payload(category="Herramientas"), format="multipart").status_code, 201)
+        self.assertEqual(self.api.post(self.url, self.payload(category="Tecnología"), format="multipart").status_code, 201)
 
     def test_only_owner_can_delete(self):
         self.api.force_authenticate(self.user)

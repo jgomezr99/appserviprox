@@ -366,18 +366,18 @@ const ClientHome: React.FC = () => {
             <a className="sp-card sp-home-link" href="/tienda">
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                 <IonIcon icon={cartOutline} style={{ fontSize: "1.3rem" }} />
-                <h2>Tienda de productos</h2>
+                <h2>Meko Shop</h2>
               </div>
-              <p>Compra y consulta tecnología, muebles, ropa y más artículos de la comunidad.</p>
+              <p>Compra y vende tecnología, muebles, ropa, libros y más artículos nuevos y de segunda.</p>
             </a>
             )}
             {flags.publish_store && (
             <a className="sp-card sp-home-link" href="/tienda?action=publish">
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                 <IonIcon icon={addCircleOutline} style={{ fontSize: "1.3rem", color: "var(--ion-color-primary)" }} />
-                <h2>Publicar en tienda</h2>
+                <h2>Publicar en Meko Shop</h2>
               </div>
-              <p>Publica tecnología, muebles, ropa y otros artículos para venta.</p>
+              <p>Publica tus productos para compradores en tu ciudad o en toda Colombia.</p>
             </a>
             )}
           </section>

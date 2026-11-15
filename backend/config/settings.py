@@ -37,8 +37,10 @@ if not SECRET_KEY:
     raise ImproperlyConfigured("Configura DJANGO_SECRET_KEY en el entorno.")
 
 ALLOWED_HOSTS = env_list(
-    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,backend"
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,backend,testserver"
 )
+if DEBUG and "*" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("*")
 render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if render_hostname and render_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(render_hostname)
@@ -80,6 +82,7 @@ if MEDIA_STORAGE == "s3":
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    "apps.accounts.maintenance.MaintenanceMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -124,6 +127,13 @@ WOMPI_PUBLIC_KEY = os.getenv("WOMPI_PUBLIC_KEY", "").strip()
 WOMPI_PRIVATE_KEY = os.getenv("WOMPI_PRIVATE_KEY", "").strip()
 WOMPI_EVENTS_SECRET = os.getenv("WOMPI_EVENTS_SECRET", "").strip()
 WOMPI_INTEGRITY_SECRET = os.getenv("WOMPI_INTEGRITY_SECRET", "").strip()
+# Llaves sandbox (pub_test_...) para simular pagos cuando el pago de prueba está activo.
+WOMPI_TEST_PUBLIC_KEY = os.getenv("WOMPI_TEST_PUBLIC_KEY", "").strip()
+WOMPI_TEST_PRIVATE_KEY = os.getenv("WOMPI_TEST_PRIVATE_KEY", "").strip()
+WOMPI_TEST_EVENTS_SECRET = os.getenv("WOMPI_TEST_EVENTS_SECRET", "").strip()
+WOMPI_TEST_INTEGRITY_SECRET = os.getenv("WOMPI_TEST_INTEGRITY_SECRET", "").strip()
+# Clave que el administrador debe ingresar para activar el pago de prueba (vacía = desactivado).
+TEST_PAYMENT_KEY = os.getenv("TEST_PAYMENT_KEY", "").strip()
 # URL pública de la app a la que Wompi devuelve al cliente tras pagar.
 FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
 
@@ -177,6 +187,10 @@ else:
     raise ImproperlyConfigured(
         "SERVIPROX_DATABASE debe ser 'sqlite' o 'postgres'."
     )
+
+if DEBUG and DATABASE_ENGINE == "sqlite":
+    # Desarrollo local: una base SQLite desactualizada se pone al día sola en la primera petición.
+    MIDDLEWARE.insert(0, "config.auto_migrate.AutoMigrateMiddleware")
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -319,12 +333,17 @@ CSRF_TRUSTED_ORIGINS = env_list(
 # Radio por defecto (km) para la busqueda de profesionales cercanos.
 DEFAULT_SEARCH_RADIUS_KM = float(os.getenv("DEFAULT_SEARCH_RADIUS_KM", "5"))
 
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@serviprox.local")
+DEFAULT_FROM_EMAIL = (
+    os.getenv("DEFAULT_FROM_EMAIL")
+    or os.getenv("EMAIL_HOST_USER")
+    or "no-reply@serviprox.local"
+)
 EMAIL_HOST = os.getenv("EMAIL_HOST", "")
 EMAIL_PORT = env_int("EMAIL_PORT", 587)
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT", 10)
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND",
     "django.core.mail.backends.smtp.EmailBackend"

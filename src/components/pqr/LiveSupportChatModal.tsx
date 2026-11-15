@@ -39,6 +39,7 @@ import type {
 import { REGISTERED_CONTRACTORS_REF } from '../../data/pqrInitialData';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
+import '../../theme/tailwind.css';
 import './pqrStyles.css';
 
 
@@ -926,24 +927,24 @@ export function LiveSupportChatModal({
         className="bg-white rounded-3xl shadow-2xl border border-neutral-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 my-auto h-[90vh] max-h-[720px] flex flex-col text-neutral-900"
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-neutral-950 via-neutral-900 to-rose-950 text-white p-4 flex items-center justify-between border-b border-neutral-800">
-          <div className="flex items-center gap-3">
+        <div className="live-chat-header bg-gradient-to-r from-neutral-950 via-neutral-900 to-rose-950 text-white p-4 flex items-center justify-between border-b border-neutral-800">
+          <div className="live-chat-header-identity flex items-center gap-3">
             <div className="relative">
-              <div className="w-10 h-10 rounded-2xl bg-rose-600/30 border border-rose-500/40 flex items-center justify-center">
+              <div className="live-chat-bot-avatar w-10 h-10 rounded-2xl bg-rose-600/30 border border-rose-500/40 flex items-center justify-center">
                 <Bot className="w-5 h-5 text-rose-400" />
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-neutral-900 rounded-full" />
+              <span className="live-chat-bot-status-dot absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-neutral-900 rounded-full" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="live-chat-header-text">
+              <div className="live-chat-header-title-row flex items-center gap-2">
                 <h3 className="text-sm sm:text-base font-black text-white">
                   Chat en Vivo: Quejas &amp; Soporte Bogotá
                 </h3>
-                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black px-2 py-0.5 rounded-full">
+                <span className="live-chat-online-badge bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black px-2 py-0.5 rounded-full">
                   EN LÍNEA
                 </span>
               </div>
-              <p className="text-[11px] text-neutral-300">
+              <p className="live-chat-header-subtitle text-[11px] text-neutral-300">
                 Radica quejas de contratistas o reporta problemas con la app al instante
               </p>
             </div>
@@ -951,7 +952,7 @@ export function LiveSupportChatModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            className="live-chat-close-btn p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
             aria-label="Cerrar chat"
           >
             <X className="w-5 h-5" />
@@ -959,42 +960,42 @@ export function LiveSupportChatModal({
         </div>
 
         {/* Diagnostic Bar */}
-        <div className="bg-neutral-100 px-4 py-2 border-b border-neutral-200 flex items-center justify-between text-[11px] text-neutral-600">
+        <div className="live-chat-diagnostic-bar bg-neutral-100 px-4 py-2 border-b border-neutral-200 flex items-center justify-between text-[11px] text-neutral-600">
           <span>
             📱 Diagnóstico automático: <strong>Bogotá D.C. • App v2.4 Activa</strong>
           </span>
-          <span className="text-[10px] text-neutral-500 font-mono">Conexión Segura SSL</span>
+          <span className="live-chat-ssl-tag text-[10px] text-neutral-500 font-mono">Conexión Segura SSL</span>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-neutral-50/50">
+        <div className="live-chat-stream flex-1 p-4 overflow-y-auto space-y-3 bg-neutral-50/50">
           {messages.map((msg) => {
             const isAgent = msg.sender === 'agent';
             return (
               <div
                 key={msg.id}
-                className={`flex gap-2.5 max-w-[92%] ${
-                  isAgent ? 'mr-auto' : 'ml-auto flex-row-reverse'
+                className={`live-chat-msg-row flex gap-2.5 max-w-[92%] ${
+                  isAgent ? 'from-agent mr-auto' : 'from-user ml-auto flex-row-reverse'
                 }`}
               >
                 {isAgent && (
                   <img
                     src={msg.agentAvatar || agentAvatar}
                     alt="Sofía"
-                    className="w-8 h-8 rounded-xl object-cover border border-neutral-300 flex-shrink-0 mt-0.5"
+                    className="live-chat-agent-avatar w-10 h-10 rounded-xl object-cover border border-neutral-300 flex-shrink-0 mt-0.5"
                   />
                 )}
 
-                <div className="space-y-1.5 max-w-full">
+                <div className="live-chat-bubble-wrap space-y-1.5 max-w-full">
                   <div
-                    className={`p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-xs whitespace-pre-line ${
+                    className={`live-chat-bubble ${
                       isAgent
-                        ? 'bg-white border border-neutral-200 text-neutral-900 rounded-tl-sm'
-                        : 'bg-rose-600 text-white rounded-tr-sm'
-                    }`}
+                        ? 'from-agent-bubble bg-white border border-neutral-200 text-neutral-900 rounded-tl-sm'
+                        : 'from-user-bubble bg-rose-600 text-white rounded-tr-sm'
+                    } p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-xs whitespace-pre-line`}
                   >
                     {isAgent && (
-                      <div className="text-[10px] font-black text-rose-600 mb-1">
+                      <div className="live-chat-agent-label text-[10px] font-black text-rose-600 mb-1">
                         {msg.agentName}
                       </div>
                     )}
@@ -1002,8 +1003,8 @@ export function LiveSupportChatModal({
 
                     {/* Ticket Creado */}
                     {msg.ticketCreated && (
-                      <div className="mt-2.5 p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 space-y-1">
-                        <div className="flex items-center gap-1.5 font-black text-emerald-800">
+                      <div className="live-chat-ticket-box mt-2.5 p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 space-y-1">
+                        <div className="live-chat-ticket-title flex items-center gap-1.5 font-black text-emerald-800">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           <span>
                             {msg.ticketCreated.type === 'problema_app'
@@ -1011,7 +1012,7 @@ export function LiveSupportChatModal({
                               : 'Radicado PQR Formal Generado'}
                           </span>
                         </div>
-                        <div className="font-mono font-bold text-xs bg-emerald-100/70 px-2 py-0.5 rounded text-emerald-900 inline-block">
+                        <div className="live-chat-ticket-badge font-mono font-bold text-xs bg-emerald-100/70 px-2 py-0.5 rounded text-emerald-900 inline-block">
                           {msg.ticketCreated.ticketNumber}
                         </div>
                         <p className="text-[11px] text-emerald-800">
@@ -1023,13 +1024,13 @@ export function LiveSupportChatModal({
 
                   {/* Opciones rápidas interactivas */}
                   {isAgent && msg.quickOptions && msg.quickOptions.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
+                    <div className="live-chat-chips-group flex flex-wrap gap-1.5 pt-1">
                       {msg.quickOptions.map((opt, i) => (
                         <button
                           key={i}
                           type="button"
                           onClick={() => handleQuickAction(opt.action)}
-                          className="bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300 font-bold text-[11px] px-3 py-1.5 rounded-xl shadow-2xs transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                          className="live-chat-chip-btn bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300 font-bold text-[11px] px-3 py-1.5 rounded-xl shadow-2xs transition-all active:scale-95 cursor-pointer flex items-center gap-1"
                         >
                           {opt.label}
                         </button>
@@ -1038,7 +1039,7 @@ export function LiveSupportChatModal({
                   )}
 
                   <span
-                    className={`block text-[9px] text-neutral-400 ${
+                    className={`live-chat-time-stamp block text-[9px] text-neutral-400 ${
                       isAgent ? 'text-left' : 'text-right'
                     }`}
                   >
@@ -1053,7 +1054,7 @@ export function LiveSupportChatModal({
           })}
 
           {isTyping && (
-            <div className="flex items-center gap-2 text-xs text-neutral-500 italic bg-white border border-neutral-200 p-2.5 rounded-2xl w-fit">
+            <div className="live-chat-typing-row flex items-center gap-2 text-xs text-neutral-500 italic bg-white border border-neutral-200 p-2.5 rounded-2xl w-fit">
               <Bot className="w-4 h-4 text-rose-500 animate-spin" />
               <span>Sofía está escribiendo...</span>
             </div>
@@ -1063,13 +1064,13 @@ export function LiveSupportChatModal({
         </div>
 
         {/* Input Bar */}
-        <div className="p-3 sm:p-4 bg-white border-t border-neutral-200">
-          <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+        <div className="live-chat-composer-box p-3 sm:p-4 bg-white border-t border-neutral-200">
+          <form onSubmit={handleSendMessage} className="live-chat-composer-row flex items-center gap-2">
             <button
               type="button"
               onClick={handleSimulateScreenshot}
               title="Adjuntar evidencia o captura"
-              className="p-2.5 text-neutral-500 hover:text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors cursor-pointer flex-shrink-0"
+              className="live-chat-clip-btn p-2.5 text-neutral-500 hover:text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors cursor-pointer flex-shrink-0"
             >
               <Paperclip className="w-4 h-4" />
             </button>
@@ -1091,13 +1092,13 @@ export function LiveSupportChatModal({
                   ? 'Solución esperada (ej: reparación, cambio de maestro)...'
                   : 'Escribe tu queja o problema con la app aquí...'
               }
-              className="flex-1 px-3.5 py-2.5 text-xs sm:text-sm bg-neutral-50 border border-neutral-300 rounded-xl text-neutral-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+              className="live-chat-input-pill flex-1 px-3.5 py-2.5 text-xs sm:text-sm bg-neutral-50 border border-neutral-300 rounded-xl text-neutral-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
             />
 
             <button
               type="submit"
               disabled={!inputText.trim()}
-              className="bg-rose-500 hover:bg-rose-600 disabled:opacity-40 active:scale-95 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0"
+              className="live-chat-send-btn bg-rose-500 hover:bg-rose-600 disabled:opacity-40 active:scale-95 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0"
             >
               <Send className="w-4 h-4" />
               <span>Enviar</span>
@@ -1105,7 +1106,7 @@ export function LiveSupportChatModal({
           </form>
 
           {simulatedScreenshot && (
-            <div className="mt-2 flex items-center gap-2 text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 w-fit">
+            <div className="live-chat-attachment-pill mt-2 flex items-center gap-2 text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 w-fit">
               <span>📎 Adjunto: {simulatedScreenshot}</span>
               <button
                 type="button"

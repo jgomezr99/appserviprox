@@ -265,6 +265,20 @@
   background-color: #f8fafc;
 }
 
+/* En pantallas angostas el menú lateral pasa arriba para que el contenido use todo el ancho. */
+@media (max-width: 900px) {
+  .ad-wrapper {
+    flex-direction: column;
+  }
+  .ad-sidebar {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    max-height: 45vh;
+  }
+}
+
 /* ── Encabezado Superior (Top Bar) ── */
 .ad-topbar {
   background-color: #ffffff;
@@ -459,6 +473,74 @@
   width: 18px;
   height: 18px;
   color: #64748b;
+}
+
+.ad-db-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  background: #fff;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.ad-db-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.ad-db-status.connected {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.ad-db-status.connected .ad-db-status-dot {
+  background: #16a34a;
+}
+
+.ad-db-status.disconnected {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.ad-db-status.disconnected .ad-db-status-dot {
+  background: #dc2626;
+}
+
+.ad-db-status.loading {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.ad-db-status.loading .ad-db-status-dot {
+  background: #d97706;
+}
+
+.ad-db-status button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.ad-empty-state {
+  margin: 0;
+  padding: 16px;
+  color: #64748b;
+  font-size: 0.85rem;
+  text-align: center;
 }
 
 /* ── Fila de Tarjetas KPI (6 columnas) ── */
@@ -2154,6 +2236,11 @@
   cursor: pointer;
 }
 
+.ad-ben-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .ad-ben-page-btn.active {
   background: #2563eb;
   border-color: #2563eb;
@@ -2482,6 +2569,5 @@
   align-items: center;
   flex-wrap: wrap;
 }
-
 
 

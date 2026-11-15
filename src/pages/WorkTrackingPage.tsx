@@ -9,6 +9,7 @@ import { useLivePage } from "../hooks/useLivePage";
 import AuthenticatedImage from "../components/serviprox/AuthenticatedImage";
 import TravelMap from "../components/serviprox/TravelMap";
 import ServiceProgress from "../components/serviprox/ServiceProgress";
+import PaymentReceivedCard from "../components/serviprox/tracking/PaymentReceivedCard";
 import ClientTrackingControls from "../components/serviprox/tracking/ClientTrackingControls";
 import ProfessionalTrackingControls, { type TransitionDetails } from "../components/serviprox/tracking/ProfessionalTrackingControls";
 import { priceBounds } from "../components/serviprox/tracking/priceBounds";
@@ -68,7 +69,7 @@ const WorkTrackingPage: React.FC = () => {
       if (current === version.current) setLoading(false);
     }
   }, [id, requestId, accountId, activeRole]);
-  const active = useLivePage(load);
+  const active = useLivePage(load, 4000);
   useEffect(() => {
     setLoading(true); setOrder(null); setRequest(null); setError(""); setConfirmation(null); setToast(""); setGpsMessage("");
     return () => { version.current += 1; };
@@ -82,14 +83,14 @@ const WorkTrackingPage: React.FC = () => {
     let sending = false;
     let lastSent = 0;
     const orderId = order.id;
-    setGpsMessage("Autoriza la ubicación para compartir tu desplazamiento.");
+    setGpsMessage("Autoriza la ubicación para compartir tu desplazamiento en tiempo real.");
     const watch = navigator.geolocation.watchPosition(async ({ coords }) => {
-      if (!live || sending || busy.current || Date.now() - lastSent < 15000) return;
+      if (!live || sending || busy.current || Date.now() - lastSent < 4000) return;
       sending = true;
       try {
         await orderService.updateLocation(orderId, coords.latitude, coords.longitude);
         if (live) {
-          lastSent = Date.now(); setGpsMessage("Ubicación compartida.");
+          lastSent = Date.now(); setGpsMessage("Ubicación en tiempo real compartida.");
           setOrder((previous) => previous?.id === orderId && previous.status === "traveling"
             ? { ...previous, professional_latitude: coords.latitude, professional_longitude: coords.longitude } : previous);
         }
@@ -97,7 +98,7 @@ const WorkTrackingPage: React.FC = () => {
         if (live) setGpsMessage(apiMessage(failure, "No se pudo compartir la ubicación."));
       } finally { sending = false; }
     }, () => { if (live) setGpsMessage("No se pudo obtener tu ubicación. Revisa los permisos y vuelve a intentar."); },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 });
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 3000 });
     return () => { live = false; navigator.geolocation.clearWatch(watch); };
   }, [active, isProfessional, traveling, order?.id, gpsAttempt]);
 
@@ -181,6 +182,22 @@ const WorkTrackingPage: React.FC = () => {
                 </div>
                 {isClient && <p className="tracking-hint">La tarifa la confirma el profesional dentro del rango publicado y aquí se muestra para consulta.</p>}
               </section>
+              <PaymentReceivedCard order={order} isClient={isClient} onMessage={setToast} />
+              {status === "completed" && order.payment_status === "pending" && (
+                <section className="tracking-card" aria-label="Pago pendiente">
+                  <h2>Pago pendiente</h2>
+                  <p>
+                    {isClient
+                      ? "Paga el servicio terminado para reactivar tu cuenta y la del profesional."
+                      : "Tu cuenta se reactivará cuando el cliente pague el servicio terminado."}
+                  </p>
+                  {isClient && (
+                    <IonButton routerLink={`/cliente/historialpago?order=${order.id}`}>
+                      Pagar servicio
+                    </IonButton>
+                  )}
+                </section>
+              )}
               {isProfessional && <ProfessionalTrackingControls key={`professional-${order.id}`} order={order} disabled={acting || !!error}
                 onTransition={requestTransition} onEvidence={uploadEvidence} onPrice={(amount) => {
                   void perform(async () => { setOrder(await orderService.setFinalPrice(order.id, amount)); setToast("Valor final guardado."); });

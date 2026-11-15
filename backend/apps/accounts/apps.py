@@ -7,6 +7,8 @@ class AccountsConfig(AppConfig):
     verbose_name = "Cuentas"
 
     def ready(self):
+        from . import notification_dispatch  # noqa: F401  (registra el envío de correos)
+
         from django.db.backends.signals import connection_created
         from django.dispatch import receiver
 

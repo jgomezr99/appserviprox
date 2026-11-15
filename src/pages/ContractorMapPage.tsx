@@ -10,6 +10,8 @@ import {
   IonToolbar,
 } from "@ionic/react";
 import { useHistory, useLocation } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { Geolocation, type Position } from "@capacitor/geolocation";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -31,10 +33,12 @@ import {
 } from "ionicons/icons";
 
 import {
-  BOGOTA_LOCALITIES,
-  CONTRACTORS_MAP_DATA,
+  DEFAULT_MAP_CITY,
+  MAP_CITIES,
   USER_PROJECT_LOCATION,
   WORK_SPECIALTIES,
+  nearestMapCity,
+  type MapCity,
   type MapContractor,
   type UserProjectLocation,
 } from "../data/contractorMapData";
@@ -54,6 +58,7 @@ import { PqrListView } from "../components/pqr/PqrListView";
 import { LiveSupportChatModal } from "../components/pqr/LiveSupportChatModal";
 import { MaintenanceNotice, useMaintenance } from "../components/MaintenanceNotice";
 import "./ContractorMapPage.css";
+import "../theme/tailwind.css";
 
 
 const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -69,6 +74,25 @@ const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
+
+const MAP_CITY_KEY = "serviprox_map_city";
+
+const cityLocation = (city: MapCity): UserProjectLocation => ({
+  label: `Centro de ${city.name}`,
+  address: `Centro de ${city.name}, Colombia`,
+  lat: city.lat,
+  lng: city.lng,
+});
+
+const readSavedCity = (): MapCity | null => {
+  try {
+    return MAP_CITIES.find((c) => c.id === localStorage.getItem(MAP_CITY_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const isInColombia = (lat: number, lng: number) => lat >= -4.3 && lat <= 13.5 && lng >= -79.1 && lng <= -66.8;
 
 const toMapContractor = (
   professional: Professional,
@@ -102,9 +126,10 @@ const toMapContractor = (
     avatar: professional.avatar_url || "",
     rating: Number(professional.rating_avg) || 0,
     reviewsCount: professional.jobs_completed,
-    locality: professional.neighborhood || "Bogotá",
-    neighborhood: professional.neighborhood || "Bogotá",
+    locality: professional.neighborhood || professional.city || "Bogotá",
+    neighborhood: professional.neighborhood || professional.city || "Bogotá",
     city: professional.city || "Bogotá D.C.",
+    locationApproximate: Boolean(professional.location_approximate),
     distanceKm,
     estimatedMinutes: Math.max(5, Math.round((distanceKm || 1) * 4)),
     visitPriceCop: price,
@@ -162,13 +187,13 @@ const renderTechnicianPinSvg = (clipId: string) => `
 const buildContractorPopupHtml = (contractor: MapContractor): string => {
   const locality = (contractor.locality || "BOGOTÁ").toUpperCase();
   const neighborhood = (contractor.neighborhood || contractor.locality || "BOGOTÁ").toUpperCase();
-  const headerLocation = `${neighborhood} / ${locality}, BOGOTÁ`;
+  const headerLocation = neighborhood === locality ? neighborhood : `${neighborhood} / ${locality}`;
   const ratingVal = contractor.rating.toFixed(1);
   const reviewsVal = `(${contractor.reviewsCount})`;
   const businessName = contractor.businessName || contractor.name;
   const proName = contractor.name || contractor.shortName;
   const specialtyLabel = contractor.specialtyLabel || contractor.specialty || "Servicios profesionales";
-  const distanceFormatted = `~${contractor.distanceKm.toFixed(1)} km`;
+  const distanceFormatted = `~${contractor.distanceKm.toFixed(1)} km${contractor.locationApproximate ? " · ubicación aproximada" : ""}`;
   const priceFormatted = contractor.visitPriceCop
     ? `$ ${contractor.visitPriceCop.toLocaleString("es-CO")}`
     : "$ 35.000";
@@ -224,14 +249,20 @@ const ContractorMapPage: React.FC = () => {
   const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const homeMarkerRef = useRef<L.Marker | null>(null);
   const coverageCircleRef = useRef<L.Circle | null>(null);
-  const localityScrollRef = useRef<HTMLDivElement | null>(null);
   const specialtyScrollRef = useRef<HTMLDivElement | null>(null);
   const activeMarkerRef = useRef<Record<string, L.Marker>>({});
   const [mapReady, setMapReady] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState("Buscando ubicación GPS…");
+  const [hasDeviceLocation, setHasDeviceLocation] = useState(false);
+  const gpsCenteredRef = useRef(false);
+  const geocodeStartedRef = useRef(false);
+  const initialMapFitRef = useRef(false);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedLocality, setSelectedLocality] = useState("Todas");
+  const savedCity = useMemo(readSavedCity, []);
+  const [selectedCity, setSelectedCity] = useState<MapCity>(savedCity ?? DEFAULT_MAP_CITY);
+  const manualCityRef = useRef(false);
   const [selectedSpecialty, setSelectedSpecialty] = useState("Todas las Especialidades");
 
   useEffect(() => {
@@ -255,10 +286,13 @@ const ContractorMapPage: React.FC = () => {
   const [filterPolicy, setFilterPolicy] = useState(false);
   const [radiusKm, setRadiusKm] = useState(50);
   const [showCoverageRadius, setShowCoverageRadius] = useState(true);
-  const [selectedContractorId, setSelectedContractorId] = useState<string>("cerrajeria-express");
+  const [selectedContractorId, setSelectedContractorId] = useState<string>("");
   const [mobileView, setMobileView] = useState<"map" | "list">("map");
-  const [contractors, setContractors] = useState<MapContractor[]>(CONTRACTORS_MAP_DATA);
-  const [projectLocation, setProjectLocation] = useState<UserProjectLocation>(USER_PROJECT_LOCATION);
+  const [contractors, setContractors] = useState<MapContractor[]>([]);
+  const [isLoadingContractors, setIsLoadingContractors] = useState(true);
+  const [projectLocation, setProjectLocation] = useState<UserProjectLocation>(
+    savedCity ? cityLocation(savedCity) : USER_PROJECT_LOCATION
+  );
 
   // ── PQR State ─────────────────────────────────────────────────────────────
   const [pqrReports, setPqrReports] = useState<PqrReport[]>(() => getStoredPqrReports());
@@ -283,104 +317,189 @@ const ContractorMapPage: React.FC = () => {
       .toUpperCase();
 
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    let active = true;
+    let hasDeviceFix = false;
+    let watchId: string | null = null;
 
-    const updateLocation = async ({ coords }: GeolocationPosition) => {
-      const distFromBogota = getDistanceFromLatLonInKm(
-        coords.latitude,
-        coords.longitude,
-        USER_PROJECT_LOCATION.lat,
-        USER_PROJECT_LOCATION.lng
-      );
-
-      // Si el usuario está en Bogotá o alrededores (<= 50km), actualizamos su ubicación real.
-      // Si está más lejos (pruebas en otra ciudad o país), se preserva la ubicación demo de Bogotá
-      // para evitar que los contratistas queden fuera de rango.
-      if (distFromBogota <= 50) {
+    const updateLocation = async ({ coords }: Position) => {
+      if (!active || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) return;
+      if (!manualCityRef.current) {
+        if (isInColombia(coords.latitude, coords.longitude)) {
+          setSelectedCity(nearestMapCity(coords.latitude, coords.longitude));
+        }
         const location = {
           label: "Mi ubicación",
           address: `Ubicación actual (${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)})`,
           lat: coords.latitude,
           lng: coords.longitude,
         } satisfies UserProjectLocation;
+        hasDeviceFix = true;
         setProjectLocation(location);
+        setHasDeviceLocation(true);
+        setGpsStatus(
+          coords.accuracy > 100
+            ? `Ubicación aproximada (±${Math.round(coords.accuracy)} m)`
+            : `GPS preciso (±${Math.round(coords.accuracy)} m)`
+        );
 
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}&zoom=18&addressdetails=1`,
-            { headers: { Accept: "application/json", "Accept-Language": "es" } }
-          );
-          if (!response.ok) return;
-          const payload = (await response.json()) as { display_name?: string };
-          if (payload.display_name) {
-            setProjectLocation((current) => ({
-              ...current,
-              address: payload.display_name || current.address,
-            }));
+        if (!geocodeStartedRef.current) {
+          geocodeStartedRef.current = true;
+          const requestedLat = coords.latitude;
+          const requestedLng = coords.longitude;
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${requestedLat}&lon=${requestedLng}&zoom=18&addressdetails=1`,
+              { headers: { Accept: "application/json", "Accept-Language": "es" } }
+            );
+            if (!response.ok) return;
+            const payload = (await response.json()) as { display_name?: string };
+            if (payload.display_name && !manualCityRef.current && active) {
+              setProjectLocation((current) => {
+                const stillSameLocation =
+                  current.lat === requestedLat && current.lng === requestedLng;
+                return stillSameLocation
+                  ? { ...current, address: payload.display_name || current.address }
+                  : current;
+              });
+            }
+          } catch {
+            // Conserva las coordenadas GPS si no se puede resolver la dirección.
           }
-        } catch {
-          // Conserva las coordenadas reales si no se puede resolver la dirección.
         }
       }
     };
 
-    const watchId = navigator.geolocation.watchPosition(
-      updateLocation,
-      () => {
-        // Mantiene la ubicación de Bogotá configurada como respaldo.
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+    const reportLocationError = (error: unknown) => {
+      if (!active) return;
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (message.includes("permission") || message.includes("denied")) {
+        setGpsStatus("Permite el acceso a tu ubicación");
+      } else if (hasDeviceFix) {
+        setGpsStatus("No se pudo actualizar el GPS");
+      } else {
+        setGpsStatus("Ubicación GPS no disponible");
       }
-    );
+    };
 
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const distFromBogota = getDistanceFromLatLonInKm(
-      projectLocation.lat,
-      projectLocation.lng,
-      USER_PROJECT_LOCATION.lat,
-      USER_PROJECT_LOCATION.lng
-    );
-    const searchLat = distFromBogota <= 50 ? projectLocation.lat : USER_PROJECT_LOCATION.lat;
-    const searchLng = distFromBogota <= 50 ? projectLocation.lng : USER_PROJECT_LOCATION.lng;
-
-    professionalSearchService
-      .list({
-        lat: searchLat,
-        lng: searchLng,
-        radius_km: 50,
-      })
-      .then((professionals) => {
-        if (!active || !professionals || !professionals.length) return;
-        const validPros = professionals.filter(
-          (p) => p.latitude !== null && p.latitude !== undefined &&
-                 p.longitude !== null && p.longitude !== undefined &&
-                 Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude))
-        );
-        if (!validPros.length) return;
-
-        const nextContractors = validPros.map((professional, index) =>
-          toMapContractor(professional, index, projectLocation)
-        );
-        if (nextContractors.length > 0) {
-          setContractors(nextContractors);
-          setSelectedContractorId(String(nextContractors[0].id));
+    const startTracking = async () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          let permissions = await Geolocation.checkPermissions();
+          if (permissions.location !== "granted" && permissions.coarseLocation !== "granted") {
+            permissions = await Geolocation.requestPermissions({ permissions: ["location"] });
+          }
+          if (permissions.location !== "granted" && permissions.coarseLocation !== "granted") {
+            setGpsStatus("Permite la ubicación precisa en los ajustes del dispositivo");
+            return;
+          }
+          if (permissions.location !== "granted") {
+            setGpsStatus("Ubicación aproximada; activa la ubicación precisa");
+          }
         }
-      })
-      .catch(() => {
-        // El mapa conserva los datos demo si la API no está disponible.
-      });
+
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0,
+          minimumUpdateInterval: 3000,
+        };
+        const initialPosition = await Geolocation.getCurrentPosition(options);
+        if (!active) return;
+        void updateLocation(initialPosition);
+        const nextWatchId = await Geolocation.watchPosition(options, (position, error) => {
+          if (error) {
+            reportLocationError(error);
+          } else if (position) {
+            void updateLocation(position);
+          }
+        });
+        if (!active) {
+          void Geolocation.clearWatch({ id: nextWatchId });
+          return;
+        }
+        watchId = nextWatchId;
+      } catch (error) {
+        reportLocationError(error);
+      }
+    };
+
+    void startTracking();
 
     return () => {
       active = false;
+      if (watchId) void Geolocation.clearWatch({ id: watchId });
     };
-  }, [projectLocation]);
+  }, []);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !mapReady || !hasDeviceLocation || gpsCenteredRef.current) return;
+    gpsCenteredRef.current = true;
+    map.flyTo([projectLocation.lat, projectLocation.lng], 14, { duration: 0.8 });
+  }, [hasDeviceLocation, mapReady, projectLocation]);
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchLiveContractors = () => {
+      const searchLat = projectLocation.lat;
+      const searchLng = projectLocation.lng;
+
+      professionalSearchService
+        .list({
+          lat: searchLat,
+          lng: searchLng,
+          radius_km: radiusKm || 50,
+        })
+        .then((professionals) => {
+          if (!active) return;
+          setIsLoadingContractors(false);
+          if (!professionals || !professionals.length) {
+            setContractors([]);
+            return;
+          }
+          const validPros = professionals.filter(
+            (p) =>
+              p.latitude !== null &&
+              p.latitude !== undefined &&
+              p.longitude !== null &&
+              p.longitude !== undefined &&
+              Number.isFinite(Number(p.latitude)) &&
+              Number.isFinite(Number(p.longitude))
+          );
+          if (!validPros.length) {
+            setContractors([]);
+            return;
+          }
+
+          const nextContractors = validPros.map((professional, index) =>
+            toMapContractor(professional, index, projectLocation)
+          );
+          if (nextContractors.length > 0) {
+            setContractors(nextContractors);
+            setSelectedContractorId((prev) =>
+              nextContractors.some((c) => c.id === prev) ? prev : String(nextContractors[0].id)
+            );
+          } else {
+            setContractors([]);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setIsLoadingContractors(false);
+          }
+        });
+    };
+
+    fetchLiveContractors();
+    // Actualización continua en tiempo real cada 5 segundos
+    const liveTimer = window.setInterval(fetchLiveContractors, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(liveTimer);
+    };
+  }, [projectLocation, radiusKm]);
 
   useEffect(() => {
     const w = window as Window & { __serviproxGoToContractor?: (contractorId: string) => void };
@@ -403,16 +522,6 @@ const ContractorMapPage: React.FC = () => {
         const matchesSpecialty = item.specialties.some((s) => s.toLowerCase().includes(q));
         const matchesLoc = item.locality.toLowerCase().includes(q) || item.neighborhood.toLowerCase().includes(q);
         if (!matchesName && !matchesSub && !matchesSpecialty && !matchesLoc) {
-          return false;
-        }
-      }
-
-      // Locality filter
-      if (selectedLocality !== "Todas") {
-        const selLoc = selectedLocality.toLowerCase();
-        const itemLoc = (item.locality || "").toLowerCase();
-        const itemNeigh = (item.neighborhood || "").toLowerCase();
-        if (!itemLoc.includes(selLoc) && !itemNeigh.includes(selLoc)) {
           return false;
         }
       }
@@ -451,7 +560,7 @@ const ContractorMapPage: React.FC = () => {
 
       return true;
     }).sort((a, b) => a.distanceKm - b.distanceKm || b.rating - a.rating);
-  }, [contractors, searchQuery, selectedLocality, selectedSpecialty, filterAvailable, filterUrgent, filterPolicy, radiusKm]);
+  }, [contractors, searchQuery, selectedSpecialty, filterAvailable, filterUrgent, filterPolicy, radiusKm]);
 
   // Closest contractor
   const closestContractor = useMemo(() => {
@@ -465,7 +574,7 @@ const ContractorMapPage: React.FC = () => {
     if (mapInstanceRef.current) return;
 
     const map = L.map(mapContainerRef.current, {
-      center: [4.656, -74.075],
+      center: [projectLocation.lat, projectLocation.lng],
       zoom: 12.6,
       zoomControl: false,
     });
@@ -486,7 +595,7 @@ const ContractorMapPage: React.FC = () => {
       html: `
         <div class="sp-tu-obra-marker-wrap">
           <div class="sp-tu-obra-capsule">
-            <span> 🏠  Hogar </span>
+            <span>🏠  Hogar </span>
           </div>
           <div class="sp-tu-obra-pin-icon">
             <svg width="28" height="38" viewBox="0 0 28 38" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -505,7 +614,7 @@ const ContractorMapPage: React.FC = () => {
       zIndexOffset: 1200,
     })
       .addTo(map)
-      .bindPopup(`<strong>Tu Obra</strong><br/>${projectLocation.address}`);
+      .bindPopup(`<strong>${projectLocation.label}</strong><br/>${projectLocation.address}`);
     homeMarkerRef.current = homeMarker;
 
     mapInstanceRef.current = map;
@@ -516,7 +625,6 @@ const ContractorMapPage: React.FC = () => {
     requestAnimationFrame(() => map.invalidateSize(true));
     const resizeTimer = window.setTimeout(() => {
       map.invalidateSize(true);
-      map.setView([4.656, -74.075], 12.6);
     }, 250);
 
     return () => {
@@ -535,7 +643,7 @@ const ContractorMapPage: React.FC = () => {
   useEffect(() => {
     if (homeMarkerRef.current) {
       homeMarkerRef.current.setLatLng([projectLocation.lat, projectLocation.lng]);
-      homeMarkerRef.current.setPopupContent(`<strong>Tu Obra</strong><br/>${projectLocation.address}`);
+      homeMarkerRef.current.setPopupContent(`<strong>${projectLocation.label}</strong><br/>${projectLocation.address}`);
     }
   }, [projectLocation]);
 
@@ -562,22 +670,31 @@ const ContractorMapPage: React.FC = () => {
     }
   }, [projectLocation, showCoverageRadius, radiusKm, mapReady]);
 
-  // Update Contractor Markers
+  // Update Contractor Markers in real time
   useEffect(() => {
     const map = mapInstanceRef.current;
     const markersGroup = markersLayerGroupRef.current;
     if (!map || !markersGroup || !mapReady) return;
 
-    markersGroup.clearLayers();
-    activeMarkerRef.current = {};
+    const currentMarkers = activeMarkerRef.current || {};
+    const nextMarkers: Record<string, L.Marker> = {};
+    const nextIds = new Set(filteredContractors.map((c) => String(c.id)));
+
+    // Eliminar marcadores de contratistas que salieron del filtro
+    Object.keys(currentMarkers).forEach((id) => {
+      if (!nextIds.has(id)) {
+        currentMarkers[id].remove();
+      }
+    });
 
     filteredContractors.forEach((contractor) => {
       const lat = Number(contractor.lat);
       const lng = Number(contractor.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
+      const idStr = String(contractor.id);
       const isSelected = contractor.id === selectedContractorId;
-      const safeId = String(contractor.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const safeId = idStr.replace(/[^a-zA-Z0-9_-]/g, "_");
 
       const markerHtml = `
         <div class="sp-map-marker-item ${isSelected ? "is-selected" : ""}" id="marker-cont-${safeId}">
@@ -585,7 +702,7 @@ const ContractorMapPage: React.FC = () => {
             <span class="sp-marker-name">${contractor.shortName}</span>
             <span class="sp-marker-star">★</span>
             <span class="sp-marker-rating-num">${contractor.rating.toFixed(1)}</span>
-            <span class="sp-marker-zone-tag">En Zona</span>
+            <span class="sp-marker-zone-tag">En Vivo</span>
           </div>
 
           <div class="sp-marker-pin-head">
@@ -594,7 +711,6 @@ const ContractorMapPage: React.FC = () => {
         </div>
       `;
 
-
       const icon = L.divIcon({
         className: "sp-custom-marker-wrapper",
         html: markerHtml,
@@ -602,37 +718,51 @@ const ContractorMapPage: React.FC = () => {
         iconAnchor: [0, 0],
       });
 
-      const marker = L.marker([lat, lng], {
-        icon,
-        zIndexOffset: isSelected ? 1000 : 200,
-      });
+      let marker = currentMarkers[idStr];
+      if (marker) {
+        // Actualización fluida en tiempo real de coordenadas y popup
+        marker.setLatLng([lat, lng]);
+        marker.setIcon(icon);
+        marker.setZIndexOffset(isSelected ? 1000 : 200);
+        marker.setPopupContent(buildContractorPopupHtml(contractor));
+      } else {
+        marker = L.marker([lat, lng], {
+          icon,
+          zIndexOffset: isSelected ? 1000 : 200,
+        });
 
-      marker.on("click", () => {
-        setSelectedContractorId(contractor.id);
-        marker.openPopup();
-        const cardElem = document.getElementById(`contractor-card-${contractor.id}`);
-        if (cardElem) {
-          cardElem.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
-      });
+        marker.on("click", () => {
+          setSelectedContractorId(contractor.id);
+          marker.openPopup();
+          const cardElem = document.getElementById(`contractor-card-${contractor.id}`);
+          if (cardElem) {
+            cardElem.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        });
 
-      marker.bindPopup(buildContractorPopupHtml(contractor), {
-        closeButton: false,
-        className: "sp-leaflet-custom-popup",
-        offset: [0, -70],
-        autoPan: true,
-        autoPanPadding: [25, 25],
-      });
+        marker.bindPopup(buildContractorPopupHtml(contractor), {
+          closeButton: false,
+          className: "sp-leaflet-custom-popup",
+          offset: [0, -70],
+          autoPan: true,
+          autoPanPadding: [25, 25],
+        });
 
-      marker.addTo(markersGroup);
-      activeMarkerRef.current[contractor.id] = marker;
+        marker.addTo(markersGroup);
+      }
+
+      nextMarkers[idStr] = marker;
     });
 
-    if (selectedContractorId && activeMarkerRef.current[selectedContractorId]) {
-      const selectedMarker = activeMarkerRef.current[selectedContractorId];
-      window.setTimeout(() => {
-        selectedMarker.openPopup();
-      }, 150);
+    activeMarkerRef.current = nextMarkers;
+
+    if (selectedContractorId && nextMarkers[selectedContractorId]) {
+      const selectedMarker = nextMarkers[selectedContractorId];
+      if (!selectedMarker.isPopupOpen()) {
+        window.setTimeout(() => {
+          selectedMarker.openPopup();
+        }, 150);
+      }
     }
   }, [filteredContractors, selectedContractorId, mapReady]);
 
@@ -777,14 +907,35 @@ const ContractorMapPage: React.FC = () => {
     }
   };
 
+  const handleSelectCity = (city: MapCity) => {
+    manualCityRef.current = true;
+    try {
+      localStorage.setItem(MAP_CITY_KEY, city.id);
+    } catch {
+      /* el almacenamiento puede no estar disponible */
+    }
+    setSelectedCity(city);
+    setProjectLocation(cityLocation(city));
+  };
+
+  // Al cambiar de ciudad el mapa se recentra en ella
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !mapReady) return;
+    if (!manualCityRef.current && hasDeviceLocation) return;
+    const timer = window.setTimeout(() => map.setView([selectedCity.lat, selectedCity.lng], selectedCity.zoom), 300);
+    return () => window.clearTimeout(timer);
+  }, [selectedCity, mapReady, hasDeviceLocation]);
+
   // Auto-fit initial bounds when map is ready and contractors are loaded
   useEffect(() => {
-    if (!mapReady || !filteredContractors.length) return;
+    if (!mapReady || !filteredContractors.length || hasDeviceLocation || manualCityRef.current || initialMapFitRef.current) return;
+    initialMapFitRef.current = true;
     const timer = window.setTimeout(() => {
       handleFitAll();
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [mapReady, filteredContractors.length]);
+  }, [mapReady, filteredContractors.length, hasDeviceLocation, selectedCity]);
 
   // Scroll horizontal helpers
   const scrollChips = (ref: React.RefObject<HTMLDivElement | null>, offset: number) => {
@@ -800,7 +951,7 @@ const ContractorMapPage: React.FC = () => {
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle>Mapa de Contratistas • Bogotá</IonTitle>
+          <IonTitle>Mapa de Contratistas • {selectedCity.name}</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -824,11 +975,15 @@ const ContractorMapPage: React.FC = () => {
               </div>
               <div className="sp-top-pill sp-top-pill--city">
                 <span className="sp-pill-pin">📍</span>
-                <span>Bogotá D.C.</span>
+                <span>{selectedCity.name}</span>
               </div>
               <div className="sp-top-pill sp-top-pill--available">
                 <span className="sp-pill-dot">●</span>
                 <span>{filteredContractors.filter((c) => c.isAvailableInZone).length} Disponibles en Zona</span>
+              </div>
+              <div className="sp-top-pill sp-top-pill--live" style={{ background: "#ecfdf5", color: "#047857", borderColor: "#a7f3d0", fontWeight: 700 }}>
+                <span className="sp-pill-dot" style={{ color: "#10b981" }}>●</span>
+                <span>{gpsStatus}</span>
               </div>
             </div>
 
@@ -919,43 +1074,25 @@ const ContractorMapPage: React.FC = () => {
 
             {/* Filter Sections */}
             <div className="sp-sidebar-filters">
-              {/* Localidad de Bogotá */}
+              {/* Ciudad */}
               <div>
                 <div className="sp-filter-section-title">
                   <IonIcon icon={locationOutline} />
-                  <span>LOCALIDAD DE BOGOTÁ</span>
+                  <span>CIUDAD</span>
                 </div>
-                <div className="sp-chip-scroll-row">
-                  <button
-                    type="button"
-                    className="sp-chip-arrow"
-                    onClick={() => scrollChips(localityScrollRef, -120)}
-                    aria-label="Anterior"
-                  >
-                    <IonIcon icon={chevronBackOutline} />
-                  </button>
-                  <div className="sp-chip-scroll-container" ref={localityScrollRef}>
-                    {BOGOTA_LOCALITIES.map((loc) => (
-                      <button
-                        key={loc}
-                        type="button"
-                        className={`sp-chip-pill ${
-                          selectedLocality === loc ? "sp-chip-pill--orange-active" : ""
-                        }`}
-                        onClick={() => setSelectedLocality(loc)}
-                      >
-                        {loc}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="sp-chip-arrow"
-                    onClick={() => scrollChips(localityScrollRef, 120)}
-                    aria-label="Siguiente"
-                  >
-                    <IonIcon icon={chevronForwardOutline} />
-                  </button>
+                <div className="sp-chip-scroll-container" role="tablist" aria-label="Ciudad" style={{ flexWrap: "wrap" }}>
+                  {MAP_CITIES.map((city) => (
+                    <button
+                      key={city.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selectedCity.id === city.id}
+                      className={`sp-chip-pill ${selectedCity.id === city.id ? "sp-chip-pill--orange-active" : ""}`}
+                      onClick={() => handleSelectCity(city)}
+                    >
+                      {city.name}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1050,8 +1187,18 @@ const ContractorMapPage: React.FC = () => {
 
             {/* Results Header */}
             <div className="sp-results-header">
-              <span className="sp-results-count">
-                {filteredContractors.length} contratistas disponibles
+              <span className="sp-results-count flex items-center gap-2">
+                {isLoadingContractors && contractors.length === 0 ? (
+                  <span className="text-slate-500 text-sm">Consultando base de datos...</span>
+                ) : (
+                  <>
+                    <span>{filteredContractors.length} contratistas disponibles</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Base de Datos
+                    </span>
+                  </>
+                )}
               </span>
               <span className="sp-results-sort">
                 Ordenados por cercanía y calificación
@@ -1060,7 +1207,12 @@ const ContractorMapPage: React.FC = () => {
 
             {/* Contractors List */}
             <div className="sp-contractors-list">
-              {filteredContractors.length > 0 ? (
+              {isLoadingContractors && contractors.length === 0 ? (
+                <div className="p-8 text-center text-slate-500">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-3 border-indigo-600 border-t-transparent mb-2"></div>
+                  <p className="text-xs font-medium">Cargando contratistas desde la base de datos...</p>
+                </div>
+              ) : filteredContractors.length > 0 ? (
                 filteredContractors.map((contractor) => {
                   const isSelected = contractor.id === selectedContractorId;
                   return (
@@ -1141,7 +1293,7 @@ const ContractorMapPage: React.FC = () => {
                         <div className="sp-footer-meta">
                           <span className="sp-distance-pill">
                             <IonIcon icon={locationOutline} />
-                            {contractor.neighborhood}  {formatDistance(contractor.distanceKm)}
+                            {contractor.neighborhood}  {formatDistance(contractor.distanceKm)}{contractor.locationApproximate ? " · aprox." : ""}
                           </span>
                           <span className="sp-time-pill">
                             <IonIcon icon={timeOutline} /> ~{contractor.estimatedMinutes} min
@@ -1217,7 +1369,6 @@ const ContractorMapPage: React.FC = () => {
                     className="sp-chip-pill sp-chip-pill--orange-active"
                     onClick={() => {
                       setSearchQuery("");
-                      setSelectedLocality("Todas");
                       setSelectedSpecialty("Todas las Especialidades");
                       setFilterAvailable(false);
                       setFilterUrgent(false);
@@ -1282,25 +1433,6 @@ const ContractorMapPage: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* ── Floating PQR button ───────────────────────────────────────────── */}
-        {!showPqrListView && (
-          <button
-            id="btn-floating-pqr"
-            type="button"
-            onClick={() => setShowPqrListView(true)}
-            className="fixed bottom-24 right-4 z-30 bg-neutral-900 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-[11px] px-3.5 py-2.5 rounded-2xl shadow-xl transition-all flex items-center gap-2 cursor-pointer border border-white/10"
-            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-          >
-            <IonIcon icon={shieldCheckmarkOutline} />
-            <span>Chat de Reporte en Vivo</span>
-            {(pqrReports.length + appProblemReports.length) > 0 && (
-              <span className="bg-rose-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                {pqrReports.length + appProblemReports.length}
-              </span>
-            )}
-          </button>
-        )}
       </IonContent>
 
       {/* ── PQR Report Form Modal ─────────────────────────────────────────────── */}
@@ -1341,4 +1473,3 @@ const ContractorMapPage: React.FC = () => {
 };
 
 export default ContractorMapPage;
-

@@ -2,6 +2,7 @@ import { api, tokenStorage } from "./api";
 import type {
   AuthTokenResponse,
   LoginPayload,
+  ProfessionalCertificatePayload,
   RefreshTokenResponse,
   RegisterPayload,
   UpdateMePayload,
@@ -18,24 +19,45 @@ export const authService = {
   },
 
   loginWithUsername: async (username: string, password: string) => {
-    const tokens = await api.post<AuthTokenResponse>("auth/token/", { username, password }, {
-      auth: false,
-    });
+    const tokens = await api.post<AuthTokenResponse>(
+      "auth/token/",
+      { username, password },
+      { auth: false }
+    );
     tokenStorage.setTokens(tokens.access, tokens.refresh);
     return api.get<User>("auth/me/");
   },
 
-  register: (payload: RegisterPayload) =>
-    api.post<User>("auth/register/", payload, { auth: false }),
+  register: (payload: RegisterPayload) => {
+    if (!payload.certificate) {
+      return api.post<User>("auth/register/", payload, { auth: false });
+    }
+    const form = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        form.append(key, value instanceof File ? value : String(value));
+      }
+    });
+    return api.post<User>("auth/register/", form, { auth: false });
+  },
 
-  requestPasswordReset: (email: string) =>
-    api.post<{ detail: string }>("auth/password-reset/request/", { email }, { auth: false }),
+  requestPasswordReset: (emailOrUsername: string) =>
+    api.post<{ detail: string }>(
+      "auth/password-reset/request/",
+      { email: emailOrUsername, username: emailOrUsername },
+      { auth: false }
+    ),
 
   confirmPasswordReset: (payload: {
     email: string;
     code: string;
     new_password: string;
-  }) => api.post<{ detail: string }>("auth/password-reset/confirm/", payload, { auth: false }),
+  }) =>
+    api.post<{ detail: string }>(
+      "auth/password-reset/confirm/",
+      { ...payload, username: payload.email },
+      { auth: false }
+    ),
 
   getCurrentUser: () => api.get<User>("auth/me/"),
 
@@ -45,7 +67,13 @@ export const authService = {
   deleteCurrentUser: (reason: string) =>
     api.delete<void>("auth/me/delete/", { reason }),
 
-  becomeProfessional: () => api.post<User>("auth/become-professional/"),
+  becomeProfessional: (certificate?: ProfessionalCertificatePayload) => {
+    if (!certificate) return api.post<User>("auth/become-professional/");
+    const form = new FormData();
+    form.append("profession", certificate.profession);
+    form.append("certificate", certificate.file);
+    return api.post<User>("auth/become-professional/", form);
+  },
 
   becomeClient: () => api.post<User>("auth/become-client/"),
 
@@ -64,10 +92,4 @@ export const authService = {
     return tokens.access;
   },
 
-  getSecurityQuestion: (username: string) =>
-    api.post<{ security_question: string }>(
-      "auth/security-question/",
-      { username },
-      { auth: false }
-    ),
 };

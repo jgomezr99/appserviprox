@@ -7,7 +7,9 @@ import Menu from './components/Menu';
 import Login from './pages/Login';
 import ClientHome from './pages/ClientHome';
 import { GlobalChatButton } from './components/GlobalChatButton';
+import { ProfessionalLocationTracker } from './components/ProfessionalLocationTracker';
 import { ConnectionBanner } from './components/ConnectionBanner';
+import { PaymentHoldBanner } from './components/PaymentHoldBanner';
 import { SplashScreen } from './components/SplashScreen';
 import { RoleThemeController } from './components/RoleThemeController';
 import { RequireAuth } from './components/routing/RouteGuards';
@@ -61,6 +63,7 @@ const PqrPage = lazy(() => import('./pages/PqrPage'));
 const Reservas = lazy(() => import('./pages/Reservas'));
 const BenefitsPage = lazy(() => import('./pages/BenefitsPage'));
 const StorePage = lazy(() => import('./pages/StorePage'));
+const ProfessionalEarningsPage = lazy(() => import('./pages/ProfessionalEarningsPage'));
 
 const PageFallback: React.FC = () => (
   <div
@@ -108,6 +111,7 @@ const LazyPqrPage = withLazy(PqrPage);
 const LazyReservas = withLazy(Reservas);
 const LazyBenefitsPage = withLazy(BenefitsPage);
 const LazyStorePage = withLazy(StorePage);
+const LazyProfessionalEarningsPage = withLazy(ProfessionalEarningsPage);
 
 const BenefitsRoute: React.FC = () => {
   const flags = useHomeFlags('professional');
@@ -330,6 +334,11 @@ const App: React.FC = () => {
                 </RequireAuth>
               </Route>
 
+              <Route path="/profesional/ingresos" exact={true}>
+                <RequireAuth role="professional">
+                  <LazyProfessionalEarningsPage />
+                </RequireAuth>
+              </Route>
               <Route path="/profesional/beneficios" exact={true}>
                 <RequireAuth role="professional">
                   <BenefitsRoute />
@@ -390,8 +399,14 @@ const App: React.FC = () => {
           {/* ── Global floating "Chat de Reporte en Vivo" button ── */}
           <GlobalChatButton />
 
+          {/* ── Rastreo GPS en tiempo real para profesionales ── */}
+          <ProfessionalLocationTracker />
+
           {/* ── Global Database & Backend Connection Monitor ── */}
           <ConnectionBanner />
+
+          {/* ── Aviso de suspensión por servicio terminado sin pagar ── */}
+          <PaymentHoldBanner />
 
         </IonReactRouter>
       </AuthProvider>

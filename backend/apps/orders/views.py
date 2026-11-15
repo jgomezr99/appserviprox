@@ -4,7 +4,6 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.utils import timezone
 import mimetypes
 
 from django.http import FileResponse
@@ -16,13 +15,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.platform_views import IsPlatformStaff
 from apps.accounts.models import PlatformSettings
 
+from .finance import apply_payment_update, compute_discount, record_declined_dev_payment
 from .models import Order, Payment, Review, WorkEvidence
-from .serializers import OrderCreateSerializer, OrderSerializer, ReviewSerializer, OrderTransitionSerializer, OrderPriceSerializer
+from .serializers import DemoPaymentSerializer, OrderCreateSerializer, OrderSerializer, ReviewSerializer, OrderTransitionSerializer, OrderPriceSerializer
 from .services import InvalidTransition, confirm_development_payment, transition, set_final_price, is_assigned_professional, is_order_client, validate_price_range, price_bounds
 from .wompi import build_checkout_url, verify_event, wompi_ready
+
+PAY_AFTER_COMPLETION = "El pago se habilita cuando el profesional termina el trabajo."
 
 WOMPI_STATUS = {
     "APPROVED": Payment.Status.APPROVED,
@@ -82,11 +83,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = Order.objects.select_for_update().get(pk=self.get_object().pk)
         if not is_order_client(order, request.user):
             return Response({"detail": "Solo el cliente de la orden puede pagarla."}, status=status.HTTP_403_FORBIDDEN)
-        if order.payment_status == Order.PaymentStatus.PAID:
+        if order.payment_status != Order.PaymentStatus.PENDING:
             return Response({"detail": "La orden ya está pagada."}, status=status.HTTP_400_BAD_REQUEST)
-        if order.status in {Order.Status.REQUESTED, Order.Status.CANCELLED}:
-            return Response({"detail": "Esta orden no permite iniciar un pago."}, status=400)
-        if not wompi_ready():
+        if order.status != Order.Status.COMPLETED:
+            return Response({"detail": PAY_AFTER_COMPLETION}, status=status.HTTP_400_BAD_REQUEST)
+        test_mode = PlatformSettings.test_payment_enabled()
+        if not wompi_ready(test_mode):
             return Response({"detail": "Wompi no está configurado en el servidor."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         payments_cfg = PlatformSettings.load()["sections"].get("payments", {})
         if all(payments_cfg.get(f"{m}_enabled") is False for m in ("pse", "card", "transfer", "wallet")):
@@ -103,18 +105,25 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({"detail": str(exc)}, status=400)
         if missing_bounds:
             order.save(update_fields=["estimate_min", "estimate_max", "updated_at"])
-        cents = int((Decimal(amount) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        discount = compute_discount(amount)
+        cents = int(((Decimal(amount) - discount) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
         if cents < 150000:
             return Response({"detail": "El monto mínimo de pago es $1.500 COP."}, status=status.HTTP_400_BAD_REQUEST)
 
         reference = f"SPX-{order.pk}-{secrets.token_hex(4)}"
         Payment.objects.create(
-            order=order, client=request.user, reference=reference, amount_in_cents=cents, currency="COP"
+            order=order,
+            client=request.user,
+            reference=reference,
+            amount_in_cents=cents,
+            discount_amount=discount,
+            currency="COP",
+            test_mode=test_mode,
         )
         redirect_url = f"{settings.FRONTEND_URL}/cliente/historialpago?order={order.pk}" if settings.FRONTEND_URL else ""
         return Response(
             {
-                "checkout_url": build_checkout_url(reference, cents, "COP", redirect_url),
+                "checkout_url": build_checkout_url(reference, cents, "COP", redirect_url, test_mode),
                 "reference": reference,
                 "amount_in_cents": cents,
             }
@@ -122,7 +131,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="confirm-demo-payment")
     def confirm_demo_payment(self, request, pk=None):
-        if wompi_ready() and not settings.DEBUG:
+        if wompi_ready() and not settings.DEBUG and not PlatformSettings.test_payment_enabled():
             return Response({"detail": "El pago demo está deshabilitado."}, status=status.HTTP_403_FORBIDDEN)
         order = self.get_object()
         if not is_order_client(order, request.user):
@@ -130,7 +139,21 @@ class OrderViewSet(viewsets.ModelViewSet):
                 {"detail": "Solo el cliente de la orden puede confirmar el pago."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        order = confirm_development_payment(order, user=request.user)
+        if order.payment_status == Order.PaymentStatus.PENDING and order.status != Order.Status.COMPLETED:
+            return Response({"detail": PAY_AFTER_COMPLETION}, status=status.HTTP_400_BAD_REQUEST)
+        payload = DemoPaymentSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        if order.payment_status == Order.PaymentStatus.PENDING and payload.simulate_decline:
+            declined = record_declined_dev_payment(order, user=request.user, method=payload.payment_method)
+            return Response(
+                {
+                    "detail": "Pago rechazado. Verifica los datos o intenta con otro medio de pago.",
+                    "payment_status": "declined",
+                    "reference": declined.reference,
+                },
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+        order = confirm_development_payment(order, user=request.user, method=payload.payment_method)
         return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
 
     @action(detail=True, methods=["post"], url_path="location")
@@ -149,6 +172,10 @@ class OrderViewSet(viewsets.ModelViewSet):
                 and -90 <= order.professional_latitude <= 90 and -180 <= order.professional_longitude <= 180):
             return Response({"detail": "Las coordenadas no son válidas."}, status=400)
         order.save(update_fields=["professional_latitude", "professional_longitude", "updated_at"])
+        if order.professional:
+            order.professional.latitude = order.professional_latitude
+            order.professional.longitude = order.professional_longitude
+            order.professional.save(update_fields=["latitude", "longitude"])
         return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
 
     @action(detail=True, methods=["post"], url_path="evidence")
@@ -208,44 +235,17 @@ class WompiEventsView(APIView):
         new_status = WOMPI_STATUS.get(tx.get("status"))
         if not payment or not new_status:
             return Response({"detail": "Sin cambios."})
-        if payment.status == Payment.Status.APPROVED:
+        if payment.status in (Payment.Status.APPROVED, Payment.Status.REFUNDED):
             return Response({"detail": "Pago ya registrado."})
         if tx.get("amount_in_cents") != payment.amount_in_cents or tx.get("currency") != payment.currency:
             payment.status = Payment.Status.ERROR
             payment.save(update_fields=["status", "updated_at"])
             return Response({"detail": "Monto no coincide."})
 
-        payment.status = new_status
-        payment.wompi_transaction_id = str(tx.get("id", ""))[:80]
-        payment.payment_method = str(tx.get("payment_method_type", ""))[:40]
-        payment.save()
-
-        if new_status == Payment.Status.APPROVED:
-            order = Order.objects.select_for_update().get(pk=payment.order_id)
-            order.payment_status = Order.PaymentStatus.PAID
-            order.payment_confirmed_at = timezone.now()
-            order.payment_reference = payment.reference
-            order.save(update_fields=["payment_status", "payment_confirmed_at", "payment_reference", "updated_at"])
-        return Response({"detail": "Evento procesado."})
-
-
-class AdminPaymentListView(APIView):
-    permission_classes = [IsPlatformStaff]
-
-    def get(self, request):
-        rows = Payment.objects.select_related("client", "order")[:20]
-        return Response(
-            [
-                {
-                    "id": p.id,
-                    "date": p.created_at.isoformat(),
-                    "reference": p.reference,
-                    "method": p.payment_method or "—",
-                    "user": (p.client.get_full_name() or p.client.email) if p.client else "—",
-                    "amount": p.amount_in_cents / 100,
-                    "status": p.status,
-                    "status_label": p.get_status_display(),
-                }
-                for p in rows
-            ]
+        apply_payment_update(
+            payment,
+            new_status,
+            transaction_id=tx.get("id", ""),
+            method=tx.get("payment_method_type", ""),
         )
+        return Response({"detail": "Evento procesado."})

@@ -49,3 +49,4 @@ backups/
 .venv-validation/
 
 .fake
+node_modules

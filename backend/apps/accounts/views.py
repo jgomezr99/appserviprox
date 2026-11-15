@@ -1,13 +1,16 @@
 import secrets
 import re
 import logging
+import mimetypes
 from datetime import timedelta
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
+from django.http import FileResponse
 from django.utils import timezone
+from django.db.models import Q
 from rest_framework import generics, permissions, status
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -39,8 +42,15 @@ class RequestPasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = str(request.data.get("email", "")).strip().lower()
-        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        identity = str(request.data.get("email", "") or request.data.get("username", "")).strip().lower()
+        user = (
+            User.objects.filter(
+                Q(email__iexact=identity) | Q(username__iexact=identity),
+                is_active=True
+            ).first()
+            if identity
+            else None
+        )
         if user:
             code = f"{secrets.randbelow(1_000_000):06d}"
             PasswordResetCode.objects.filter(user=user, used_at__isnull=True).update(
@@ -51,19 +61,23 @@ class RequestPasswordResetView(APIView):
                 code_hash=make_password(code),
                 expires_at=timezone.now() + timedelta(minutes=10),
             )
-            send_mail(
-                subject="Tu código para recuperar Serviprox",
-                message=(
-                    f"Tu código de recuperación es: {code}\n\n"
-                    "Vence en 10 minutos. Si no solicitaste este cambio, ignora este correo."
-                ),
-                from_email=None,
-                recipient_list=[user.email],
-                fail_silently=False,
-            )
+            logger.info("Código de recuperación generado para %s (%s): %s", user.username, user.email, code)
+            try:
+                send_mail(
+                    subject="Tu código para recuperar Serviprox",
+                    message=(
+                        f"Tu código de recuperación es: {code}\n\n"
+                        "Vence en 10 minutos. Si no solicitaste este cambio, ignora este correo."
+                    ),
+                    from_email=None,
+                    recipient_list=[user.email],
+                    fail_silently=True,
+                )
+            except Exception as mail_exc:
+                logger.warning("No se pudo enviar el correo de recuperación a %s: %s", user.email, mail_exc)
 
         return Response(
-            {"detail": "Si el correo existe, enviaremos un código de recuperación."},
+            {"detail": "Si el usuario o correo existe, enviaremos un código de recuperación."},
             status=status.HTTP_200_OK,
         )
 
@@ -72,18 +86,20 @@ class ConfirmPasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = str(request.data.get("email", "")).strip().lower()
+        identity = str(request.data.get("email", "") or request.data.get("username", "")).strip().lower()
         code = str(request.data.get("code", "")).strip()
         new_password = str(request.data.get("new_password", ""))
         reset = (
             PasswordResetCode.objects.filter(
-                user__email__iexact=email,
+                Q(user__email__iexact=identity) | Q(user__username__iexact=identity),
                 used_at__isnull=True,
                 expires_at__gt=timezone.now(),
             )
             .select_related("user")
             .order_by("-created_at")
             .first()
+            if identity
+            else None
         )
         normalized_code = re.sub(r"\D", "", code)
         if not reset or not check_password(normalized_code, reset.code_hash):
@@ -142,6 +158,9 @@ class DeleteAccountView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+from .certificates import validate_certificate_upload
+
+
 class BecomeProfessionalView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -150,6 +169,16 @@ class BecomeProfessionalView(APIView):
         require_feature("professionals", "El registro de profesionales está deshabilitado.")
         if user.role == UserRole.STAFF:
             raise ValidationError({"detail": "El equipo Serviprox no puede cambiar a este rol."})
+
+        # Quien ya cargó un certificado en el pasado no tiene que volver a enviarlo.
+        from apps.professionals.models import ProfessionalProfile as ExistingProfile
+
+        existing = ExistingProfile.objects.filter(user=user).first()
+        upload = request.FILES.get("certificate")
+        profession = str(request.data.get("profession", "")).strip()
+        needs_certificate = upload is not None or not (existing and existing.certificate_file)
+        if needs_certificate:
+            validate_certificate_upload(upload, profession)
 
         user.role = UserRole.PROFESSIONAL
         user.onboarding_completed = False
@@ -192,7 +221,37 @@ class BecomeProfessionalView(APIView):
                     end_time=time(18, 0),
                 )
 
+        if needs_certificate:
+            prof.certificate_file = upload
+            prof.certificate_profession = profession
+            prof.certificate_uploaded_at = timezone.now()
+            prof.specialty_label = prof.specialty_label or profession
+            prof.is_verified = False
+            prof.save()
+
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+class ProfessionalCertificateView(APIView):
+    """Entrega el certificado solo a su dueño o al equipo Serviprox."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        from apps.professionals.models import ProfessionalProfile
+
+        profile = ProfessionalProfile.objects.filter(pk=pk).first()
+        user = request.user
+        is_staff = user.is_staff or user.role == UserRole.STAFF
+        if profile is None or not (is_staff or profile.user_id == user.id):
+            raise NotFound("Certificado no encontrado.")
+        if not profile.certificate_file:
+            raise NotFound("Este profesional no ha cargado un certificado.")
+        content_type = mimetypes.guess_type(profile.certificate_file.name)[0] or "application/octet-stream"
+        response = FileResponse(profile.certificate_file.open("rb"), content_type=content_type)
+        response["Cache-Control"] = "private, no-store"
+        response["Content-Disposition"] = 'inline; filename="certificado"'
+        return response
 
 
 class BecomeClientView(APIView):
@@ -266,6 +325,8 @@ class CompleteOnboardingView(APIView):
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import CustomTokenObtainPairSerializer
 
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Obtención de token JWT con verificación disciplinaria y aviso de suspensión administrativa."""
+
     serializer_class = CustomTokenObtainPairSerializer
