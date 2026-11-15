@@ -10,37 +10,31 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings_production
       - key: DJANGO_DEBUG
         value: "False"
       - key: DJANGO_SECURE_HSTS_SECONDS
-        value: "31536000"
+        value: "3600"
       - key: DJANGO_SECRET_KEY
         generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        value: serviprox-backend.onrender.com
       - key: SERVIPROX_DATABASE
         value: postgres
-      - key: POSTGRES_DB
-        sync: false
-      - key: POSTGRES_USER
-        sync: false
-      - key: POSTGRES_PASSWORD
-        sync: false
-      - key: POSTGRES_HOST
-        sync: false
-      - key: POSTGRES_SSLMODE
-        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: serviprox-db
+          property: connectionString
       - key: SERVIPROX_MEDIA_STORAGE
-        value: s3
-      - key: SERVIPROX_S3_BUCKET_NAME
-        sync: false
-      - key: SERVIPROX_S3_ACCESS_KEY_ID
-        sync: false
-      - key: SERVIPROX_S3_SECRET_ACCESS_KEY
-        sync: false
-      - key: SERVIPROX_S3_REGION_NAME
-        sync: false
-      - key: SERVIPROX_S3_ENDPOINT_URL
-        sync: false
+        value: filesystem
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://serviproxweb.netlify.app,https://deploy-preview-2--serviproxweb.netlify.app"
+        value: "https://serviprouc.netlify.app,https://serviproxweb.netlify.app"
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://serviproxweb.netlify.app,https://deploy-preview-2--serviproxweb.netlify.app"
+        value: https://serviprox-backend.onrender.com
+
+databases:
+  - name: serviprox-db
+    databaseName: serviprox
+    user: serviprox
+    plan: free
