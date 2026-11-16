@@ -150,6 +150,10 @@ ion-item.selected ion-label { color: var(--menu-selected-fg) !important; }
   --inner-padding-end: 8px;
 }
 
+.menu-footer .role-switch-item {
+  margin-bottom: 16px;
+}
+
 /* ===== Perfil de usuario y botón de cerrar sesión a la derecha ===== */
 .profile-item {
   --color: #ffffff !important;
