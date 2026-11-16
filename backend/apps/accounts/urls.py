@@ -23,12 +23,21 @@ from .views import (
     DeleteAccountView,
     MeView,
     ProfessionalCertificateView,
+    RegisterAdminWorkerView,
     RegisterView,
     RequestPasswordResetView,
 )
 
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="auth-register"),
+    path("auth/admin/register-worker/", RegisterAdminWorkerView.as_view(), name="auth-admin-register-worker"),
+    path("auth/admin/register-worker", RegisterAdminWorkerView.as_view()),
+    path("admin/register-worker/", RegisterAdminWorkerView.as_view()),
+    path("admin/register-worker", RegisterAdminWorkerView.as_view()),
+    path("auth/register-worker/", RegisterAdminWorkerView.as_view()),
+    path("auth/register-worker", RegisterAdminWorkerView.as_view()),
+    path("auth/register-admin/", RegisterAdminWorkerView.as_view()),
+    path("auth/register-admin", RegisterAdminWorkerView.as_view()),
     path("auth/password-reset/request/", RequestPasswordResetView.as_view(), name="password-reset-request"),
     path("auth/password-reset/confirm/", ConfirmPasswordResetView.as_view(), name="password-reset-confirm"),
     path("auth/me/", MeView.as_view(), name="auth-me"),

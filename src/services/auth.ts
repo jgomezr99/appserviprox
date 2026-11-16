@@ -59,6 +59,44 @@ export const authService = {
       { auth: false }
     ),
 
+  registerAdminWorker: async (payload: {
+    worker_key: string;
+    username: string;
+    full_name: string;
+    email: string;
+    phone?: string;
+    area: string;
+    password: string;
+  }) => {
+    type RegisterWorkerResponse = {
+      success: boolean;
+      message: string;
+      user: {
+        id: number;
+        username: string;
+        email: string;
+        full_name: string;
+        role: string;
+        is_staff: boolean;
+        area: string;
+        phone?: string;
+      };
+    };
+
+    try {
+      return await api.post<RegisterWorkerResponse>("auth/admin/register-worker/", payload, { auth: false });
+    } catch (err: any) {
+      if (err?.status === 404) {
+        try {
+          return await api.post<RegisterWorkerResponse>("admin/register-worker/", payload, { auth: false });
+        } catch {
+          return await api.post<RegisterWorkerResponse>("auth/register-worker/", payload, { auth: false });
+        }
+      }
+      throw err;
+    }
+  },
+
   getCurrentUser: () => api.get<User>("auth/me/"),
 
   updateCurrentUser: (payload: UpdateMePayload) =>

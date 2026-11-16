@@ -38,6 +38,29 @@ interface ChatMessage {
 const AGENT_AVATAR =
 	"https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=400&auto=format&fit=crop&q=80";
 
+function extractApiErrorMessage(err: any): string {
+	if (!err) return "Ocurrió un error inesperado al procesar la solicitud.";
+	const payload = err.payload || err.data || err;
+	if (typeof payload === "string") return payload;
+	if (typeof payload?.detail === "string") return payload.detail;
+	if (typeof payload?.message === "string") return payload.message;
+	if (typeof payload === "object" && payload !== null) {
+		const messages: string[] = [];
+		for (const [, val] of Object.entries(payload)) {
+			if (Array.isArray(val)) {
+				messages.push(val.join(" "));
+			} else if (typeof val === "string") {
+				messages.push(val);
+			}
+		}
+		if (messages.length > 0) return messages.join("\n");
+	}
+	if (typeof err.message === "string" && !err.message.startsWith("API request failed")) {
+		return err.message;
+	}
+	return "No fue posible conectar con el servidor backend ni la base de datos.";
+}
+
 const AdministrativeLoginPage: React.FC = () => {
 	const history = useHistory();
 	const { isAuthenticated, isLoading: sessionLoading, login, logout, user: sessionUser } = useAuth();
@@ -77,6 +100,32 @@ const AdministrativeLoginPage: React.FC = () => {
 
 	const [adminChatOpen, setAdminChatOpen] = useState(false);
 
+	// Estado del proceso de creación de cuenta administrativa por chat
+	type CreationFlowStep =
+		| "idle"
+		| "waiting_worker_key"
+		| "waiting_username"
+		| "waiting_fullname"
+		| "waiting_email"
+		| "waiting_phone"
+		| "waiting_area"
+		| "waiting_password"
+		| "saving";
+
+	interface WorkerDraft {
+		worker_key?: string;
+		username?: string;
+		full_name?: string;
+		email?: string;
+		phone?: string;
+		area?: string;
+		password?: string;
+	}
+
+	const [creationStep, setCreationStep] = useState<CreationFlowStep>("idle");
+	const [workerDraft, setWorkerDraft] = useState<WorkerDraft>({});
+	const [creationSuccessBanner, setCreationSuccessBanner] = useState<string>("");
+
 	// Estado del Chat en Vivo
 	const [chatInput, setChatInput] = useState("");
 	const [isTyping, setIsTyping] = useState(false);
@@ -89,8 +138,13 @@ const AdministrativeLoginPage: React.FC = () => {
 			sender: "agent",
 			agentName: "Sofía • Defensoría y Mesa Técnica",
 			agentAvatar: AGENT_AVATAR,
-			text: "¡Hola! Soy Sofía de la Defensoría y Mesa Técnica de Servicio Contratista Bogotá. ¿En qué te puedo ayudar hoy? Puedes radicar  directamente por este chat o reportar cualquier problema técnico con la app.",
+			text: "¡Hola! Soy Sofía de la Defensoría y Mesa Técnica de Serviprox Bogotá. ¿En qué te puedo ayudar hoy?\n\nSi eres trabajador de la plataforma, puedes dar de alta tu **cuenta administrativa** ingresando la clave de trabajador autorizada para que quede reflejada en la base de datos oficial.",
 			timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+			quickOptions: [
+				{ label: "🛡️ Crear cuenta administrativa", action: "iniciar_crear_admin" },
+				{ label: "📱 Problema con la app", action: "problema_app" },
+				{ label: "⚖️ Radicar queja formal", action: "queja_contratista" },
+			],
 		},
 	]);
 
@@ -218,7 +272,44 @@ const AdministrativeLoginPage: React.FC = () => {
 	const handleQuickAction = (action: string) => {
 		const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-		if (action === "problema_app") {
+		if (action === "iniciar_crear_admin") {
+			setCreationStep("waiting_worker_key");
+			setWorkerDraft({});
+			setChatMessages((prev) => [
+				...prev,
+				{
+					id: `user-${Date.now()}`,
+					sender: "user",
+					text: "🛡️ Deseo dar de alta mi cuenta administrativa.",
+					timestamp: time,
+				},
+			]);
+			pushAgentResponse(
+				"🔐 **Módulo de Alta para Trabajadores Administrativos Serviprox**\n\nPara autorizar la creación de una cuenta en la base de datos oficial, por favor ingresa la **Clave de Trabajador Autorizado**:"
+			);
+		} else if (action.startsWith("sel_area:")) {
+			const selectedArea = action.replace("sel_area:", "").trim();
+			setWorkerDraft((prev) => ({ ...prev, area: selectedArea }));
+			setCreationStep("waiting_password");
+			setChatMessages((prev) => [
+				...prev,
+				{
+					id: `user-${Date.now()}`,
+					sender: "user",
+					text: `🏢 Área: ${selectedArea}`,
+					timestamp: time,
+				},
+			]);
+			pushAgentResponse(
+				`Área asignada: **${selectedArea}**.\n\n👉 **Paso 6 de 6:** Define tu **Contraseña de acceso** para el login administrativo (mínimo 6 caracteres):`
+			);
+		} else if (action.startsWith("auto_fill_login:")) {
+			const targetUser = action.replace("auto_fill_login:", "").trim();
+			setUsername(targetUser);
+			setAdminChatOpen(false);
+			setError("");
+			setCreationSuccessBanner(`Cuenta administrativa lista: ${targetUser}. Ingresa tu contraseña para acceder.`);
+		} else if (action === "problema_app") {
 			setChatMessages((prev) => [
 				...prev,
 				{
@@ -262,7 +353,7 @@ const AdministrativeLoginPage: React.FC = () => {
 		}
 	};
 
-	const handleSendChatMessage = (e?: React.FormEvent) => {
+	const handleSendChatMessage = async (e?: React.FormEvent) => {
 		if (e) e.preventDefault();
 		const text = chatInput.trim();
 		if (!text) return;
@@ -277,17 +368,216 @@ const AdministrativeLoginPage: React.FC = () => {
 		setChatMessages((prev) => [...prev, userMsg]);
 		setChatInput("");
 
-		// Respuesta automática
-		const lower = text.toLowerCase();
-		if (lower.includes("contraseña") || lower.includes("clave") || lower.includes("olvid")) {
+		// 1. Detección directa de la clave de trabajador en cualquier momento
+		if (text === "Juanpablo9*") {
+			setWorkerDraft({ worker_key: "Juanpablo9*" });
+			setCreationStep("waiting_username");
 			pushAgentResponse(
-				"Para restablecer tu contraseña, vuelve al formulario de acceso, escribe el correo de tu cuenta y selecciona “Enviar código de recuperación”. No compartas tu contraseña ni códigos por este chat."
+				"🔐 **¡Clave de trabajador autorizada correctamente!**\n\nBienvenido al registro de personal administrativo de Serviprox Bogotá.\n\n👉 **Paso 1 de 6:** Escribe tu **Nombre de usuario** administrativo (ejemplo: `jpablo`, `admin_bogota`):"
 			);
-		} else {
-			pushAgentResponse(
-				`Mensaje recibido: "${text}". Un analista de la Mesa Técnica de Bogotá está procesando tu solicitud.`
-			);
+			return;
 		}
+
+		// 2. Si está en espera de la clave de trabajador
+		if (creationStep === "waiting_worker_key") {
+			if (text === "Juanpablo9*") {
+				setWorkerDraft({ worker_key: "Juanpablo9*" });
+				setCreationStep("waiting_username");
+				pushAgentResponse(
+					"✅ **Clave de trabajador autorizada correctamente.**\n\nVamos a crear tu cuenta administrativa en la base de datos oficial de Serviprox.\n\n👉 **Paso 1 de 6:** Escribe tu **Nombre de usuario** administrativo (ejemplo: `jpablo`, `admin_bogota`):"
+				);
+			} else {
+				pushAgentResponse(
+					"❌ **Clave de trabajador incorrecta.**\n\nPor motivos de seguridad institucional y control de la base de datos, únicamente el personal con la clave autorizada puede crear cuentas administrativas.\n\nPor favor ingresa la clave de trabajador correcta para continuar:"
+				);
+			}
+			return;
+		}
+
+		// 3. Paso de usuario
+		if (creationStep === "waiting_username") {
+			if (text.includes(" ")) {
+				pushAgentResponse(
+					"⚠️ El nombre de usuario no puede contener espacios. Por favor escribe un usuario válido (ejemplo: `jpablo` o `admin_bogota`):"
+				);
+				return;
+			}
+			if (text.length < 3) {
+				pushAgentResponse(
+					"⚠️ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo:"
+				);
+				return;
+			}
+			setWorkerDraft((prev) => ({ ...prev, username: text }));
+			setCreationStep("waiting_fullname");
+			pushAgentResponse(
+				`Excelente usuario: **${text}**.\n\n👉 **Paso 2 de 6:** Escribe tu **Nombre y apellidos completos** (ejemplo: Juan Pablo Gómez):`
+			);
+			return;
+		}
+
+		// 4. Paso de nombre completo
+		if (creationStep === "waiting_fullname") {
+			if (text.length < 3) {
+				pushAgentResponse(
+					"⚠️ Por favor escribe tu nombre completo (ejemplo: Juan Pablo Gómez):"
+				);
+				return;
+			}
+			setWorkerDraft((prev) => ({ ...prev, full_name: text }));
+			setCreationStep("waiting_email");
+			pushAgentResponse(
+				`Mucho gusto, **${text}**.\n\n👉 **Paso 3 de 6:** Escribe tu **Correo electrónico corporativo / oficial** (ejemplo: juanpablo@serviprox.com):`
+			);
+			return;
+		}
+
+		// 5. Paso de correo
+		if (creationStep === "waiting_email") {
+			if (!text.includes("@") || !text.includes(".")) {
+				pushAgentResponse(
+					"⚠️ Por favor ingresa un correo electrónico válido (ejemplo: nombre@serviprox.com):"
+				);
+				return;
+			}
+			setWorkerDraft((prev) => ({ ...prev, email: text.toLowerCase() }));
+			setCreationStep("waiting_phone");
+			pushAgentResponse(
+				`Correo registrado: **${text.toLowerCase()}**.\n\n👉 **Paso 4 de 6:** Escribe tu **Número de teléfono o celular** de contacto (ejemplo: 3101234567):`
+			);
+			return;
+		}
+
+		// 6. Paso de teléfono
+		if (creationStep === "waiting_phone") {
+			setWorkerDraft((prev) => ({ ...prev, phone: text }));
+			setCreationStep("waiting_area");
+			pushAgentResponse(
+				`Teléfono registrado: **${text}**.\n\n👉 **Paso 5 de 6:** Selecciona o escribe el **Área o Departamento** donde desempeñas tus funciones:`,
+				[
+					{ label: "⚖️ Defensoría y Mesa Técnica", action: "sel_area:Defensoría y Mesa Técnica" },
+					{ label: "🛠️ Soporte Técnico e Infraestructura", action: "sel_area:Soporte Técnico e Infraestructura" },
+					{ label: "💰 Finanzas y Liquidaciones", action: "sel_area:Finanzas y Liquidaciones" },
+					{ label: "📋 Supervisión y Control Staff", action: "sel_area:Supervisión y Control Staff" },
+				]
+			);
+			return;
+		}
+
+		// 7. Paso de área
+		if (creationStep === "waiting_area") {
+			setWorkerDraft((prev) => ({ ...prev, area: text }));
+			setCreationStep("waiting_password");
+			pushAgentResponse(
+				`Área asignada: **${text}**.\n\n👉 **Paso 6 de 6:** Define tu **Contraseña de acceso** para el login administrativo (mínimo 6 caracteres):`
+			);
+			return;
+		}
+
+		// 8. Paso de contraseña y guardado en base de datos
+		if (creationStep === "waiting_password") {
+			if (text.length < 6) {
+				pushAgentResponse(
+					"⚠️ La contraseña debe tener al menos 6 caracteres por seguridad. Por favor ingresa una contraseña válida:"
+				);
+				return;
+			}
+
+			setCreationStep("saving");
+			setIsTyping(true);
+
+			const payload = {
+				worker_key: workerDraft.worker_key || "Juanpablo9*",
+				username: workerDraft.username || "",
+				full_name: workerDraft.full_name || "",
+				email: workerDraft.email || "",
+				phone: workerDraft.phone || "",
+				area: workerDraft.area || "Defensoría y Mesa Técnica",
+				password: text,
+			};
+
+			try {
+				const res = await authService.registerAdminWorker(payload);
+				setIsTyping(false);
+				setCreationStep("idle");
+				setWorkerDraft({});
+				setChatMessages((prev) => [
+					...prev,
+					{
+						id: `agent-success-${Date.now()}`,
+						sender: "agent",
+						agentName: "Sofía • Defensoría y Mesa Técnica",
+						agentAvatar: AGENT_AVATAR,
+						text:
+							`🎉 **¡Cuenta administrativa creada exitosamente en la base de datos de Serviprox!**\n\n` +
+							`📋 **Ficha de Trabajador Registrado:**\n` +
+							`• 👤 **Usuario:** ${res.user.username}\n` +
+							`• 🏷️ **Nombre:** ${res.user.full_name}\n` +
+							`• 📧 **Correo:** ${res.user.email}\n` +
+							`• 📞 **Teléfono:** ${res.user.phone || "No registrado"}\n` +
+							`• 🏢 **Área:** ${res.user.area}\n` +
+							`• 🛡️ **Rol:** Personal Administrativo (\`staff\` / \`is_staff = True\`)\n\n` +
+							`Tu cuenta ya quedó reflejada y conectada a la base de datos oficial. Puedes iniciar sesión inmediatamente en este login administrativo.`,
+						timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+						quickOptions: [
+							{ label: "🚀 Iniciar sesión con esta cuenta", action: `auto_fill_login:${res.user.username}` },
+							{ label: "🔄 Registrar otro trabajador", action: "iniciar_crear_admin" },
+							{ label: "✕ Cerrar chat", action: "cerrar_chat" },
+						],
+					},
+				]);
+			} catch (err: any) {
+				setIsTyping(false);
+				setCreationStep("idle");
+				const detail = extractApiErrorMessage(err);
+				setChatMessages((prev) => [
+					...prev,
+					{
+						id: `agent-err-${Date.now()}`,
+						sender: "agent",
+						agentName: "Sofía • Defensoría y Mesa Técnica",
+						agentAvatar: AGENT_AVATAR,
+						text: `❌ **No se pudo registrar la cuenta administrativa:**\n\n${detail}\n\n¿Deseas intentarlo de nuevo?`,
+						timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+						quickOptions: [
+							{ label: "🔄 Intentar nuevamente", action: "iniciar_crear_admin" },
+							{ label: "✕ Cerrar chat", action: "cerrar_chat" },
+						],
+					},
+				]);
+			}
+			return;
+		}
+
+		// 9. Detección de intención si escribe en lenguaje natural
+		const lower = text.toLowerCase();
+		if (
+			lower.includes("crear") ||
+			lower.includes("cuenta") ||
+			lower.includes("registro") ||
+			lower.includes("trabajador") ||
+			lower.includes("admin") ||
+			lower.includes("alta") ||
+			lower.includes("clave")
+		) {
+			setCreationStep("waiting_worker_key");
+			setWorkerDraft({});
+			pushAgentResponse(
+				"🔐 **Módulo de Alta para Trabajadores Administrativos Serviprox**\n\nPara autorizar la creación de tu cuenta en la base de datos oficial, por favor escribe la **Clave de Trabajador Autorizado**:"
+			);
+			return;
+		}
+
+		if (lower.includes("contraseña") || lower.includes("olvid")) {
+			pushAgentResponse(
+				"Para restablecer tu contraseña, vuelve al formulario de acceso, escribe tu usuario o correo y selecciona “Enviar código de recuperación”."
+			);
+			return;
+		}
+
+		pushAgentResponse(
+			`Mensaje recibido: "${text}". Si eres nuevo trabajador y deseas registrar tu cuenta, escribe **crear cuenta** o ingresa la clave de trabajador autorizada.`
+		);
 	};
 
 	const handleAttachEvidence = () => {
@@ -329,6 +619,27 @@ const AdministrativeLoginPage: React.FC = () => {
 
 						<h1 id="admin-login-title">Login administrativo</h1>
 						<p className="admin-login-subtitle">Acceso exclusivo con usuario de administración (no correos de usuarios comunes)</p>
+
+						{creationSuccessBanner && (
+							<div
+								style={{
+									background: "#ecfdf5",
+									border: "1.5px solid #10b981",
+									borderRadius: "14px",
+									padding: "12px 14px",
+									marginBottom: "16px",
+									color: "#065f46",
+									fontSize: "0.88rem",
+									fontWeight: 700,
+									display: "flex",
+									alignItems: "center",
+									gap: "8px",
+								}}
+							>
+								<span>✅</span>
+								<span>{creationSuccessBanner}</span>
+							</div>
+						)}
 
 						{error && (
 							<p className="admin-login-error" role="alert" style={{ marginBottom: "16px" }}>
@@ -413,6 +724,35 @@ const AdministrativeLoginPage: React.FC = () => {
 							>
 								{submitting ? <IonSpinner name="crescent" /> : "Iniciar sesión"}
 							</IonButton>
+
+							<button
+								type="button"
+								className="admin-login-support"
+								style={{
+									display: "flex",
+									alignItems: "center",
+									justifyContent: "center",
+									gap: "6px",
+									padding: "10px",
+									borderRadius: "14px",
+									background: "#fff1f2",
+									border: "1px solid #fecdd3",
+									color: "#e11d48",
+									fontWeight: 800,
+									marginTop: "6px",
+									marginBottom: "2px",
+								}}
+								onClick={() => {
+									setAdminChatOpen(true);
+									setCreationStep("waiting_worker_key");
+									setWorkerDraft({});
+									pushAgentResponse(
+										"🔐 **Módulo de Alta para Trabajadores Administrativos Serviprox**\n\nPara autorizar la creación de tu cuenta en la base de datos oficial, por favor ingresa la **Clave de Trabajador Autorizado**:"
+									);
+								}}
+							>
+								🛡️ ¿Nuevo trabajador? Crear cuenta por el chat
+							</button>
 
 							<button
 								type="button"
@@ -638,7 +978,23 @@ const AdministrativeLoginPage: React.FC = () => {
 											type="text"
 											value={chatInput}
 											onChange={(e) => setChatInput(e.target.value)}
-											placeholder="Escribe tu queja o problema con la app aquí..."
+											placeholder={
+												creationStep === "waiting_worker_key"
+													? "Escribe la clave de trabajador autorizada..."
+													: creationStep === "waiting_username"
+													? "Escribe tu usuario administrativo (ej: jpablo)..."
+													: creationStep === "waiting_fullname"
+													? "Escribe tu nombre y apellido completo..."
+													: creationStep === "waiting_email"
+													? "Escribe tu correo (ej: nombre@serviprox.com)..."
+													: creationStep === "waiting_phone"
+													? "Escribe tu número de teléfono o celular..."
+													: creationStep === "waiting_area"
+													? "Escribe o selecciona tu área de trabajo..."
+													: creationStep === "waiting_password"
+													? "Define tu contraseña administrativa (mínimo 6)..."
+													: "Escribe tu consulta o 'crear cuenta'..."
+											}
 											className="admin-chat-input-pill"
 										/>
 

@@ -39,6 +39,7 @@ import type {
 import { REGISTERED_CONTRACTORS_REF } from '../../data/pqrInitialData';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
+import { authService } from '../../services/auth';
 import '../../theme/tailwind.css';
 import './pqrStyles.css';
 
@@ -47,6 +48,13 @@ import './pqrStyles.css';
 
 type ChatFlow =
   | 'inicio'
+  | 'admin_worker_key'
+  | 'admin_username'
+  | 'admin_fullname'
+  | 'admin_email'
+  | 'admin_phone'
+  | 'admin_area'
+  | 'admin_password'
   | 'queja_contratista'
   | 'queja_cual_contratista'
   | 'queja_descripcion'
@@ -65,6 +73,15 @@ type ChatFlow =
   | 'desbloqueo_foto'
   | 'desbloqueo_evaluando'
   | 'fin';
+
+interface AdminWorkerDraft {
+  worker_key?: string;
+  username?: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  area?: string;
+}
 
 interface DesbloqueoDraft {
   descripcion?: string;
@@ -152,6 +169,29 @@ function userMsg(text: string): LiveChatMessage {
   };
 }
 
+function extractApiErrorMessage(err: any): string {
+  if (!err) return 'Ocurrió un error inesperado al procesar la solicitud.';
+  const payload = err.payload || err.data || err;
+  if (typeof payload === 'string') return payload;
+  if (typeof payload?.detail === 'string') return payload.detail;
+  if (typeof payload?.message === 'string') return payload.message;
+  if (typeof payload === 'object' && payload !== null) {
+    const messages: string[] = [];
+    for (const [, val] of Object.entries(payload)) {
+      if (Array.isArray(val)) {
+        messages.push(val.join(' '));
+      } else if (typeof val === 'string') {
+        messages.push(val);
+      }
+    }
+    if (messages.length > 0) return messages.join('\n');
+  }
+  if (typeof err.message === 'string' && !err.message.startsWith('API request failed')) {
+    return err.message;
+  }
+  return 'No fue posible conectar con el servidor backend ni la base de datos.';
+}
+
 // ─── Mensaje inicial exacto de la interfaz ────────────────────────────────────
 
 const INITIAL_MESSAGE: LiveChatMessage = agentMsg(
@@ -161,6 +201,7 @@ const INITIAL_MESSAGE: LiveChatMessage = agentMsg(
     { label: '⚖️ Radicar PQR (Queja o Reclamo)', action: 'queja_contratista' },
     { label: '🛡️ Presentar Apelación de Cuenta / Sanción', action: 'iniciar_apelacion' },
     { label: '📇 Reportar problema con la app', action: 'problema_app' },
+    { label: '🔐 Crear cuenta administrativa (Staff)', action: 'iniciar_crear_admin' },
   ]
 );
 
@@ -184,6 +225,7 @@ export function LiveSupportChatModal({
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [flow, setFlow] = useState<ChatFlow>('inicio');
+  const [adminDraft, setAdminDraft] = useState<AdminWorkerDraft>({});
   const [quejaDraft, setQuejaDraft] = useState<QuejaDraft>({});
   const [problemaDraft, setProblemaAppDraft] = useState<ProblemaAppDraft>({});
   const [apelacionDraft, setApelacionDraft] = useState<ApelacionDraft>({});
@@ -231,11 +273,83 @@ export function LiveSupportChatModal({
     );
   };
 
+  // Finalizar creación de trabajador administrativo
+  const finalizarCrearAdminWorker = async (password: string) => {
+    setIsTyping(true);
+    setFlow('fin');
+    const payload = {
+      worker_key: adminDraft.worker_key || 'Juanpablo9*',
+      username: adminDraft.username || '',
+      full_name: adminDraft.full_name || '',
+      email: adminDraft.email || '',
+      phone: adminDraft.phone || '',
+      area: adminDraft.area || 'Defensoría y Mesa Técnica',
+      password,
+    };
+
+    try {
+      const res = await authService.registerAdminWorker(payload);
+      setIsTyping(false);
+      setAdminDraft({});
+      pushAgent(
+        `🎉 **¡Cuenta administrativa creada exitosamente en la base de datos de Serviprox!**\n\n` +
+        `📋 **Ficha de Trabajador Registrado:**\n` +
+        `• 👤 **Usuario:** ${res.user.username}\n` +
+        `• 🏷️ **Nombre:** ${res.user.full_name}\n` +
+        `• 📧 **Correo:** ${res.user.email}\n` +
+        `• 📞 **Teléfono:** ${res.user.phone || 'No registrado'}\n` +
+        `• 🏢 **Área:** ${res.user.area}\n` +
+        `• 🛡️ **Rol:** Personal Administrativo (\`staff\` / \`is_staff = True\`)\n\n` +
+        `Tu cuenta ya quedó reflejada y conectada a la base de datos oficial. Puedes iniciar sesión inmediatamente en el login administrativo.`,
+        [
+          { label: '🚀 Ir al Login Administrativo', action: 'goto_admin_login' },
+          { label: '🔄 Registrar otro trabajador', action: 'iniciar_crear_admin' },
+          { label: '✕ Cerrar chat', action: 'cerrar_chat' },
+        ],
+        undefined,
+        400
+      );
+    } catch (err: any) {
+      setIsTyping(false);
+      const detail = extractApiErrorMessage(err);
+      pushAgent(
+        `❌ **No se pudo registrar la cuenta administrativa:**\n\n${detail}\n\n¿Deseas intentarlo de nuevo?`,
+        [
+          { label: '🔄 Intentar nuevamente', action: 'iniciar_crear_admin' },
+          { label: '✕ Cerrar chat', action: 'cerrar_chat' },
+        ],
+        undefined,
+        400
+      );
+    }
+  };
+
   // ───────────────────────────────────────────────────────────────────────────
   // Manejo de botones de acción rápida
   // ───────────────────────────────────────────────────────────────────────────
   const handleQuickAction = (action: string) => {
     switch (action) {
+      case 'iniciar_crear_admin': {
+        pushUser('Deseo dar de alta mi cuenta administrativa en la base de datos.');
+        setFlow('admin_worker_key');
+        setAdminDraft({});
+        pushAgent(
+          '🔐 **Módulo de Alta para Trabajadores Administrativos Serviprox**\n\nPara autorizar la creación de tu cuenta en la base de datos oficial, por favor ingresa la **Clave de Trabajador Autorizado**:'
+        );
+        break;
+      }
+
+      case 'goto_admin_login': {
+        onClose();
+        window.location.href = '/admin/login';
+        break;
+      }
+
+      case 'cerrar_chat': {
+        onClose();
+        break;
+      }
+
       case 'queja_contratista': {
         pushUser('Deseo radicar una queja formal contra un contratista por este chat.');
         startContractorComplaint();
@@ -399,6 +513,17 @@ export function LiveSupportChatModal({
           break;
         }
 
+        if (action.startsWith('sel_admin_area:')) {
+          const area = action.replace('sel_admin_area:', '').trim();
+          setAdminDraft((prev) => ({ ...prev, area }));
+          pushUser(`🏢 Área: ${area}`);
+          setFlow('admin_password');
+          pushAgent(
+            `Área asignada: **${area}**.\n\n👉 **Paso 6 de 6:** Define tu **Contraseña de acceso** para el login administrativo (mínimo 6 caracteres):`
+          );
+          break;
+        }
+
         if (action === 'restart') {
           setMessages([INITIAL_MESSAGE]);
           setFlow('inicio');
@@ -440,6 +565,31 @@ export function LiveSupportChatModal({
     pushUser(text);
 
     const lower = text.toLowerCase();
+
+    // 0. Detección directa de la clave de trabajador autorizada en cualquier momento
+    if (text === 'Juanpablo9*') {
+      setAdminDraft({ worker_key: 'Juanpablo9*' });
+      setFlow('admin_username');
+      pushAgent(
+        '🔐 **¡Clave de trabajador autorizada correctamente!**\n\nBienvenido al registro de personal administrativo de Serviprox Bogotá.\n\n👉 **Paso 1 de 6:** Escribe tu **Nombre de usuario** administrativo (ejemplo: `jpablo`, `admin_bogota`):'
+      );
+      return;
+    }
+
+    // 0.5. Detectar intención de crear cuenta administrativa / alta trabajador
+    if (
+      flow === 'inicio' &&
+      (lower.includes('crear') ||
+        lower.includes('cuenta') ||
+        lower.includes('registro') ||
+        lower.includes('trabajador') ||
+        lower.includes('admin') ||
+        lower.includes('alta') ||
+        lower.includes('clave'))
+    ) {
+      handleQuickAction('iniciar_crear_admin');
+      return;
+    }
 
     // 1. Detectar solicitud de desbloqueo de cuenta
     if (
@@ -484,6 +634,103 @@ export function LiveSupportChatModal({
     }
 
     switch (flow) {
+      // ── Flujo de Alta / Registro de Trabajador Administrativo ────────────────
+      case 'admin_worker_key': {
+        if (text === 'Juanpablo9*') {
+          setAdminDraft({ worker_key: 'Juanpablo9*' });
+          setFlow('admin_username');
+          pushAgent(
+            '✅ **Clave de trabajador autorizada correctamente.**\n\nVamos a crear tu cuenta administrativa en la base de datos oficial de Serviprox.\n\n👉 **Paso 1 de 6:** Escribe tu **Nombre de usuario** administrativo (ejemplo: `jpablo`, `admin_bogota`):'
+          );
+        } else {
+          pushAgent(
+            '❌ **Clave de trabajador incorrecta.**\n\nPor motivos de seguridad y control de la base de datos, ingresa la clave de trabajador autorizada para continuar:'
+          );
+        }
+        break;
+      }
+
+      case 'admin_username': {
+        if (text.includes(' ')) {
+          pushAgent(
+            '⚠️ El nombre de usuario no puede contener espacios. Por favor escribe un usuario válido (ejemplo: `jpablo` o `admin_bogota`):'
+          );
+          break;
+        }
+        if (text.length < 3) {
+          pushAgent('⚠️ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo:');
+          break;
+        }
+        setAdminDraft((prev) => ({ ...prev, username: text }));
+        setFlow('admin_fullname');
+        pushAgent(
+          `Excelente usuario: **${text}**.\n\n👉 **Paso 2 de 6:** Escribe tu **Nombre y apellidos completos** (ejemplo: Juan Pablo Gómez):`
+        );
+        break;
+      }
+
+      case 'admin_fullname': {
+        if (text.length < 3) {
+          pushAgent('⚠️ Por favor escribe tu nombre y apellidos completos (ejemplo: Juan Pablo Gómez):');
+          break;
+        }
+        setAdminDraft((prev) => ({ ...prev, full_name: text }));
+        setFlow('admin_email');
+        pushAgent(
+          `Mucho gusto, **${text}**.\n\n👉 **Paso 3 de 6:** Escribe tu **Correo electrónico corporativo / oficial** (ejemplo: juanpablo@serviprox.com):`
+        );
+        break;
+      }
+
+      case 'admin_email': {
+        if (!text.includes('@') || !text.includes('.')) {
+          pushAgent(
+            '⚠️ Por favor ingresa un correo electrónico válido (ejemplo: nombre@serviprox.com):'
+          );
+          break;
+        }
+        setAdminDraft((prev) => ({ ...prev, email: text.toLowerCase() }));
+        setFlow('admin_phone');
+        pushAgent(
+          `Correo registrado: **${text.toLowerCase()}**.\n\n👉 **Paso 4 de 6:** Escribe tu **Número de teléfono o celular** de contacto (ejemplo: 3101234567):`
+        );
+        break;
+      }
+
+      case 'admin_phone': {
+        setAdminDraft((prev) => ({ ...prev, phone: text }));
+        setFlow('admin_area');
+        pushAgent(
+          `Teléfono registrado: **${text}**.\n\n👉 **Paso 5 de 6:** Selecciona o escribe el **Área o Departamento** donde desempeñas tus funciones:`,
+          [
+            { label: '⚖️ Defensoría y Mesa Técnica', action: 'sel_admin_area:Defensoría y Mesa Técnica' },
+            { label: '🛠️ Soporte Técnico e Infraestructura', action: 'sel_admin_area:Soporte Técnico e Infraestructura' },
+            { label: '💰 Finanzas y Liquidaciones', action: 'sel_admin_area:Finanzas y Liquidaciones' },
+            { label: '📋 Supervisión y Control Staff', action: 'sel_admin_area:Supervisión y Control Staff' },
+          ]
+        );
+        break;
+      }
+
+      case 'admin_area': {
+        setAdminDraft((prev) => ({ ...prev, area: text }));
+        setFlow('admin_password');
+        pushAgent(
+          `Área asignada: **${text}**.\n\n👉 **Paso 6 de 6:** Define tu **Contraseña de acceso** para el login administrativo (mínimo 6 caracteres):`
+        );
+        break;
+      }
+
+      case 'admin_password': {
+        if (text.length < 6) {
+          pushAgent(
+            '⚠️ La contraseña debe tener al menos 6 caracteres por seguridad. Por favor ingresa una contraseña válida:'
+          );
+          break;
+        }
+        void finalizarCrearAdminWorker(text);
+        break;
+      }
       // ── Paso 1: Identificación y validación de contratista en base de datos ──
       case 'queja_cual_contratista': {
         const found = registeredContractors.find(
@@ -1123,7 +1370,21 @@ export function LiveSupportChatModal({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={
-                flow === 'queja_cual_contratista'
+                flow === 'admin_worker_key'
+                  ? 'Escribe la clave de trabajador autorizada...'
+                  : flow === 'admin_username'
+                  ? 'Escribe tu usuario administrativo (ej: jpablo)...'
+                  : flow === 'admin_fullname'
+                  ? 'Escribe tu nombre y apellido completo...'
+                  : flow === 'admin_email'
+                  ? 'Escribe tu correo (ej: nombre@serviprox.com)...'
+                  : flow === 'admin_phone'
+                  ? 'Escribe tu número de celular o teléfono...'
+                  : flow === 'admin_area'
+                  ? 'Escribe o selecciona tu área de trabajo...'
+                  : flow === 'admin_password'
+                  ? 'Define tu contraseña administrativa (mínimo 6)...'
+                  : flow === 'queja_cual_contratista'
                   ? 'Escribe el nombre del contratista registrado (ej: Carlos Mendoza)...'
                   : flow === 'queja_descripcion'
                   ? 'Describe lo que ocurrió con el contratista...'

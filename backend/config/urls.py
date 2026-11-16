@@ -31,7 +31,7 @@ def health_check(request):
         }, status=503)
 
 
-from apps.accounts.views import CustomTokenObtainPairView
+from apps.accounts.views import CustomTokenObtainPairView, RegisterAdminWorkerView
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,12 @@ api_v1 = [
     path("health/", health_check, name="api-health"),
     path("auth/token/", CustomTokenObtainPairView.as_view(), name="token-obtain"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
+    path("auth/admin/register-worker/", RegisterAdminWorkerView.as_view(), name="api-auth-admin-register-worker"),
+    path("auth/admin/register-worker", RegisterAdminWorkerView.as_view()),
+    path("admin/register-worker/", RegisterAdminWorkerView.as_view()),
+    path("admin/register-worker", RegisterAdminWorkerView.as_view()),
+    path("auth/register-worker/", RegisterAdminWorkerView.as_view()),
+    path("auth/register-worker", RegisterAdminWorkerView.as_view()),
     path("admin/catalog/", include("apps.catalog.admin_urls")),
     path("", include("apps.accounts.urls")),
     path("", include("apps.households.urls")),
@@ -53,6 +59,12 @@ api_v1 = [
 
 urlpatterns = [
     path("health/", health_check, name="root-health"),
+    path("auth/admin/register-worker/", RegisterAdminWorkerView.as_view()),
+    path("auth/admin/register-worker", RegisterAdminWorkerView.as_view()),
+    path("admin/register-worker/", RegisterAdminWorkerView.as_view()),
+    path("admin/register-worker", RegisterAdminWorkerView.as_view()),
+    path("auth/register-worker/", RegisterAdminWorkerView.as_view()),
+    path("auth/register-worker", RegisterAdminWorkerView.as_view()),
     path("admin/", admin.site.urls),
     path("api/v1/", include(api_v1)),
 ]

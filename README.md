@@ -79,9 +79,19 @@ Credenciales demo:
 - Profesional: andres.ruiz@demo.serviprox.co / serviprox2026
 
 _______________________________________________________________________________________________
-admin  login 
-  email: adimin@serviprox.com
- clave:  serviprox2026
+
+Habilitar acceso administrativo (local y producción):
+
+- Para una cuenta existente, ejecuta desde `backend/`:
+  `python manage.py promote_serviprox_admin <usuario-o-correo> --confirm --reset-password`
+- El comando asigna el rol administrativo y solicita una contraseña nueva sin mostrarla
+  ni guardarla en el repositorio. Usa `--superuser` solo si necesita permisos de
+  superusuario.
+- Para una cuenta nueva, ejecuta `python manage.py createsuperuser`; las cuentas
+  creadas así reciben automáticamente el rol administrativo.
+- Ejecuta estos comandos por separado contra la base de datos de cada entorno.
+  En producción, usa la consola autorizada del servidor después de aplicar las
+  migraciones; no ejecutes `backend/seed_demo.py`.
 
 Recuperacion de contrasena:
 - En desarrollo, sin configurar correo, el codigo de 6 digitos aparece en la consola del backend.

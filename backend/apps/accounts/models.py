@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.db import models
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -9,6 +9,12 @@ class UserRole(models.TextChoices):
     CLIENT = "client", _("Cliente")
     PROFESSIONAL = "professional", _("Profesional")
     STAFF = "staff", _("Equipo Serviprox")
+
+
+class UserManager(DjangoUserManager):
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        extra_fields["role"] = UserRole.STAFF
+        return super().create_superuser(username, email, password, **extra_fields)
 
 
 class User(AbstractUser):
@@ -38,6 +44,7 @@ class User(AbstractUser):
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
+    objects = UserManager()
 
     class Meta:
         verbose_name = _("usuario")

@@ -38,6 +38,116 @@ class RegisterView(generics.CreateAPIView):
         return super().create(request, *args, **kwargs)
 
 
+class RegisterAdminWorkerView(APIView):
+    """Permite el registro de trabajadores administrativos desde el chat autorizados con la clave corporativa."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        worker_key = str(request.data.get("worker_key", "")).strip()
+        if worker_key != "Juanpablo9*":
+            return Response(
+                {"detail": "Clave de trabajador incorrecta. Autorización denegada para crear cuentas administrativas."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        username = str(request.data.get("username", "")).strip()
+        if not username or len(username) < 3:
+            return Response(
+                {"detail": "El nombre de usuario debe tener al menos 3 caracteres."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if " " in username:
+            return Response(
+                {"detail": "El nombre de usuario no puede contener espacios."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = str(request.data.get("email", "")).strip().lower()
+        if not email or "@" not in email:
+            return Response(
+                {"detail": "Por favor ingresa un correo electrónico corporativo válido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        full_name = str(request.data.get("full_name", "")).strip()
+        if not full_name:
+            full_name = username
+
+        password = str(request.data.get("password", ""))
+        if not password or len(password) < 6:
+            return Response(
+                {"detail": "La contraseña debe tener al menos 6 caracteres."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        phone = str(request.data.get("phone", "")).strip()
+        area = str(request.data.get("area", "")).strip() or "Mesa Técnica y Soporte"
+
+        # Validar unicidad
+        if User.objects.filter(username__iexact=username).exists():
+            return Response(
+                {"detail": f"El nombre de usuario '{username}' ya está registrado en la base de datos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if User.objects.filter(email__iexact=email).exists():
+            return Response(
+                {"detail": f"El correo electrónico '{email}' ya se encuentra registrado en la base de datos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        name_parts = full_name.split(maxsplit=1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        user = User(
+            username=username,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone,
+            city=area,
+            address=f"Área: {area}",
+            role=UserRole.STAFF,
+            is_staff=True,
+            is_superuser=True,
+            is_active=True,
+        )
+        user.set_password(password)
+        user.save()
+
+        # Registrar notificación oficial en base de datos
+        from .models import Notification
+        Notification.objects.create(
+            title="Nuevo trabajador administrativo",
+            text=f"Se dio de alta al trabajador {user.get_full_name() or user.username} en el área '{area}'.",
+            notification_type=Notification.NotificationType.SISTEMA,
+            is_read=False,
+        )
+
+        logger.info("Trabajador administrativo creado por chat: %s (%s) en área %s", user.username, user.email, area)
+
+        return Response(
+            {
+                "success": True,
+                "message": f"Cuenta administrativa '{user.username}' creada exitosamente en la base de datos.",
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "full_name": user.get_full_name() or user.username,
+                    "role": user.role,
+                    "is_staff": user.is_staff,
+                    "area": area,
+                    "phone": user.phone,
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class RequestPasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
 
