@@ -14,13 +14,8 @@ import { useAuth } from '../context/AuthContext';
 import { usePlatformSettings } from '../services/platformSettings';
 import { isUserAdmin } from '../utils/routes';
 import type { AppProblemReport, PqrReport } from '../types/serviprox';
-import {
-  REGISTERED_CONTRACTORS_REF,
-  getStoredPqrReports,
-  saveStoredPqrReports,
-  getStoredAppProblems,
-  saveStoredAppProblems,
-} from '../data/pqrInitialData';
+import { appProblemService, pqrService } from '../services/serviprox';
+import { REGISTERED_CONTRACTORS_REF } from '../data/pqrInitialData';
 
 const LiveSupportChatModal = lazy(() =>
   import('./pqr/LiveSupportChatModal').then((m) => ({ default: m.LiveSupportChatModal }))
@@ -59,36 +54,25 @@ export const GlobalChatButton: React.FC = () => {
 
   if (isHidden) return null;
 
-  const handlePqrCreated = (
+  const handlePqrCreated = async (
     data: Omit<PqrReport, 'id' | 'radicadoNumber' | 'status' | 'createdAt' | 'estimatedResponseDays'>
   ) => {
-    const radicado = `PQR-BOG-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newReport: PqrReport = {
-      ...data,
-      id: `pqr-${Date.now()}`,
-      radicadoNumber: radicado,
-      status: 'radicado',
-      createdAt: new Date().toISOString(),
-      estimatedResponseDays: 2,
-      messages: [
-        {
-          id: `msg-${Date.now()}`,
-          sender: 'system',
-          senderName: 'Servicio Contratista Bogotá',
-          senderRole: 'Defensoría',
-          text: `Radicado oficial ${radicado} registrado. Notificado al contratista ${data.contractorCompany}.`,
-          timestamp: new Date().toISOString(),
-        },
-      ],
-    };
-
-    const current = getStoredPqrReports();
-    saveStoredPqrReports([newReport, ...current]);
+    const created = await pqrService.create(data);
+    window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
+    return created;
   };
 
-  const handleAppProblem = (problem: AppProblemReport) => {
-    const current = getStoredAppProblems();
-    saveStoredAppProblems([problem, ...current]);
+  const handleAppProblem = async (problem: AppProblemReport) => {
+    const created = await appProblemService.create({
+      category: problem.category,
+      categoryLabel: problem.categoryLabel,
+      description: problem.description,
+      deviceInfo: problem.deviceInfo,
+      reportedBy: problem.reportedBy,
+      userEmail: problem.userEmail || user?.email || '',
+    });
+    window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
+    return created;
   };
 
   return (

@@ -209,7 +209,7 @@ const PqrPage: React.FC = () => {
       const created = data as PqrReport;
       setPqrReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
       setToastMsg(`✅ Reclamo formal ${created.radicadoNumber} guardado en la base de datos.`);
-      return;
+      return created;
     }
 
     try {
@@ -225,9 +225,11 @@ const PqrPage: React.FC = () => {
       const created = await pqrService.create(pqrPayload);
       setPqrReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
       setToastMsg(`✅ Reclamo formal ${created.radicadoNumber} guardado en la base de datos.`);
+      return created;
     } catch (err) {
       console.warn('[PqrPage] No fue posible registrar la PQR en la API:', err);
       setToastMsg('No se pudo registrar la PQR en el servidor. No se guardó localmente; verifica la conexión e inténtalo de nuevo.');
+      return undefined;
     }
   };
 
@@ -279,9 +281,11 @@ const PqrPage: React.FC = () => {
       });
       setAppProblemReports((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
       setToastMsg(`✅ Reporte técnico ${created.ticketNumber} guardado en la base de datos.`);
+      return created;
     } catch (err) {
       console.warn('[PqrPage] No fue posible guardar el reporte técnico en la API:', err);
       setToastMsg('No se pudo guardar el reporte técnico en el servidor. No se guardó localmente; verifica la conexión e inténtalo de nuevo.');
+      return undefined;
     }
   };
 

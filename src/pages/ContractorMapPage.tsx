@@ -42,7 +42,7 @@ import {
   type MapContractor,
   type UserProjectLocation,
 } from "../data/contractorMapData";
-import { professionalSearchService, pqrService } from "../services/serviprox";
+import { appProblemService, professionalSearchService, pqrService } from "../services/serviprox";
 import type { Professional } from "../types/serviprox";
 import type { PqrReport, PqrContractorRef, AppProblemReport } from "../types/serviprox";
 import {
@@ -810,28 +810,17 @@ const ContractorMapPage: React.FC = () => {
       const created = data as PqrReport;
       setPqrReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
       saveStoredPqrReports([created, ...getStoredPqrReports().filter((r) => r.id !== created.id)]);
-      return;
+      return created;
     }
 
     try {
       const created = await pqrService.create(data);
       setPqrReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
       saveStoredPqrReports([created, ...getStoredPqrReports().filter((r) => r.id !== created.id)]);
-    } catch {
-      const newReport: PqrReport = {
-        ...data,
-        id: `pqr-${Date.now()}`,
-        radicadoNumber: `PQR-BOG-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        status: 'radicado',
-        createdAt: new Date().toISOString(),
-        estimatedResponseDays: 2,
-        messages: [],
-      };
-      setPqrReports((prev) => {
-        const updated = [newReport, ...prev];
-        saveStoredPqrReports(updated);
-        return updated;
-      });
+      return created;
+    } catch (error) {
+      console.warn("[ContractorMapPage] No fue posible registrar la PQR en la API:", error);
+      return undefined;
     }
   };
 
@@ -872,12 +861,26 @@ const ContractorMapPage: React.FC = () => {
     setShowPqrDetailModal(true);
   };
 
-  const handleAppProblemReported = (problem: AppProblemReport) => {
-    setAppProblemReports((prev) => {
-      const updated = [problem, ...prev];
-      saveStoredAppProblems(updated);
-      return updated;
-    });
+  const handleAppProblemReported = async (problem: AppProblemReport) => {
+    try {
+      const created = await appProblemService.create({
+        category: problem.category,
+        categoryLabel: problem.categoryLabel,
+        description: problem.description,
+        deviceInfo: problem.deviceInfo,
+        reportedBy: problem.reportedBy,
+        userEmail: problem.userEmail || "",
+      });
+      setAppProblemReports((prev) => {
+        const updated = [created, ...prev.filter((item) => item.id !== created.id)];
+        saveStoredAppProblems(updated);
+        return updated;
+      });
+      return created;
+    } catch (error) {
+      console.warn("[ContractorMapPage] No fue posible guardar el reporte técnico en la API:", error);
+      return undefined;
+    }
   };
 
 
@@ -1462,9 +1465,10 @@ const ContractorMapPage: React.FC = () => {
         isOpen={showLiveChatModal}
         onClose={() => setShowLiveChatModal(false)}
         contractors={allContractorRefs.length > 0 ? allContractorRefs : [{ id: 'demo', name: 'Contratista Demo', companyName: 'Empresa Demo' }]}
-        onPqrCreatedFromChat={(data) => {
-          handleSubmitPqr(data);
-          setShowPqrListView(true);
+        onPqrCreatedFromChat={async (data) => {
+          const created = await handleSubmitPqr(data);
+          if (created) setShowPqrListView(true);
+          return created;
         }}
         onAppProblemReported={handleAppProblemReported}
       />

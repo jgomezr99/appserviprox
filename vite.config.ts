@@ -3,10 +3,18 @@
 import react from '@vitejs/plugin-react'
 import autoprefixer from 'autoprefixer'
 import tailwindcss from 'tailwindcss'
+import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const apiTarget = new URL(
+    env.VITE_API_URL || 'http://127.0.0.1:8000'
+  ).origin
+  const apiTargetSecure = apiTarget.startsWith('https://')
+
+  return {
   css: {
     postcss: {
       plugins: [
@@ -54,19 +62,19 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: apiTarget,
         changeOrigin: true,
-        secure: false,
+        secure: apiTargetSecure,
       },
       '/media': {
-        target: 'http://127.0.0.1:8000',
+        target: apiTarget,
         changeOrigin: true,
-        secure: false,
+        secure: apiTargetSecure,
       },
       '/static': {
-        target: 'http://127.0.0.1:8000',
+        target: apiTarget,
         changeOrigin: true,
-        secure: false,
+        secure: apiTargetSecure,
       },
     },
   },
@@ -113,5 +121,6 @@ export default defineConfig({
         url: 'http://localhost/',
       },
     },
+  }
   }
 })

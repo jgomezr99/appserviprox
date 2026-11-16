@@ -105,8 +105,10 @@ interface LiveSupportChatModalProps {
       PqrReport,
       'id' | 'radicadoNumber' | 'status' | 'createdAt' | 'estimatedResponseDays'
     >
-  ) => void;
-  onAppProblemReported?: (problem: AppProblemReport) => void;
+  ) => Promise<PqrReport | void> | PqrReport | void;
+  onAppProblemReported?: (
+    problem: AppProblemReport
+  ) => Promise<AppProblemReport | void> | AppProblemReport | void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -188,6 +190,7 @@ export function LiveSupportChatModal({
   const [desbloqueoDraft, setDesbloqueoDraft] = useState<DesbloqueoDraft>({});
   const [simulatedScreenshot, setSimulatedScreenshot] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const savingReportRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -407,17 +410,17 @@ export function LiveSupportChatModal({
         }
 
         if (action === 'confirmar_radicado') {
-          finalizarQueja();
+          void finalizarQueja();
           break;
         }
 
         if (action === 'confirmar_apelacion') {
-          finalizarApelacion();
+          void finalizarApelacion();
           break;
         }
 
         if (action === 'confirmar_ticket') {
-          finalizarProblemaApp();
+          void finalizarProblemaApp();
           break;
         }
 
@@ -580,7 +583,7 @@ export function LiveSupportChatModal({
           lower.includes('radicar') ||
           lower.includes('adelante')
         ) {
-          finalizarQueja();
+          void finalizarQueja();
         } else {
           pushAgent('¿Deseas confirmar la radicación de la queja con los datos proporcionados?', [
             { label: '✅ Sí, radicar queja formal', action: 'confirmar_radicado' },
@@ -606,7 +609,7 @@ export function LiveSupportChatModal({
 
       case 'problema_app_confirmacion': {
         if (lower.includes('sí') || lower.includes('si') || lower.includes('confirmo')) {
-          finalizarProblemaApp();
+          void finalizarProblemaApp();
         } else {
           setFlow('inicio');
           pushAgent('Reporte cancelado. ¿En qué más puedo colaborarte?', [
@@ -651,7 +654,7 @@ export function LiveSupportChatModal({
           lower.includes('enviar') ||
           lower.includes('adelante')
         ) {
-          finalizarApelacion();
+          void finalizarApelacion();
         } else {
           setFlow('inicio');
           pushAgent('Apelación cancelada. ¿En qué más puedo colaborarte?', [
@@ -713,50 +716,62 @@ export function LiveSupportChatModal({
   // ───────────────────────────────────────────────────────────────────────────
   // Finalizar y radicar PQR formal
   // ───────────────────────────────────────────────────────────────────────────
-  const finalizarQueja = () => {
+  const finalizarQueja = async () => {
+    if (savingReportRef.current) return;
+    savingReportRef.current = true;
     const contractor =
       registeredContractors.find((c) => c.id === quejaDraft.contractorId) ||
       registeredContractors[0];
 
-    const radicado = makeTicketNum('PQR-BOG');
     const amountNum = quejaDraft.monto
       ? parseFloat(quejaDraft.monto.replace(/[^0-9.]/g, ''))
       : undefined;
 
-    onPqrCreatedFromChat({
-      type: 'queja',
-      reason:
-        (quejaDraft.descripcion || '').toLowerCase().includes('garant')
-          ? 'garantia_no_atendida'
-          : 'mala_calidad_obra',
-      contractorId: contractor.id,
-      contractorName: contractor.name,
-      contractorCompany: contractor.companyName,
-      contractorSpecialty: contractor.specialtyLabel,
-      contractorAvatar: contractor.avatarUrl,
-      clientName: (user && `${user.first_name || ''} ${user.last_name || ''}`.trim()) || user?.username || '',
-      clientPhone: user?.phone || '',
-      clientEmail: user?.email || '',
-      clientDocumentId: user?.document_id || '',
-      clientAddress: user?.address || '',
-      incidentDate: quejaDraft.fecha || new Date().toISOString().split('T')[0],
-      description: quejaDraft.descripcion || 'Queja radicada vía Chat en Vivo.',
-      amountDisputed: Number.isFinite(amountNum) ? amountNum : undefined,
-      desiredResolution:
-        quejaDraft.solucion ||
-        'Revisión técnica urgente y mediación formal por la Defensoría de Bogotá.',
-      evidenceFiles: simulatedScreenshot ? [simulatedScreenshot] : ['Registro_Chat_EnVivo.pdf'],
-    });
+    let created: PqrReport;
+    try {
+      const saved = await onPqrCreatedFromChat({
+        type: 'queja',
+        reason:
+          (quejaDraft.descripcion || '').toLowerCase().includes('garant')
+            ? 'garantia_no_atendida'
+            : 'mala_calidad_obra',
+        contractorId: contractor.id,
+        contractorName: contractor.name,
+        contractorCompany: contractor.companyName,
+        contractorSpecialty: contractor.specialtyLabel,
+        contractorAvatar: contractor.avatarUrl,
+        clientName: (user && `${user.first_name || ''} ${user.last_name || ''}`.trim()) || user?.username || '',
+        clientPhone: user?.phone || '',
+        clientEmail: user?.email || '',
+        clientDocumentId: user?.document_id || '',
+        clientAddress: user?.address || '',
+        incidentDate: quejaDraft.fecha || new Date().toISOString().split('T')[0],
+        description: quejaDraft.descripcion || 'Queja radicada vía Chat en Vivo.',
+        amountDisputed: Number.isFinite(amountNum) ? amountNum : undefined,
+        desiredResolution:
+          quejaDraft.solucion ||
+          'Revisión técnica urgente y mediación formal por la Defensoría de Bogotá.',
+        evidenceFiles: simulatedScreenshot ? [simulatedScreenshot] : ['Registro_Chat_EnVivo.pdf'],
+      });
+      if (!saved) throw new Error('El servidor no devolvió el radicado.');
+      created = saved;
+    } catch (error) {
+      savingReportRef.current = false;
+      console.error('[LiveSupportChatModal] No fue posible guardar la PQR:', error);
+      pushAgent('No se pudo guardar la queja en el servidor y no se generó un radicado. Verifica tu conexión e inténtalo de nuevo.');
+      return;
+    }
 
+    savingReportRef.current = false;
     setFlow('fin');
     pushAgent(
-      `✅ ¡Tu queja formal ha sido radicada con éxito!\n\n🔖 Número Oficial: **${radicado}**\n👷 Contratista Requerido: **${contractor.companyName}** (${contractor.name})\n⏱️ Plazo de descargos: **48 horas hábiles** (Ley 1480 del Consumidor)\n\nPuedes consultar el expediente y las respuestas oficiales en la sección **"PQRS & Quejas"** de la app.`,
+      `✅ ¡Tu queja formal ha sido radicada con éxito!\n\n🔖 Número Oficial: **${created.radicadoNumber}**\n👷 Contratista Requerido: **${contractor.companyName}** (${contractor.name})\n⏱️ Plazo de descargos: **48 horas hábiles** (Ley 1480 del Consumidor)\n\nPuedes consultar el expediente y las respuestas oficiales en la sección **"PQRS & Quejas"** de la app.`,
       [
         { label: '📂 Ver mis Reclamos y Respuestas', action: 'goto_pqrs' },
         { label: '🔄 Radicar otro reclamo', action: 'restart' },
       ],
       {
-        ticketNumber: radicado,
+        ticketNumber: created.radicadoNumber,
         type: 'pqr_contratista',
         summary: `${contractor.companyName}: ${(quejaDraft.descripcion || '').slice(0, 75)}`,
       }
@@ -811,37 +826,48 @@ export function LiveSupportChatModal({
   // ───────────────────────────────────────────────────────────────────────────
   // Finalizar y radicar Apelación Formal ante el Comité Administrativo
   // ───────────────────────────────────────────────────────────────────────────
-  const finalizarApelacion = () => {
-    const radNum = Math.floor(1000 + Math.random() * 9000);
-    const radicado = `APL-${radNum}`;
+  const finalizarApelacion = async () => {
+    if (savingReportRef.current) return;
+    savingReportRef.current = true;
     const userFullName =
       (user && `${user.first_name || ''} ${user.last_name || ''}`.trim()) ||
       user?.username ||
       'Usuario Serviprox';
 
-    onPqrCreatedFromChat({
-      type: 'reclamo',
-      reason: 'otro',
-      contractorId: 'administracion-serviprox',
-      contractorName: 'Administración Serviprox Bogotá',
-      contractorCompany: 'Comité Disciplinario y Mesa Técnica',
-      contractorSpecialty: 'Defensoría y Apelaciones',
-      clientName: userFullName,
-      clientPhone: user?.phone || '+57 300 000 0000',
-      clientEmail: user?.email || 'usuario@serviprox.co',
-      clientDocumentId: user?.document_id || 'CC Verificada',
-      clientAddress: user?.address || 'Bogotá D.C.',
-      incidentDate: new Date().toISOString(),
-      description: `Apelación formal radicada por Chat en Vivo:\n\nMotivo / Causal: ${apelacionDraft.motivo || 'Revisión de sanción'}\nDescargos: "${apelacionDraft.argumentos || 'Solicitud de revisión formal'}"`,
-      desiredResolution: 'Revisión por el Comité Administrativo y reactivación de cuenta.',
-      evidenceFiles: simulatedScreenshot ? [simulatedScreenshot] : ['Descargos_Apelacion_Chat.pdf'],
-    });
+    let created: PqrReport;
+    try {
+      const saved = await onPqrCreatedFromChat({
+        type: 'reclamo',
+        reason: 'otro',
+        contractorId: 'administracion-serviprox',
+        contractorName: 'Administración Serviprox Bogotá',
+        contractorCompany: 'Comité Disciplinario y Mesa Técnica',
+        contractorSpecialty: 'Defensoría y Apelaciones',
+        clientName: userFullName,
+        clientPhone: user?.phone || '+57 300 000 0000',
+        clientEmail: user?.email || 'usuario@serviprox.co',
+        clientDocumentId: user?.document_id || 'CC Verificada',
+        clientAddress: user?.address || 'Bogotá D.C.',
+        incidentDate: new Date().toISOString().split('T')[0],
+        description: `Apelación formal radicada por Chat en Vivo:\n\nMotivo / Causal: ${apelacionDraft.motivo || 'Revisión de sanción'}\nDescargos: "${apelacionDraft.argumentos || 'Solicitud de revisión formal'}"`,
+        desiredResolution: 'Revisión por el Comité Administrativo y reactivación de cuenta.',
+        evidenceFiles: simulatedScreenshot ? [simulatedScreenshot] : ['Descargos_Apelacion_Chat.pdf'],
+      });
+      if (!saved) throw new Error('El servidor no devolvió el radicado.');
+      created = saved;
+    } catch (error) {
+      savingReportRef.current = false;
+      console.error('[LiveSupportChatModal] No fue posible guardar la apelación:', error);
+      pushAgent('No se pudo guardar la apelación en el servidor y no se generó un radicado. Verifica tu conexión e inténtalo de nuevo.');
+      return;
+    }
 
+    savingReportRef.current = false;
     // Registrar acción en backend y emitir evento
     adminService
       .executeAction({
         action: 'respond_pqr',
-        target_id: radicado,
+        target_id: created.radicadoNumber,
         response_text: `Apelación radicada por Chat en Vivo de ${userFullName}: "${apelacionDraft.argumentos || apelacionDraft.motivo}"`,
         admin_name: 'Asistente IA - Defensoría',
         send_notification: true,
@@ -852,13 +878,13 @@ export function LiveSupportChatModal({
 
     setFlow('fin');
     pushAgent(
-      `✅ ¡Tu apelación formal ha sido radicada ante el Comité Administrativo!\n\n🔖 Número de Radicado: **${radicado}**\n🏛️ Destino: **Administración Serviprox Bogotá (Comité Disciplinario)**\n⏱️ Tiempo de evaluación: **24 a 48 horas hábiles**\n\nEl Administrador evaluará tus descargos en el panel de control administrativo y emitirá el fallo oficial.`,
+      `✅ ¡Tu apelación formal ha sido radicada ante el Comité Administrativo!\n\n🔖 Número de Radicado: **${created.radicadoNumber}**\n🏛️ Destino: **Administración Serviprox Bogotá (Comité Disciplinario)**\n⏱️ Tiempo de evaluación: **24 a 48 horas hábiles**\n\nEl Administrador evaluará tus descargos en el panel de control administrativo y emitirá el fallo oficial.`,
       [
         { label: '📂 Ver mis Reclamos y Apelaciones', action: 'goto_pqrs' },
         { label: '🔄 Radicar otro trámite', action: 'restart' },
       ],
       {
-        ticketNumber: radicado,
+        ticketNumber: created.radicadoNumber,
         type: 'pqr_contratista',
         summary: `Apelación: ${apelacionDraft.motivo || 'Revisión de sanción'}`,
       }
@@ -868,7 +894,9 @@ export function LiveSupportChatModal({
   // ───────────────────────────────────────────────────────────────────────────
   // Finalizar ticket de app
   // ───────────────────────────────────────────────────────────────────────────
-  const finalizarProblemaApp = () => {
+  const finalizarProblemaApp = async () => {
+    if (savingReportRef.current) return;
+    savingReportRef.current = true;
     const ticketId = makeTicketNum('APP-BUG');
     const cat = problemaDraft.categoria || 'otro_tecnico';
     const userFullName = user
@@ -888,19 +916,34 @@ export function LiveSupportChatModal({
       responseNotes: 'Reporte en análisis por el equipo de desarrollo de Servicio Contratista Bogotá.',
     };
 
-    if (onAppProblemReported) {
-      onAppProblemReported(newProblem);
+    if (!onAppProblemReported) {
+      savingReportRef.current = false;
+      pushAgent('No se pudo guardar el reporte porque el servicio de soporte no está configurado. Inténtalo de nuevo más tarde.');
+      return;
     }
 
+    let created: AppProblemReport;
+    try {
+      const saved = await onAppProblemReported(newProblem);
+      if (!saved) throw new Error('El servidor no devolvió el ticket.');
+      created = saved;
+    } catch (error) {
+      savingReportRef.current = false;
+      console.error('[LiveSupportChatModal] No fue posible guardar el reporte técnico:', error);
+      pushAgent('No se pudo guardar el reporte en el servidor y no se generó un ticket. Verifica tu conexión e inténtalo de nuevo.');
+      return;
+    }
+
+    savingReportRef.current = false;
     setFlow('fin');
     pushAgent(
-      `✅ ¡Ticket técnico generado!\n\n🔖 Ticket: **${ticketId}**\n🔧 Área: **${problemaDraft.categoriaLabel}**\n\nEl equipo de soporte ha sido notificado para corregir la falla a la mayor brevedad.`,
+      `✅ ¡Ticket técnico generado!\n\n🔖 Ticket: **${created.ticketNumber}**\n🔧 Área: **${created.categoryLabel}**\n\nEl equipo de soporte ha sido notificado para corregir la falla a la mayor brevedad.`,
       [
         { label: '📱 Ver mis tickets', action: 'goto_pqrs' },
         { label: '🔄 Reportar otro problema', action: 'restart' },
       ],
       {
-        ticketNumber: ticketId,
+        ticketNumber: created.ticketNumber,
         type: 'problema_app',
         summary: problemaDraft.descripcion || problemaDraft.categoriaLabel || '',
       }
