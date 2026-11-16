@@ -10,6 +10,148 @@
   overflow: hidden;
 }
 
+.sp-service-flow ion-toolbar.sp-map-toolbar {
+  --sp-workflow-toolbar: #ffffff;
+  --sp-workflow-ink: #334155;
+  --background: #ffffff;
+  --color: #334155;
+  --min-height: 48px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sp-service-flow ion-toolbar .sp-map-toolbar-title {
+  flex: 0 0 auto;
+  max-width: 232px;
+  padding-inline: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  text-align: left;
+}
+
+.sp-map-toolbar-controls {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  width: calc(100vw - 280px);
+  max-width: none;
+  min-width: 0;
+  padding: 3px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sp-map-toolbar-controls::-webkit-scrollbar {
+  display: none;
+}
+
+.sp-map-toolbar-search {
+  flex: 0 0 330px;
+  width: 330px;
+  min-width: 220px;
+  height: 36px;
+  border-radius: 14px;
+}
+
+.sp-map-toolbar-search .sp-search-input {
+  min-width: 0;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.sp-map-toolbar-search .sp-search-input::placeholder {
+  font-size: 11px;
+}
+
+.sp-map-toolbar-specialty {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.sp-map-toolbar-specialty ion-icon {
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.sp-map-toolbar-specialty label {
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.sp-map-toolbar-specialty select {
+  max-width: 112px;
+  padding: 3px 2px;
+  border: 0;
+  background: transparent;
+  color: #334155;
+  font-size: 9px;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+
+.sp-map-toolbar-filter {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid #e9d8da;
+  border-radius: 9px;
+  background: #fffafa;
+  color: #e34751;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sp-map-toolbar-filter.is-active {
+  background: #fff2f2;
+  border-color: #efcdd0;
+}
+
+.sp-map-toolbar-filter ion-icon {
+  font-size: 12px;
+}
+
+.sp-map-toolbar-filter-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #16a34a;
+}
+
+.sp-map-toolbar-radius {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sp-map-toolbar-radius .sp-radio-select {
+  padding: 3px 6px;
+  font-size: 10px;
+}
+
 .sp-map-layout {
   position: relative;
   width: 100%;
@@ -584,6 +726,7 @@
 /* Contractor Cards Scroll List */
 .sp-contractors-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px 14px;
   display: flex;
@@ -593,6 +736,7 @@
 }
 
 .sp-contractor-card {
+  flex: 0 0 auto;
   background: #ffffff;
   border: 1px solid #fef3c7;
   border-left: 2px solid #fa0101;
@@ -1076,6 +1220,23 @@
    Responsive Adaptations
    ========================================================================== */
 @media (max-width: 860px) {
+  .sp-service-flow ion-toolbar .sp-map-toolbar-title {
+    max-width: 150px;
+    font-size: 12px;
+  }
+
+  .sp-map-toolbar-controls {
+    width: calc(100vw - 210px);
+    max-width: none;
+    gap: 6px;
+  }
+
+  .sp-map-toolbar-search {
+    flex-basis: 220px;
+    width: 220px;
+    min-width: 220px;
+  }
+
   .sp-map-layout,
   .sp-map-container {
     min-height: 100%;
@@ -1123,7 +1284,7 @@
     right: 0;
     bottom: 0;
     top: auto;
-    height: 72vh;
+    height: 86vh;
     max-height: calc(100% - 76px);
     padding-bottom: env(safe-area-inset-bottom);
     border-radius: 24px 24px 0 0;
@@ -1184,6 +1345,22 @@
 }
 
 @media (max-width: 430px) {
+  .sp-service-flow ion-toolbar .sp-map-toolbar-title {
+    max-width: 92px;
+    padding-inline: 4px;
+    font-size: 11px;
+  }
+
+  .sp-map-toolbar-controls {
+    width: calc(100vw - 150px);
+  }
+
+  .sp-map-toolbar-search {
+    flex-basis: 190px;
+    width: 190px;
+    min-width: 190px;
+  }
+
   .sp-map-top-pill--closest span {
     max-width: 130px;
     overflow: hidden;

@@ -18,6 +18,7 @@ import {
   closeCircleOutline,
   expandOutline,
   flashOutline,
+  funnelOutline,
   listOutline,
   locationOutline,
   mapOutline,
@@ -249,7 +250,6 @@ const ContractorMapPage: React.FC = () => {
   const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const homeMarkerRef = useRef<L.Marker | null>(null);
   const coverageCircleRef = useRef<L.Circle | null>(null);
-  const specialtyScrollRef = useRef<HTMLDivElement | null>(null);
   const activeMarkerRef = useRef<Record<string, L.Marker>>({});
   const [mapReady, setMapReady] = useState(false);
   const [gpsStatus, setGpsStatus] = useState("Buscando ubicación GPS…");
@@ -287,7 +287,7 @@ const ContractorMapPage: React.FC = () => {
   const [radiusKm, setRadiusKm] = useState(50);
   const [showCoverageRadius, setShowCoverageRadius] = useState(true);
   const [selectedContractorId, setSelectedContractorId] = useState<string>("");
-  const [mobileView, setMobileView] = useState<"map" | "list">("map");
+  const [mobileView, setMobileView] = useState<"map" | "list">("list");
   const [contractors, setContractors] = useState<MapContractor[]>([]);
   const [isLoadingContractors, setIsLoadingContractors] = useState(true);
   const [projectLocation, setProjectLocation] = useState<UserProjectLocation>(
@@ -940,21 +940,100 @@ const ContractorMapPage: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [mapReady, filteredContractors.length, hasDeviceLocation, selectedCity]);
 
-  // Scroll horizontal helpers
-  const scrollChips = (ref: React.RefObject<HTMLDivElement | null>, offset: number) => {
-    if (ref.current) {
-      ref.current.scrollBy({ left: offset, behavior: "smooth" });
-    }
-  };
-
   return (
     <IonPage className="sp-service-flow">
       <IonHeader>
-        <IonToolbar>
+        <IonToolbar className="sp-map-toolbar">
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle>Mapa de Contratistas • {selectedCity.name}</IonTitle>
+          <IonTitle slot="start" className="sp-map-toolbar-title">
+            Mapa de Contratistas • {selectedCity.name}
+          </IonTitle>
+          <div slot="end" className="sp-map-toolbar-controls">
+            <div className="sp-map-toolbar-specialty">
+              <IonIcon icon={funnelOutline} aria-hidden="true" />
+              <label htmlFor="sp-map-specialty-select">ESPECIALIDAD DE OBRA</label>
+              <select
+                id="sp-map-specialty-select"
+                aria-label="Especialidad de obra"
+                value={selectedSpecialty}
+                onChange={(e) => setSelectedSpecialty(e.target.value)}
+              >
+                {WORK_SPECIALTIES.map((specialty) => (
+                  <option key={specialty} value={specialty}>
+                    {specialty}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="sp-search-bar-wrap sp-map-toolbar-search">
+              <IonIcon icon={searchOutline} className="sp-search-icon" />
+              <input
+                type="text"
+                className="sp-search-input"
+                placeholder="Buscar por servicio, electricista, plomero, barrio..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  className="sp-search-clear"
+                  aria-label="Limpiar búsqueda"
+                  onClick={() => setSearchQuery("")}
+                >
+                  <IonIcon icon={closeCircleOutline} />
+                </button>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              className={`sp-map-toolbar-filter sp-map-toolbar-filter--available ${
+                filterAvailable ? "is-active" : ""
+              }`}
+              onClick={() => setFilterAvailable((value) => !value)}
+            >
+              <span className="sp-map-toolbar-filter-dot" />
+              <span>Disponibles en la Zona</span>
+            </button>
+            <button
+              type="button"
+              className={`sp-map-toolbar-filter sp-map-toolbar-filter--urgent ${
+                filterUrgent ? "is-active" : ""
+              }`}
+              onClick={() => setFilterUrgent((value) => !value)}
+            >
+              <span>🚨 Urgencias 24h</span>
+            </button>
+            <button
+              type="button"
+              className={`sp-map-toolbar-filter sp-map-toolbar-filter--policy ${
+                filterPolicy ? "is-active" : ""
+              }`}
+              onClick={() => setFilterPolicy((value) => !value)}
+            >
+              <IonIcon icon={shieldCheckmarkOutline} />
+              <span>Póliza / RETIE</span>
+            </button>
+            <div className="sp-map-toolbar-radius">
+              <label htmlFor="sp-map-radius-select">Radio:</label>
+              <select
+                id="sp-map-radius-select"
+                className="sp-radio-select"
+                value={radiusKm}
+                onChange={(e) => setRadiusKm(Number(e.target.value))}
+              >
+                <option value={5}>5 km</option>
+                <option value={10}>10 km</option>
+                <option value={20}>20 km</option>
+                <option value={35}>35 km</option>
+                <option value={50}>50 km</option>
+              </select>
+            </div>
+          </div>
         </IonToolbar>
       </IonHeader>
 
@@ -1052,29 +1131,6 @@ const ContractorMapPage: React.FC = () => {
               mobileView === "map" ? "is-map-view" : ""
             }`}
           >
-            {/* Search Input */}
-            <div className="sp-sidebar-header">
-              <div className="sp-search-bar-wrap">
-                <IonIcon icon={searchOutline} className="sp-search-icon" />
-                <input
-                  type="text"
-                  className="sp-search-input"
-                  placeholder="Buscar por servicio, electricista, plomero, barrio..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery ? (
-                  <button
-                    type="button"
-                    className="sp-search-clear"
-                    onClick={() => setSearchQuery("")}
-                  >
-                    <IonIcon icon={closeCircleOutline} />
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
             {/* Filter Sections */}
             <div className="sp-sidebar-filters">
               {/* Ciudad */}
@@ -1099,93 +1155,6 @@ const ContractorMapPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Especialidad de Obra */}
-              <div>
-                <div className="sp-filter-section-title sp-filter-section-title--dark">
-                  <span>ESPECIALIDAD DE OBRA</span>
-                </div>
-                <div className="sp-chip-scroll-row">
-                  <button
-                    type="button"
-                    className="sp-chip-arrow"
-                    onClick={() => scrollChips(specialtyScrollRef, -120)}
-                    aria-label="Anterior"
-                  >
-                    <IonIcon icon={chevronBackOutline} />
-                  </button>
-                  <div className="sp-chip-scroll-container" ref={specialtyScrollRef}>
-                    {WORK_SPECIALTIES.map((spec) => (
-                      <button
-                        key={spec}
-                        type="button"
-                        className={`sp-chip-pill ${
-                          selectedSpecialty === spec ? "sp-chip-pill--black-active" : ""
-                        }`}
-                        onClick={() => setSelectedSpecialty(spec)}
-                      >
-                        {spec}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="sp-chip-arrow"
-                    onClick={() => scrollChips(specialtyScrollRef, 120)}
-                    aria-label="Siguiente"
-                  >
-                    <IonIcon icon={chevronForwardOutline} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Toggle Pills & Radius */}
-              <div className="sp-toggles-row">
-                <button
-                  type="button"
-                  className={`sp-toggle-pill ${filterAvailable ? "is-active" : ""}`}
-                  onClick={() => setFilterAvailable((v) => !v)}
-                >
-                  <span className="sp-badge-pill--green-dot" />
-                  <span>Disponibles en la Zona</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`sp-toggle-pill sp-toggle-pill--urgent ${
-                    filterUrgent ? "is-active" : ""
-                  }`}
-                  onClick={() => setFilterUrgent((v) => !v)}
-                >
-                  <span>🚨 Urgencias 24h</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`sp-toggle-pill sp-toggle-pill--policy ${
-                    filterPolicy ? "is-active" : ""
-                  }`}
-                  onClick={() => setFilterPolicy((v) => !v)}
-                >
-                  <IonIcon icon={shieldCheckmarkOutline} />
-                  <span>Póliza / RETIE</span>
-                </button>
-
-                <div className="sp-radio-dropdown-wrap">
-                  <label htmlFor="radius-select">Radio:</label>
-                  <select
-                    id="radius-select"
-                    className="sp-radio-select"
-                    value={radiusKm}
-                    onChange={(e) => setRadiusKm(Number(e.target.value))}
-                  >
-                    <option value={5}>5 km</option>
-                    <option value={10}>10 km</option>
-                    <option value={20}>20 km</option>
-                    <option value={35}>35 km</option>
-                    <option value={50}>50 km</option>
-                  </select>
-                </div>
-              </div>
             </div>
 
             {/* Results Header */}
@@ -1218,6 +1187,9 @@ const ContractorMapPage: React.FC = () => {
               ) : filteredContractors.length > 0 ? (
                 filteredContractors.map((contractor) => {
                   const isSelected = contractor.id === selectedContractorId;
+                  const hasSeparateBusinessName =
+                    contractor.businessName !== contractor.name &&
+                    !contractor.subtitle.startsWith(contractor.businessName);
                   return (
                     <article
                       key={contractor.id}
@@ -1260,8 +1232,11 @@ const ContractorMapPage: React.FC = () => {
                           </div>
 
                           <h3 className="sp-contractor-name">
-                            {contractor.businessName}
+                            {contractor.name}
                           </h3>
+                          {hasSeparateBusinessName ? (
+                            <p className="sp-contractor-sub">{contractor.businessName}</p>
+                          ) : null}
                           <p className="sp-contractor-sub">{contractor.subtitle}</p>
                         </div>
                       </div>
@@ -1289,6 +1264,17 @@ const ContractorMapPage: React.FC = () => {
                         <span className="sp-badge-pill sp-badge-pill--gray">
                           {contractor.jobsCompleted}+ trabajos
                         </span>
+
+                        <span className="sp-badge-pill sp-badge-pill--gray">
+                          <IonIcon icon={timeOutline} />
+                          {contractor.availabilityLabel || "Horario por acordar"}
+                        </span>
+
+                        {contractor.acceptsUrgent24h ? (
+                          <span className="sp-badge-pill sp-badge-pill--gray">
+                            Atención urgente 24 h
+                          </span>
+                        ) : null}
                       </div>
 
                       {/* Footer */}
