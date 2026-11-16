@@ -22,6 +22,7 @@ def health_check(request):
         return JsonResponse({
             "status": "ok",
             "database": "connected",
+            "engine": connection.vendor or "sqlite",
         })
     except Exception:
         logger.exception("Health check failed to connect to the database.")

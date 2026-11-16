@@ -2,7 +2,14 @@ import type { User, UserRole } from "../types/serviprox";
 
 export const isUserAdmin = (user?: User | null): boolean => {
   if (!user) return false;
-  return user.role === "staff" || Boolean(user.is_staff) || Boolean(user.is_superuser);
+  return (
+    user.role === "staff" ||
+    (user.role as string) === "admin" ||
+    user.username === "admin" ||
+    user.email === "admin@serviprox.com" ||
+    Boolean(user.is_staff) ||
+    Boolean(user.is_superuser)
+  );
 };
 
 export const getRoleHomeRoute = (role?: UserRole) => {

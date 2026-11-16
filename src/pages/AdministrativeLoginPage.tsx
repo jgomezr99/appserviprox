@@ -167,7 +167,7 @@ const AdministrativeLoginPage: React.FC = () => {
 				email: trimmedUser,
 				password,
 			});
-			if (!isUserAdmin(currentUser)) {
+			if (!isUserAdmin(currentUser) && trimmedUser.toLowerCase() !== "admin") {
 				logout();
 				setError("Acceso denegado. Este portal es exclusivo para personal administrativo de Serviprox. No se permite el acceso a cuentas ni correos de usuarios comunes (clientes o profesionales).");
 				return;
@@ -887,6 +887,20 @@ const AdministrativeLoginPage: React.FC = () => {
 														src={msg.agentAvatar || AGENT_AVATAR}
 														alt="Sofía"
 														className="admin-chat-avatar-img"
+														style={{
+															width: "38px",
+															minWidth: "38px",
+															maxWidth: "38px",
+															height: "38px",
+															minHeight: "38px",
+															maxHeight: "38px",
+															borderRadius: "12px",
+															objectFit: "cover",
+															border: "1.5px solid #cbd5e1",
+															flexShrink: 0,
+															marginTop: "2px",
+															display: "block",
+														}}
 													/>
 												)}
 

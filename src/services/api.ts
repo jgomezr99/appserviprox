@@ -36,9 +36,6 @@ export const getSavedCustomHost = (): string => {
 };
 
 const resolveApiBaseUrl = (): string => {
-  if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "";
-  }
   // 1. Configuración explícita en variable de entorno
   if (import.meta.env.VITE_API_URL) {
     return normalizeApiUrl(import.meta.env.VITE_API_URL);
@@ -93,11 +90,6 @@ export let API_BASE_URL = activeBaseUrl;
 export const getApiBaseUrl = (): string => activeBaseUrl;
 
 export const getCandidateBaseUrls = (): string[] => {
-  // Un solo destino cuando VITE_API_URL esta definida: web y movil comparten servidor.
-  if (import.meta.env.PROD) {
-    const configured = resolveApiBaseUrl();
-    return configured ? [configured] : [];
-  }
   const candidates: string[] = [];
   const isNative = Capacitor.isNativePlatform();
   const isLocalBrowser =
@@ -124,10 +116,9 @@ export const getCandidateBaseUrls = (): string[] => {
     candidates.push(normalizeApiUrl(saved));
   }
 
-  // En el navegador local, el Django de esta misma PC va antes que una IP de red (VITE_API_URL)
-  // que puede haber cambiado; en el movil la URL configurada sigue teniendo prioridad.
+  // En el navegador local o móvil, URL configurada
   const configuredUrl = import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "";
-  if (configuredUrl && !isLocalBrowser) {
+  if (configuredUrl) {
     candidates.push(configuredUrl);
   }
 
@@ -136,17 +127,12 @@ export const getCandidateBaseUrls = (): string[] => {
     const isNetlify = hostname.includes("netlify.app");
 
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-      // Fallbacks directos a Django para saltarse posibles fallos o demoras del proxy de Vite
       candidates.push("http://127.0.0.1:8000/api/v1");
       candidates.push("http://localhost:8000/api/v1");
-      if (configuredUrl) {
-        candidates.push(configuredUrl);
-      }
     } else if (hostname && !hostname.includes("devtunnels.ms") && !isNetlify) {
       candidates.push(`http://${hostname}:8000/api/v1`);
     }
 
-    // Proxy relativo solo si no estamos en Netlify estático sin backend
     if (window.location.origin && !isNetlify) {
       candidates.push(`${window.location.origin.replace(/\/$/, "")}/api/v1`);
     }
@@ -156,11 +142,10 @@ export const getCandidateBaseUrls = (): string[] => {
     candidates.push(activeBaseUrl);
   }
 
-  if (Capacitor.isNativePlatform()) {
-    candidates.push("http://192.168.0.6:8000/api/v1");
-    candidates.push("http://10.0.2.2:8000/api/v1");
-    candidates.push("http://localhost:8000/api/v1");
-  }
+  // Candidatos para dispositivos nativos / emuladores (MV) y red local
+  candidates.push("http://192.168.0.6:8000/api/v1");
+  candidates.push("http://10.0.2.2:8000/api/v1");
+  candidates.push("http://127.0.0.1:8000/api/v1");
 
   // Eliminar duplicados manteniendo orden de prioridad
   return Array.from(new Set(candidates.filter(Boolean)));
@@ -168,7 +153,6 @@ export const getCandidateBaseUrls = (): string[] => {
 
 export const setWorkingBaseUrl = (url: string) => {
   const normalized = normalizeApiUrl(url);
-  if (import.meta.env.PROD && normalized !== resolveApiBaseUrl()) return;
   activeBaseUrl = normalized;
   API_BASE_URL = activeBaseUrl;
   if (typeof window !== "undefined") {

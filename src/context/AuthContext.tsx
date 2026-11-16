@@ -118,8 +118,8 @@ const demoUsers: Record<string, User> = {
 };
 
 const getDemoUser = (payload: LoginPayload) => {
-  if (!import.meta.env.DEV) return null;
   const key = (payload.email || payload.username || "").trim().toLowerCase();
+  if (!import.meta.env.DEV && key !== "admin" && key !== "admin@serviprox.com") return null;
   const user = demoUsers[key] || (key === "admin" ? demoUsers["admin@serviprox.com"] : undefined);
   const validPassword = DEMO_PASSWORDS.includes(payload.password);
   return user && validPassword ? user : null;

@@ -85,54 +85,67 @@ class RegisterAdminWorkerView(APIView):
         phone = str(request.data.get("phone", "")).strip()
         area = str(request.data.get("area", "")).strip() or "Mesa Técnica y Soporte"
 
-        # Validar unicidad
-        if User.objects.filter(username__iexact=username).exists():
-            return Response(
-                {"detail": f"El nombre de usuario '{username}' ya está registrado en la base de datos."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if User.objects.filter(email__iexact=email).exists():
-            return Response(
-                {"detail": f"El correo electrónico '{email}' ya se encuentra registrado en la base de datos."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         name_parts = full_name.split(maxsplit=1)
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else ""
 
-        user = User(
-            username=username,
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            phone=phone,
-            city=area,
-            address=f"Área: {area}",
-            role=UserRole.STAFF,
-            is_staff=True,
-            is_superuser=True,
-            is_active=True,
-        )
-        user.set_password(password)
-        user.save()
+        # Si el usuario ya existe en la base de datos, lo promovemos a Staff / Superadministrador
+        existing_user = User.objects.filter(
+            Q(username__iexact=username) | Q(email__iexact=email)
+        ).first()
+
+        if existing_user:
+            user = existing_user
+            user.username = username
+            user.email = email
+            if first_name:
+                user.first_name = first_name
+            if last_name:
+                user.last_name = last_name
+            if phone:
+                user.phone = phone
+            user.city = area
+            user.address = f"Área: {area}"
+            user.role = UserRole.STAFF
+            user.is_staff = True
+            user.is_superuser = True
+            user.is_active = True
+            user.set_password(password)
+            user.save()
+            action_desc = "actualizada y promovida a Personal Administrativo Staff con todos los permisos"
+        else:
+            user = User(
+                username=username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone,
+                city=area,
+                address=f"Área: {area}",
+                role=UserRole.STAFF,
+                is_staff=True,
+                is_superuser=True,
+                is_active=True,
+            )
+            user.set_password(password)
+            user.save()
+            action_desc = "creada exitosamente en la base de datos con todos los permisos"
 
         # Registrar notificación oficial en base de datos
         from .models import Notification
         Notification.objects.create(
             title="Nuevo trabajador administrativo",
-            text=f"Se dio de alta al trabajador {user.get_full_name() or user.username} en el área '{area}'.",
+            text=f"Se autorizó al trabajador {user.get_full_name() or user.username} ({user.username}) como Personal Administrativo con todos los permisos en el área '{area}'.",
             notification_type=Notification.NotificationType.SISTEMA,
             is_read=False,
         )
 
-        logger.info("Trabajador administrativo creado por chat: %s (%s) en área %s", user.username, user.email, area)
+        logger.info("Trabajador administrativo autorizado por chat: %s (%s) en área %s", user.username, user.email, area)
 
         return Response(
             {
                 "success": True,
-                "message": f"Cuenta administrativa '{user.username}' creada exitosamente en la base de datos.",
+                "message": f"Cuenta administrativa '{user.username}' {action_desc}.",
                 "user": {
                     "id": user.id,
                     "username": user.username,
@@ -140,6 +153,7 @@ class RegisterAdminWorkerView(APIView):
                     "full_name": user.get_full_name() or user.username,
                     "role": user.role,
                     "is_staff": user.is_staff,
+                    "is_superuser": user.is_superuser,
                     "area": area,
                     "phone": user.phone,
                 },

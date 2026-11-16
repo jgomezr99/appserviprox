@@ -1215,26 +1215,99 @@ export function LiveSupportChatModal({
       <div
         id="live-support-chat-dialog"
         className="bg-white rounded-3xl shadow-2xl border border-neutral-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 my-auto h-[90vh] max-h-[720px] flex flex-col text-neutral-900"
+        style={{
+          background: '#ffffff',
+          borderRadius: '24px',
+          width: '100%',
+          maxWidth: '640px',
+          height: '88vh',
+          maxHeight: '720px',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.08)',
+          border: '1px solid rgba(0, 0, 0, 0.08)',
+          position: 'relative',
+          color: '#1e293b',
+        }}
       >
         {/* Header */}
-        <div className="live-chat-header bg-gradient-to-r from-neutral-950 via-neutral-900 to-rose-950 text-white p-4 flex items-center justify-between border-b border-neutral-800">
+        <div
+          className="live-chat-header bg-gradient-to-r from-neutral-950 via-neutral-900 to-rose-950 text-white p-4 flex items-center justify-between border-b border-neutral-800"
+          style={{
+            background: 'linear-gradient(135deg, #09090b 0%, #1c1917 50%, #4c0519 100%)',
+            color: '#ffffff',
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            flexShrink: 0,
+          }}
+        >
           <div className="live-chat-header-identity flex items-center gap-3">
             <div className="relative">
-              <div className="live-chat-bot-avatar w-10 h-10 rounded-2xl bg-rose-600/30 border border-rose-500/40 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-rose-400" />
+              <div
+                className="live-chat-bot-avatar w-10 h-10 rounded-2xl bg-rose-600/30 border border-rose-500/40 flex items-center justify-center"
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '14px',
+                  background: 'rgba(225, 29, 72, 0.18)',
+                  border: '1.5px solid rgba(244, 63, 94, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative',
+                  flexShrink: 0,
+                }}
+              >
+                <Bot style={{ width: '22px', height: '22px', color: '#fb7185' }} />
               </div>
-              <span className="live-chat-bot-status-dot absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-neutral-900 rounded-full" />
+              <span
+                className="live-chat-bot-status-dot absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-neutral-900 rounded-full"
+                style={{
+                  position: 'absolute',
+                  bottom: '-2px',
+                  right: '-2px',
+                  width: '11px',
+                  height: '11px',
+                  borderRadius: '50%',
+                  background: '#10b981',
+                  border: '2px solid #09090b',
+                  boxShadow: '0 0 8px #10b981',
+                }}
+              />
             </div>
             <div className="live-chat-header-text">
               <div className="live-chat-header-title-row flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-black text-white">
+                <h3
+                  className="text-sm sm:text-base font-black text-white"
+                  style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.2px' }}
+                >
                   Chat en Vivo: Quejas &amp; Soporte Bogotá
                 </h3>
-                <span className="live-chat-online-badge bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black px-2 py-0.5 rounded-full">
+                <span
+                  className="live-chat-online-badge bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black px-2 py-0.5 rounded-full"
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.18)',
+                    color: '#34d399',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    padding: '2px 8px',
+                    borderRadius: '9999px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}
+                >
                   EN LÍNEA
                 </span>
               </div>
-              <p className="live-chat-header-subtitle text-[11px] text-neutral-300">
+              <p
+                className="live-chat-header-subtitle text-[11px] text-neutral-300"
+                style={{ margin: '2px 0 0', fontSize: '11px', color: '#cbd5e1' }}
+              >
                 Radica quejas de contratistas o reporta problemas con la app al instante
               </p>
             </div>
@@ -1243,22 +1316,72 @@ export function LiveSupportChatModal({
             type="button"
             onClick={onClose}
             className="live-chat-close-btn p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: 'none',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'background 0.15s ease',
+            }}
             aria-label="Cerrar chat"
           >
-            <X className="w-5 h-5" />
+            <X style={{ width: '20px', height: '20px' }} />
           </button>
         </div>
 
         {/* Diagnostic Bar */}
-        <div className="live-chat-diagnostic-bar bg-neutral-100 px-4 py-2 border-b border-neutral-200 flex items-center justify-between text-[11px] text-neutral-600">
+        <div
+          className="live-chat-diagnostic-bar bg-neutral-100 px-4 py-2 border-b border-neutral-200 flex items-center justify-between text-[11px] text-neutral-600"
+          style={{
+            background: '#f8fafc',
+            borderBottom: '1px solid #e2e8f0',
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '11px',
+            color: '#64748b',
+            flexShrink: 0,
+          }}
+        >
           <span>
             📱 Diagnóstico automático: <strong>Bogotá D.C. • App v2.4 Activa</strong>
           </span>
-          <span className="live-chat-ssl-tag text-[10px] text-neutral-500 font-mono">Conexión Segura SSL</span>
+          <span
+            className="live-chat-ssl-tag text-[10px] text-neutral-500 font-mono"
+            style={{
+              fontSize: '10px',
+              color: '#059669',
+              background: '#ecfdf5',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              border: '1px solid #a7f3d0',
+              fontWeight: 700,
+            }}
+          >
+            Conexión Segura SSL
+          </span>
         </div>
 
         {/* Messages */}
-        <div className="live-chat-stream flex-1 p-4 overflow-y-auto space-y-3 bg-neutral-50/50">
+        <div
+          className="live-chat-stream flex-1 p-4 overflow-y-auto space-y-3 bg-neutral-50/50"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px',
+            background: '#f8fafc',
+          }}
+        >
           {messages.map((msg) => {
             const isAgent = msg.sender === 'agent';
             return (
@@ -1267,45 +1390,134 @@ export function LiveSupportChatModal({
                 className={`live-chat-msg-row flex gap-2.5 max-w-[92%] ${
                   isAgent ? 'from-agent mr-auto' : 'from-user ml-auto flex-row-reverse'
                 }`}
+                style={{
+                  display: 'flex',
+                  flexDirection: isAgent ? 'row' : 'row-reverse',
+                  gap: '10px',
+                  alignItems: 'flex-start',
+                  maxWidth: '92%',
+                  marginLeft: isAgent ? '0' : 'auto',
+                  marginRight: isAgent ? 'auto' : '0',
+                }}
               >
                 {isAgent && (
                   <img
                     src={msg.agentAvatar || agentAvatar}
                     alt="Sofía"
-                    className="live-chat-agent-avatar w-10 h-10 rounded-xl object-cover border border-neutral-300 flex-shrink-0 mt-0.5"
+                    className="live-chat-agent-avatar"
+                    style={{
+                      width: '42px',
+                      minWidth: '42px',
+                      maxWidth: '42px',
+                      height: '42px',
+                      minHeight: '42px',
+                      maxHeight: '42px',
+                      borderRadius: '12px',
+                      objectFit: 'cover',
+                      border: '1.5px solid #cbd5e1',
+                      flexShrink: 0,
+                      marginTop: '2px',
+                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+                      display: 'block',
+                    }}
                   />
                 )}
 
-                <div className="live-chat-bubble-wrap space-y-1.5 max-w-full">
+                <div
+                  className="live-chat-bubble-wrap space-y-1.5 max-w-full"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    maxWidth: '100%',
+                    minWidth: 0,
+                  }}
+                >
                   <div
                     className={`live-chat-bubble ${
                       isAgent
                         ? 'from-agent-bubble bg-white border border-neutral-200 text-neutral-900 rounded-tl-sm'
                         : 'from-user-bubble bg-rose-600 text-white rounded-tr-sm'
                     } p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-xs whitespace-pre-line`}
+                    style={{
+                      background: isAgent ? '#ffffff' : '#e11d48',
+                      color: isAgent ? '#0f172a' : '#ffffff',
+                      border: isAgent ? '1px solid #e2e8f0' : 'none',
+                      borderRadius: '18px',
+                      borderTopLeftRadius: isAgent ? '4px' : '18px',
+                      borderTopRightRadius: isAgent ? '18px' : '4px',
+                      padding: '12px 16px',
+                      fontSize: '13.5px',
+                      lineHeight: '1.55',
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                      wordBreak: 'break-word',
+                    }}
                   >
                     {isAgent && (
-                      <div className="live-chat-agent-label text-[10px] font-black text-rose-600 mb-1">
+                      <div
+                        className="live-chat-agent-label text-[10px] font-black text-rose-600 mb-1"
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          color: '#e11d48',
+                          marginBottom: '4px',
+                          letterSpacing: '-0.1px',
+                        }}
+                      >
                         {msg.agentName}
                       </div>
                     )}
-                    <p>{msg.text}</p>
+                    <p style={{ margin: 0 }}>{msg.text}</p>
 
                     {/* Ticket Creado */}
                     {msg.ticketCreated && (
-                      <div className="live-chat-ticket-box mt-2.5 p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 space-y-1">
-                        <div className="live-chat-ticket-title flex items-center gap-1.5 font-black text-emerald-800">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <div
+                        className="live-chat-ticket-box mt-2.5 p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 space-y-1"
+                        style={{
+                          marginTop: '10px',
+                          padding: '10px 14px',
+                          background: '#ecfdf5',
+                          border: '1px solid #a7f3d0',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          color: '#064e3b',
+                        }}
+                      >
+                        <div
+                          className="live-chat-ticket-title flex items-center gap-1.5 font-black text-emerald-800"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontWeight: 800,
+                            color: '#065f46',
+                            marginBottom: '4px',
+                          }}
+                        >
+                          <CheckCircle2 style={{ width: '16px', height: '16px', color: '#059669' }} />
                           <span>
                             {msg.ticketCreated.type === 'problema_app'
                               ? 'Ticket Técnico Registrado'
                               : 'Radicado PQR Formal Generado'}
                           </span>
                         </div>
-                        <div className="live-chat-ticket-badge font-mono font-bold text-xs bg-emerald-100/70 px-2 py-0.5 rounded text-emerald-900 inline-block">
+                        <div
+                          className="live-chat-ticket-badge font-mono font-bold text-xs bg-emerald-100/70 px-2 py-0.5 rounded text-emerald-900 inline-block"
+                          style={{
+                            fontFamily: 'monospace',
+                            fontWeight: 700,
+                            fontSize: '11.5px',
+                            background: '#d1fae5',
+                            color: '#065f46',
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            display: 'inline-block',
+                            marginBottom: '4px',
+                          }}
+                        >
                           {msg.ticketCreated.ticketNumber}
                         </div>
-                        <p className="text-[11px] text-emerald-800">
+                        <p style={{ margin: 0, fontSize: '11px', color: '#047857' }}>
                           {msg.ticketCreated.summary}
                         </p>
                       </div>
@@ -1314,13 +1526,36 @@ export function LiveSupportChatModal({
 
                   {/* Opciones rápidas interactivas */}
                   {isAgent && msg.quickOptions && msg.quickOptions.length > 0 && (
-                    <div className="live-chat-chips-group flex flex-wrap gap-1.5 pt-1">
+                    <div
+                      className="live-chat-chips-group flex flex-wrap gap-1.5 pt-1"
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px',
+                        paddingTop: '6px',
+                      }}
+                    >
                       {msg.quickOptions.map((opt, i) => (
                         <button
                           key={i}
                           type="button"
                           onClick={() => handleQuickAction(opt.action)}
                           className="live-chat-chip-btn bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300 font-bold text-[11px] px-3 py-1.5 rounded-xl shadow-2xs transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                          style={{
+                            background: '#ffffff',
+                            color: '#1e293b',
+                            border: '1.5px solid #cbd5e1',
+                            borderRadius: '12px',
+                            padding: '8px 13px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+                            transition: 'all 0.15s ease',
+                          }}
                         >
                           {opt.label}
                         </button>
@@ -1332,6 +1567,13 @@ export function LiveSupportChatModal({
                     className={`live-chat-time-stamp block text-[9px] text-neutral-400 ${
                       isAgent ? 'text-left' : 'text-right'
                     }`}
+                    style={{
+                      fontSize: '10px',
+                      color: '#94a3b8',
+                      marginTop: '2px',
+                      display: 'block',
+                      textAlign: isAgent ? 'left' : 'right',
+                    }}
                   >
                     {new Date(msg.timestamp).toLocaleTimeString([], {
                       hour: '2-digit',
@@ -1344,8 +1586,24 @@ export function LiveSupportChatModal({
           })}
 
           {isTyping && (
-            <div className="live-chat-typing-row flex items-center gap-2 text-xs text-neutral-500 italic bg-white border border-neutral-200 p-2.5 rounded-2xl w-fit">
-              <Bot className="w-4 h-4 text-rose-500 animate-spin" />
+            <div
+              className="live-chat-typing-row flex items-center gap-2 text-xs text-neutral-500 italic bg-white border border-neutral-200 p-2.5 rounded-2xl w-fit"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12px',
+                color: '#64748b',
+                fontStyle: 'italic',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                padding: '8px 14px',
+                borderRadius: '16px',
+                width: 'fit-content',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+              }}
+            >
+              <Bot style={{ width: '16px', height: '16px', color: '#f43f5e' }} className="animate-spin" />
               <span>Sofía está escribiendo...</span>
             </div>
           )}
@@ -1354,15 +1612,49 @@ export function LiveSupportChatModal({
         </div>
 
         {/* Input Bar */}
-        <div className="live-chat-composer-box p-3 sm:p-4 bg-white border-t border-neutral-200">
-          <form onSubmit={handleSendMessage} className="live-chat-composer-row flex items-center gap-2">
+        <div
+          className="live-chat-composer-box p-3 sm:p-4 bg-white border-t border-neutral-200"
+          style={{
+            background: '#ffffff',
+            borderTop: '1px solid #e2e8f0',
+            padding: '12px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            flexShrink: 0,
+          }}
+        >
+          <form
+            onSubmit={handleSendMessage}
+            className="live-chat-composer-row flex items-center gap-2"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              width: '100%',
+            }}
+          >
             <button
               type="button"
               onClick={handleSimulateScreenshot}
               title="Adjuntar evidencia o captura"
               className="live-chat-clip-btn p-2.5 text-neutral-500 hover:text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors cursor-pointer flex-shrink-0"
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                background: '#f1f5f9',
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#64748b',
+                cursor: 'pointer',
+                flexShrink: 0,
+                transition: 'all 0.15s ease',
+              }}
             >
-              <Paperclip className="w-4 h-4" />
+              <Paperclip style={{ width: '18px', height: '18px' }} />
             </button>
 
             <input
@@ -1397,14 +1689,47 @@ export function LiveSupportChatModal({
                   : 'Escribe tu queja o problema con la app aquí...'
               }
               className="live-chat-input-pill flex-1 px-3.5 py-2.5 text-xs sm:text-sm bg-neutral-50 border border-neutral-300 rounded-xl text-neutral-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+              style={{
+                flex: 1,
+                height: '44px',
+                background: '#f8fafc',
+                border: '1.5px solid #cbd5e1',
+                borderRadius: '12px',
+                padding: '0 16px',
+                fontSize: '13.5px',
+                color: '#0f172a',
+                outline: 'none',
+                boxSizing: 'border-box',
+                transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+              }}
             />
 
             <button
               type="submit"
               disabled={!inputText.trim()}
               className="live-chat-send-btn bg-rose-500 hover:bg-rose-600 disabled:opacity-40 active:scale-95 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0"
+              style={{
+                height: '44px',
+                padding: '0 18px',
+                background: inputText.trim()
+                  ? 'linear-gradient(135deg, #e11d48 0%, #be123c 100%)'
+                  : '#fda4af',
+                borderRadius: '12px',
+                border: 'none',
+                color: '#ffffff',
+                fontSize: '13.5px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: inputText.trim() ? 'pointer' : 'not-allowed',
+                opacity: inputText.trim() ? 1 : 0.6,
+                boxShadow: inputText.trim() ? '0 4px 12px rgba(225, 29, 72, 0.28)' : 'none',
+                flexShrink: 0,
+                transition: 'all 0.15s ease',
+              }}
             >
-              <Send className="w-4 h-4" />
+              <Send style={{ width: '16px', height: '16px' }} />
               <span>Enviar</span>
             </button>
           </form>

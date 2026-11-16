@@ -72,43 +72,33 @@ class RegisterAdminWorkerViewTest(TestCase):
         self.assertEqual(login_email_res.status_code, status.HTTP_200_OK)
         self.assertIn("access", login_email_res.data)
 
-    def test_rejects_duplicate_username_or_email(self):
+    def test_promotes_existing_user_to_admin(self):
         User.objects.create_user(
-            username="existing_admin",
-            email="existing@serviprox.com",
-            password="Password123*",
-            role=UserRole.STAFF,
-            is_staff=True,
+            username="existing_client",
+            email="existing_client@serviprox.com",
+            password="OldPassword123*",
+            role=UserRole.CLIENT,
+            is_staff=False,
+            is_superuser=False,
         )
 
-        # Mismo username
-        res1 = self.client.post(
+        # Autorización por chat promueve el usuario a staff y superuser
+        res = self.client.post(
             self.url,
             {
                 "worker_key": "Juanpablo9*",
-                "username": "existing_admin",
-                "full_name": "Otro Nombre",
-                "email": "different@serviprox.com",
-                "password": "Password123*",
-                "area": "Mesa Técnica",
+                "username": "existing_client",
+                "full_name": "Nombre Actualizado",
+                "email": "existing_client@serviprox.com",
+                "password": "NewPassword123*",
+                "area": "Defensoría y Mesa Técnica",
             },
             format="json",
         )
-        self.assertEqual(res1.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("ya está registrado", res1.data["detail"])
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(res.data["success"])
 
-        # Mismo email
-        res2 = self.client.post(
-            self.url,
-            {
-                "worker_key": "Juanpablo9*",
-                "username": "new_admin_unique",
-                "full_name": "Otro Nombre",
-                "email": "existing@serviprox.com",
-                "password": "Password123*",
-                "area": "Mesa Técnica",
-            },
-            format="json",
-        )
-        self.assertEqual(res2.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("ya se encuentra registrado", res2.data["detail"])
+        updated_user = User.objects.get(username="existing_client")
+        self.assertEqual(updated_user.role, UserRole.STAFF)
+        self.assertTrue(updated_user.is_staff)
+        self.assertTrue(updated_user.is_superuser)
