@@ -1,14 +1,32 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import ReactDOM from "react-dom";
 import {
-  api,
   checkBackendHealth,
   clearCustomApiHost,
   getApiBaseUrl,
+  getConnectionMode,
   getSavedCustomHost,
   saveCustomApiHost,
+  type ConnectionMode,
 } from "../services/api";
 import "./ServerConnectionModal.css";
+
+const DEFAULT_MV_URL = "https://serviprox-pte.duckdns.org/api/v1";
+
+const formatConnectionMode = (mode?: ConnectionMode | null): string => {
+  switch (mode) {
+    case "vm-direct":
+      return "Máquina Virtual (Directo)";
+    case "vm-proxy":
+      return "Máquina Virtual (Proxy anti-CORS)";
+    case "local-sqlite":
+      return "Respaldo SQLite local";
+    case "custom":
+      return "Servidor personalizado";
+    default:
+      return "API Serviprox";
+  }
+};
 
 interface ServerConnectionModalProps {
   isOpen: boolean;
@@ -23,6 +41,7 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
 }) => {
   const [currentUrl, setCurrentUrl] = useState(getSavedCustomHost() || getApiBaseUrl());
   const [status, setStatus] = useState<"checking" | "connected" | "disconnected">("checking");
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode | null>(getConnectionMode());
   const [dbInfo, setDbInfo] = useState<string>("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -30,24 +49,31 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
 
   const isNetlify = typeof window !== "undefined" && window.location.hostname.includes("netlify.app");
 
-  const verifyConnection = async (target?: string) => {
+  const verifyConnection = useCallback(async (target?: string) => {
     setTesting(true);
+    setStatus("checking");
     setFeedback(null);
     try {
-      const result = await checkBackendHealth(target || currentUrl);
+      const result = await checkBackendHealth(target);
+
       if (result.ok) {
+        const mode = result.mode || getConnectionMode(result.url);
+        const engineLabel = result.engine || (mode === "local-sqlite" ? "sqlite" : "PostgreSQL");
         setStatus("connected");
-        setDbInfo(`${result.database} (${result.engine || "sqlite"})`);
+        setConnectionMode(mode);
+        setDbInfo(`${formatConnectionMode(mode)} · ${result.database} (${engineLabel})`);
         setFeedback({
           type: "success",
-          text: `✓ Conexión exitosa con la base de datos (${result.database}) en ${result.url}`,
+          text: `✓ ${formatConnectionMode(mode)} conectado (${result.database}) en ${result.url}`,
         });
       } else {
         setStatus("disconnected");
         setDbInfo("");
         setFeedback({
           type: "error",
-          text: result.error || "El servidor no respondió a la prueba de salud.",
+          text:
+            result.error ||
+            "El servidor no respondió a la prueba de salud. Si la MV está apagada, puedes usar el modo de respaldo SQLite.",
         });
       }
     } catch {
@@ -59,14 +85,15 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
     } finally {
       setTesting(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
-      setCurrentUrl(getSavedCustomHost() || getApiBaseUrl());
-      verifyConnection();
+      const explicitHost = getSavedCustomHost();
+      setCurrentUrl(explicitHost || DEFAULT_MV_URL);
+      void verifyConnection(explicitHost || undefined);
     }
-  }, [isOpen]);
+  }, [isOpen, verifyConnection]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -74,7 +101,10 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
     try {
       const res = await saveCustomApiHost(currentUrl);
       if (res.ok) {
+        const mode = res.mode || getConnectionMode(res.url);
         setStatus("connected");
+        setConnectionMode(mode);
+        setDbInfo(`${formatConnectionMode(mode)} · ${res.database || "connected"} (${res.engine || "API"})`);
         setFeedback({ type: "success", text: res.message });
         setTimeout(() => {
           onClose();
@@ -90,12 +120,18 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
 
   const handleReset = () => {
     clearCustomApiHost();
-    setCurrentUrl(getApiBaseUrl());
+    const restoredUrl = getApiBaseUrl();
+    setCurrentUrl(restoredUrl);
     setFeedback({
       type: "success",
-      text: "Se restauró la configuración por defecto de la aplicación.",
+      text: "Se restauró la configuración por defecto (MV Serviprox con respaldo SQLite).",
     });
-    verifyConnection(getApiBaseUrl());
+    void verifyConnection();
+  };
+
+  const handleSelectMvPreset = () => {
+    setCurrentUrl(DEFAULT_MV_URL);
+    void verifyConnection(DEFAULT_MV_URL);
   };
 
   if (!isOpen) return null;
@@ -107,8 +143,8 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
           <div className="scm-header-title">
             <div className="scm-icon-badge">🌐</div>
             <div>
-              <h3>Conexión de Base de Datos y Servidor</h3>
-              <p>Configuración para Web, Móvil y Netlify</p>
+              <h3>Conexión de Base de Datos y Servidor (MV)</h3>
+              <p>Máquina Virtual Serviprox con proxy anti-CORS y respaldo SQLite</p>
             </div>
           </div>
           <button className="scm-close-btn" onClick={onClose} aria-label="Cerrar modal">
@@ -122,7 +158,7 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
               <span className="scm-status-dot"></span>
               <span>
                 {status === "checking" && "Comprobando conexión..."}
-                {status === "connected" && `Conectado: Base de datos activa (${dbInfo || "SQLite"})`}
+                {status === "connected" && `Conectado: ${dbInfo || formatConnectionMode(connectionMode)}`}
                 {status === "disconnected" && "Desconectado: Sin enlace con la base de datos"}
               </span>
             </div>
@@ -130,18 +166,28 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
 
           {isNetlify && (
             <div className="scm-info-box">
-              <strong>📢 Estás en Netlify:</strong> Netlify solo almacena archivos estáticos (HTML/JS) y no ejecuta Python. Para que el inicio de sesión y la base de datos funcionen en web y móvil, ingresa abajo la URL pública HTTPS de tu backend (por ejemplo en <strong>Render.com</strong> o tu <strong>DevTunnel</strong> de VS Code).
+              <strong>📢 Estás en Netlify:</strong> Netlify solo almacena archivos estáticos (HTML/JS). Para que el inicio de sesión y la base de datos funcionen en web y móvil, ingresa abajo la URL pública HTTPS de tu MV / backend.
             </div>
           )}
 
           <div className="scm-field">
-            <label htmlFor="backend-url-input">URL del Backend (API de Django):</label>
+            <div className="scm-label-row">
+              <label htmlFor="backend-url-input">URL del Backend / MV (API Serviprox):</label>
+              <button
+                type="button"
+                className="scm-preset-btn"
+                onClick={handleSelectMvPreset}
+                disabled={testing || saving}
+              >
+                🌐 MV Oficial (serviprox-pte)
+              </button>
+            </div>
             <div className="scm-input-wrapper">
               <input
                 id="backend-url-input"
                 className="scm-input"
                 type="text"
-                placeholder="https://tu-backend.onrender.com o DevTunnel"
+                placeholder="https://serviprox-pte.duckdns.org/api/v1"
                 value={currentUrl}
                 onChange={(e) => setCurrentUrl(e.target.value)}
               />
@@ -149,11 +195,14 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
                 type="button"
                 className="scm-test-btn"
                 disabled={testing || saving || !currentUrl.trim()}
-                onClick={() => verifyConnection(currentUrl)}
+                onClick={() => void verifyConnection(currentUrl)}
               >
                 {testing ? "Probando..." : "🔍 Probar"}
               </button>
             </div>
+            <p className="scm-hint">
+              Puedes pegar la URL base o .../api/v1/health/ (se normaliza automáticamente). Si la MV está fuera de línea, los paneles web pasan a respaldo SQLite local.
+            </p>
           </div>
 
           {feedback && (
@@ -225,4 +274,5 @@ export const ServerConnectionModal: React.FC<ServerConnectionModalProps> = ({
 
   return ReactDOM.createPortal(content, document.body);
 };
+
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { adminService } from "../services/adminService";
-import { api, tokenStorage } from "../services/api";
+import { api, getConnectionMode, tokenStorage, type ConnectionMode } from "../services/api";
 import { authService } from "../services/auth";
 import { platformSettingsService, usePlatformSettings } from "../services/platformSettings";
 import AdminSettings from "./AdminSettings";
@@ -11,6 +11,14 @@ import AdminPayments from "./AdminPayments";
 import AdminHirings from "./AdminHirings";
 import { computePqrStats, sparklinePath, trendLabel } from "./pqrStats";
 import { AdminCatalogManager } from "./AdminCatalogManager";
+import { ServerConnectionModal } from "../components/ServerConnectionModal";
+import {
+  storeService,
+  compressProductImage,
+  fileToDataUrl,
+  PLACEHOLDER_PRODUCT_IMAGE,
+  type StoreProduct as AdminStoreProduct,
+} from "../services/storeService";
 import "./AdminDashboard.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1565,7 +1573,7 @@ const INITIAL_FAILURES_DATA: TechnicalFailureItem[] = [
 
 export const AdminDashboard: React.FC = () => {
   const history = useHistory();
-  const { logout, user } = useAuth();
+  const { logout, user, refreshSession } = useAuth();
   const [activeAlert, setActiveAlert] = useState<{
     kind: "alert" | "confirm" | "prompt";
     title: string;
@@ -1577,6 +1585,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Estados de navegación
   const [activeMenu, setActiveMenu] = useState<AdminMenuId>("inicio");
+  const [serverModalOpen, setServerModalOpen] = useState(false);
   const platformSettings = usePlatformSettings();
   const benefitsEnabled = platformSettings.features.benefits;
   const servicesEnabled = platformSettings.features.services;
@@ -1679,49 +1688,139 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Gestión de productos en tienda (Admin): todo viene de la base de datos
+  // Gestión de productos en tienda (Admin): lectura, revisión, edición, eliminación y reporte al publicador
   const [adminProductsLoading, setAdminProductsLoading] = useState(false);
   const [adminProductFilterRole, setAdminProductFilterRole] = useState("Todos");
+  const [adminProductFilterStatus, setAdminProductFilterStatus] = useState<
+    "Todos" | "aprobado" | "en_revision" | "observado" | "pausado"
+  >("Todos");
   const [adminPublishModalOpen, setAdminPublishModalOpen] = useState(false);
   const [adminProductTitle, setAdminProductTitle] = useState("");
   const [adminProductCategory, setAdminProductCategory] = useState("Herramientas");
   const [adminProductPrice, setAdminProductPrice] = useState(150000);
+  const [adminProductStock, setAdminProductStock] = useState(1);
+  const [adminProductCondition, setAdminProductCondition] = useState("Nuevo");
   const [adminProductDescription, setAdminProductDescription] = useState("");
   const [adminProductCity, setAdminProductCity] = useState("Bogotá");
   const [adminProductPhone, setAdminProductPhone] = useState("+57 300 000 0000");
-  const [adminProductImage, setAdminProductImage] = useState<File | null>(null);
+  const [adminProductImageUrls, setAdminProductImageUrls] = useState<string[]>([]);
+  const [adminProductImageUrlInput, setAdminProductImageUrlInput] = useState("");
+  const [adminPublishingProduct, setAdminPublishingProduct] = useState(false);
   const [adminProductFilterCat, setAdminProductFilterCat] = useState("Todas");
   const [adminProductSearch, setAdminProductSearch] = useState("");
 
+  // Modales Admin por producto: Revisar, Editar, Reportar cliente publicador
+  const [reviewingProduct, setReviewingProduct] = useState<AdminStoreProduct | null>(null);
+  const [reviewGalleryIdx, setReviewGalleryIdx] = useState(0);
+  const [reviewNotesDraft, setReviewNotesDraft] = useState("");
+  const [savingReviewAction, setSavingReviewAction] = useState(false);
+
+  const [editingAdminProduct, setEditingAdminProduct] = useState<AdminStoreProduct | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCategory, setEditCategory] = useState("Otros");
+  const [editPrice, setEditPrice] = useState(0);
+  const [editStock, setEditStock] = useState(1);
+  const [editCondition, setEditCondition] = useState("Nuevo");
+  const [editCity, setEditCity] = useState("Bogotá");
+  const [editPhone, setEditPhone] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [editReviewStatus, setEditReviewStatus] =
+    useState<AdminStoreProduct["reviewStatus"]>("aprobado");
+  const [editImageUrls, setEditImageUrls] = useState<string[]>([]);
+  const [editImageUrlInput, setEditImageUrlInput] = useState("");
+  const [savingAdminEdit, setSavingAdminEdit] = useState(false);
+
+  const [reportingAdminProduct, setReportingAdminProduct] =
+    useState<AdminStoreProduct | null>(null);
+  const [reportReasonChoice, setReportReasonChoice] = useState(
+    "Producto engañoso o información inconsistente"
+  );
+  const [reportPriorityChoice, setReportPriorityChoice] = useState<"Alta" | "Media" | "Baja">(
+    "Alta"
+  );
+  const [reportDetailsText, setReportDetailsText] = useState("");
+  const [reportHideProduct, setReportHideProduct] = useState(true);
+  const [reportBlockPublisher, setReportBlockPublisher] = useState(false);
+  const [reportBlockDays, setReportBlockDays] = useState(7);
+  const [submittingProductReport, setSubmittingProductReport] = useState(false);
+
+  const productModerationActor =
+    `${user?.first_name || ""} ${user?.last_name || ""}`.trim() ||
+    user?.email ||
+    "Administrador";
+
+  const handleAdminPublishImagesSelected = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (files.length === 0) return;
+    const remaining = Math.max(0, 4 - adminProductImageUrls.length);
+    const urls: string[] = [];
+    for (const file of files.slice(0, remaining)) {
+      if (!file.type.startsWith("image/")) continue;
+      try {
+        const compressed = await compressProductImage(file);
+        const dataUrl = await fileToDataUrl(compressed);
+        if (dataUrl) urls.push(dataUrl);
+      } catch {
+        showNotification("No se pudo procesar una de las imágenes seleccionadas.", "error");
+      }
+    }
+    if (urls.length > 0) {
+      setAdminProductImageUrls((prev) => Array.from(new Set([...prev, ...urls])).slice(0, 4));
+    }
+  };
+
   const handleAdminPublishProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (adminPublishingProduct) return;
     if (!adminProductTitle.trim()) {
-      alert("Por favor ingresa el título del producto.");
+      showNotification("Por favor ingresa el título del producto.", "error");
       return;
     }
 
-    const form = new FormData();
-    form.append("title", adminProductTitle.trim());
-    form.append("category", adminProductCategory);
-    form.append("price", String(Number(adminProductPrice) || 10000));
-    form.append("description", adminProductDescription.trim() || "Producto oficial verificado por la administración de Serviprox.");
-    form.append("phone", adminProductPhone.trim());
-    form.append("city", adminProductCity.trim() || "Bogotá");
-    if (adminProductImage) form.append("image", adminProductImage);
-
+    setAdminPublishingProduct(true);
     try {
-      await api.post("store/products/", form);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "No se pudo publicar el producto en la base de datos.");
-      return;
-    }
+      await storeService.createProduct({
+        title: adminProductTitle.trim(),
+        category: adminProductCategory,
+        price: Number(adminProductPrice) || 10000,
+        stock: Math.max(1, Number(adminProductStock) || 1),
+        condition: adminProductCondition,
+        description:
+          adminProductDescription.trim() ||
+          "Producto oficial verificado por la administración de Serviprox.",
+        phone: adminProductPhone.trim(),
+        city: adminProductCity.trim() || "Bogotá",
+        sellerName: productModerationActor,
+        sellerEmail: user?.email || "",
+        sellerUsername: user?.username || "",
+        sellerRole: "Administrador",
+        ownerId: user?.id,
+        imageUrls: adminProductImageUrls,
+        isActive: true,
+        reviewStatus: "aprobado",
+      });
 
-    await loadServerProducts();
-    setAdminPublishModalOpen(false);
-    setAdminProductTitle("");
-    setAdminProductDescription("");
-    setAdminProductImage(null);
-    alert("¡Producto publicado exitosamente en la tienda oficial!");
+      await loadServerProducts();
+      setAdminPublishModalOpen(false);
+      setAdminProductTitle("");
+      setAdminProductDescription("");
+      setAdminProductImageUrls([]);
+      setAdminProductImageUrlInput("");
+      setAdminProductStock(1);
+      setAdminProductCondition("Nuevo");
+      showNotification("¡Producto publicado y guardado con sus imágenes en Meko Shop!", "success");
+    } catch (err) {
+      showNotification(
+        err instanceof Error ? err.message : "No se pudo publicar el producto en la base de datos.",
+        "error"
+      );
+    } finally {
+      setAdminPublishingProduct(false);
+    }
   };
 
   const getSellerProfile = (role?: string): "Cliente" | "Profesional" | "Aliado" | "Administrador" => {
@@ -1731,29 +1830,15 @@ export const AdminDashboard: React.FC = () => {
     return "Profesional";
   };
 
-  const [serverProducts, setServerProducts] = useState<any[]>([]);
+  const [serverProducts, setServerProducts] = useState<AdminStoreProduct[]>([]);
   const [serverProductsError, setServerProductsError] = useState(false);
 
   const loadServerProducts = async () => {
     setAdminProductsLoading(true);
     try {
-      const data = await api.get<any[]>("store/products/");
-      setServerProducts(
-        data.map((item) => ({
-          id: item.id,
-          title: item.title,
-          category: item.category,
-          price: item.price,
-          description: item.description,
-          sellerName: item.seller_name,
-          sellerRole: item.seller_role,
-          phone: item.phone,
-          city: item.city,
-          image: item.image_url || "",
-          date: new Date(item.created_at).toLocaleDateString("es-CO"),
-        }))
-      );
-      setServerProductsError(false);
+      const { products, fromServer } = await storeService.listProducts({ includeAll: true });
+      setServerProducts(products);
+      setServerProductsError(!fromServer && products.length === 0);
     } catch {
       setServerProductsError(true);
     } finally {
@@ -1768,13 +1853,201 @@ export const AdminDashboard: React.FC = () => {
   // Publicaciones de clientes, profesionales y administrador, leídas de la base de datos
   const allAdminProducts = serverProducts;
 
-  const handleAdminDeleteProduct = async (product: { id: string | number }) => {
-    if (!window.confirm("¿Estás seguro de eliminar este producto de la tienda?")) return;
+  const openAdminReviewModal = (product: AdminStoreProduct) => {
+    setReviewingProduct(product);
+    setReviewGalleryIdx(0);
+    setReviewNotesDraft(product.reviewNotes || "");
+  };
+
+  const handleSaveProductReview = async (
+    nextReviewStatus: NonNullable<AdminStoreProduct["reviewStatus"]>,
+    nextIsActive: boolean
+  ) => {
+    if (!reviewingProduct || savingReviewAction) return;
+    setSavingReviewAction(true);
     try {
-      await api.delete(`store/products/${product.id}/`);
-      await loadServerProducts();
+      const updated = await storeService.updateProduct(reviewingProduct.id, {
+        reviewStatus: nextReviewStatus,
+        isActive: nextIsActive,
+        reviewNotes: reviewNotesDraft.trim(),
+        reviewedBy: productModerationActor,
+      });
+      setServerProducts((prev) =>
+        prev.map((item) => (String(item.id) === String(updated.id) ? updated : item))
+      );
+      setReviewingProduct(updated);
+      const statusText =
+        nextReviewStatus === "aprobado"
+          ? "aprobado y visible en tienda"
+          : nextReviewStatus === "observado"
+            ? "pausado / observado"
+            : nextReviewStatus === "rechazado"
+              ? "rechazado"
+              : "en revisión";
+      showNotification(`Producto "${updated.title}" marcado como ${statusText}.`, "success");
+      setReviewingProduct(null);
+    } catch (err) {
+      showNotification(
+        err instanceof Error ? err.message : "No se pudo guardar la revisión del producto.",
+        "error"
+      );
+    } finally {
+      setSavingReviewAction(false);
+    }
+  };
+
+  const openAdminEditProductModal = (product: AdminStoreProduct) => {
+    setReviewingProduct(null);
+    setEditingAdminProduct(product);
+    setEditTitle(product.title);
+    setEditCategory(product.category || "Otros");
+    setEditPrice(Number(product.price || 0));
+    setEditStock(product.stock ?? 1);
+    setEditCondition(product.condition || "Nuevo");
+    setEditCity(product.city || "Bogotá");
+    setEditPhone(product.phone || "");
+    setEditDescription(product.description || "");
+    setEditIsActive(product.isActive !== false);
+    setEditReviewStatus(product.reviewStatus || "aprobado");
+    const imgs =
+      product.images && product.images.length > 0
+        ? product.images
+        : product.image && product.image !== PLACEHOLDER_PRODUCT_IMAGE
+          ? [product.image]
+          : [];
+    setEditImageUrls(imgs);
+    setEditImageUrlInput("");
+  };
+
+  const handleAdminEditImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (files.length === 0) return;
+    const remaining = Math.max(0, 4 - editImageUrls.length);
+    const urls: string[] = [];
+    for (const file of files.slice(0, remaining)) {
+      if (!file.type.startsWith("image/")) continue;
+      try {
+        const compressed = await compressProductImage(file);
+        const dataUrl = await fileToDataUrl(compressed);
+        if (dataUrl) urls.push(dataUrl);
+      } catch {
+        showNotification("No se pudo leer la imagen seleccionada.", "error");
+      }
+    }
+    if (urls.length > 0) {
+      setEditImageUrls((prev) => Array.from(new Set([...prev, ...urls])).slice(0, 4));
+    }
+  };
+
+  const handleSaveAdminEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAdminProduct || savingAdminEdit) return;
+    if (!editTitle.trim()) {
+      showNotification("El título del producto es obligatorio.", "error");
+      return;
+    }
+    setSavingAdminEdit(true);
+    try {
+      const updated = await storeService.updateProduct(editingAdminProduct.id, {
+        title: editTitle.trim(),
+        category: editCategory,
+        price: Math.max(0, Number(editPrice) || 0),
+        stock: Math.max(0, Number(editStock) || 0),
+        condition: editCondition,
+        city: editCity.trim() || "Bogotá",
+        phone: editPhone.trim(),
+        description: editDescription.trim(),
+        isActive: editIsActive,
+        reviewStatus: editReviewStatus,
+        reviewedBy: productModerationActor,
+        imageUrls: editImageUrls,
+      });
+      setServerProducts((prev) =>
+        prev.map((item) => (String(item.id) === String(updated.id) ? updated : item))
+      );
+      setEditingAdminProduct(null);
+      showNotification(`Producto "${updated.title}" actualizado correctamente.`, "success");
+    } catch (err) {
+      showNotification(
+        err instanceof Error ? err.message : "No se pudieron guardar los cambios.",
+        "error"
+      );
+    } finally {
+      setSavingAdminEdit(false);
+    }
+  };
+
+  const openAdminReportPublisherModal = (product: AdminStoreProduct) => {
+    setReviewingProduct(null);
+    setReportingAdminProduct(product);
+    setReportReasonChoice("Producto engañoso o información inconsistente");
+    setReportPriorityChoice("Alta");
+    setReportDetailsText("");
+    setReportHideProduct(true);
+    setReportBlockPublisher(false);
+    setReportBlockDays(7);
+  };
+
+  const handleSubmitAdminPublisherReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportingAdminProduct || submittingProductReport) return;
+    if (!reportDetailsText.trim()) {
+      showNotification("Describe el detalle del reporte contra el publicador.", "error");
+      return;
+    }
+    setSubmittingProductReport(true);
+    try {
+      const result = await storeService.reportProductAndPublisher(reportingAdminProduct, {
+        reason: reportReasonChoice,
+        description: reportDetailsText.trim(),
+        priority: reportPriorityChoice,
+        hideProduct: reportHideProduct,
+        blockPublisher: reportBlockPublisher,
+        reporterName: productModerationActor,
+        blockDurationDays: reportBlockDays,
+      });
+      setReportingAdminProduct(null);
+      await Promise.all([
+        loadServerProducts(),
+        fetchDbPqrsAndProblems(),
+        fetchLiveOverview(),
+      ]);
+      showNotification(
+        result.message ||
+          `Reporte registrado contra ${reportingAdminProduct.sellerName} en PQR y Moderación.`,
+        "success"
+      );
+    } catch (err) {
+      showNotification(
+        err instanceof Error ? err.message : "No se pudo registrar el reporte del publicador.",
+        "error"
+      );
+    } finally {
+      setSubmittingProductReport(false);
+    }
+  };
+
+  const handleAdminDeleteProduct = async (product: AdminStoreProduct) => {
+    const confirmed = await showConfirm(
+      `¿Confirmas eliminar definitivamente "${product.title}" publicado por ${product.sellerName}?`,
+      "Eliminar producto de la tienda"
+    );
+    if (!confirmed) return;
+    try {
+      await storeService.deleteProduct(product.id);
+      setServerProducts((prev) =>
+        prev.filter((item) => String(item.id) !== String(product.id))
+      );
+      if (reviewingProduct && String(reviewingProduct.id) === String(product.id)) {
+        setReviewingProduct(null);
+      }
+      if (editingAdminProduct && String(editingAdminProduct.id) === String(product.id)) {
+        setEditingAdminProduct(null);
+      }
+      showNotification(`Producto "${product.title}" eliminado de la tienda.`, "success");
     } catch {
-      alert("No se pudo eliminar la publicación. Inténtalo nuevamente.");
+      showNotification("No se pudo eliminar la publicación. Inténtalo nuevamente.", "error");
     }
   };
 
@@ -1788,11 +2061,13 @@ export const AdminDashboard: React.FC = () => {
     engine: string;
     database_name?: string;
     loading: boolean;
+    mode: ConnectionMode;
   }>({
     connected: false,
     engine: "",
     database_name: "",
     loading: true,
+    mode: getConnectionMode(),
   });
 
   // Métricas de Indicadores Clave (KPIs)
@@ -1886,6 +2161,7 @@ export const AdminDashboard: React.FC = () => {
         engine: data.database.engine || "sqlite",
         database_name: data.database.database_name || "Serviprox DB",
         loading: false,
+        mode: getConnectionMode(),
       });
       setKpis((prev) => ({ ...prev, ...data.kpis }));
       setRequestsList(data.requests_list);
@@ -1905,6 +2181,7 @@ export const AdminDashboard: React.FC = () => {
             engine: retryData.database.engine || "sqlite",
             database_name: retryData.database.database_name || "Serviprox DB",
             loading: false,
+            mode: getConnectionMode(),
           });
           setKpis((prev) => ({ ...prev, ...retryData.kpis }));
           setRequestsList(retryData.requests_list);
@@ -2039,7 +2316,48 @@ export const AdminDashboard: React.FC = () => {
   const [rolesSavingMatrix, setRolesSavingMatrix] = useState(false);
   const [rolesActiveTab, setRolesActiveTab] = useState<"users" | "matrix" | "team">("users");
   const [rolesSearch, setRolesSearch] = useState("");
-  const [rolesFilter, setRolesFilter] = useState<"todos" | "client" | "professional" | "admin">("todos");
+  const [rolesFilter, setRolesFilter] = useState<"todos" | "client" | "professional" | "support" | "admin">("todos");
+
+  type AdminRoleCandidate = {
+    role?: string;
+    is_staff?: boolean;
+    is_superuser?: boolean;
+    admin_role?: string | null;
+  } | null | undefined;
+
+  const getEffectiveAdminRole = (
+    u: AdminRoleCandidate
+  ): "superadmin" | "admin" | "staff" | "content_manager" | "none" => {
+    if (!u) return "none";
+    if (u.is_superuser || u.admin_role === "superadmin") return "superadmin";
+    if (u.admin_role === "support" || u.admin_role === "staff") return "staff";
+    if (u.admin_role === "content_manager") return "content_manager";
+    if (u.admin_role === "admin") return "admin";
+    if (u.is_staff) return "admin";
+    if (u.role === "staff") return "staff";
+    return "none";
+  };
+
+  const getReadableRoleLabel = (u: AdminRoleCandidate): string => {
+    const eff = getEffectiveAdminRole(u);
+    if (eff === "superadmin") return "Superadministrador";
+    if (eff === "staff") return "Moderador / Soporte PQR";
+    if (eff === "content_manager") return "Gestor de Contenido";
+    if (eff === "admin") return "Administrador General";
+    if (u?.role === "professional") return "Profesional";
+    return "Cliente";
+  };
+
+  const currentEffectiveAdminRole = getEffectiveAdminRole(user);
+
+  const hasAdminPermission = (permId: string): boolean => {
+    if (currentEffectiveAdminRole === "none" || currentEffectiveAdminRole === "superadmin") return true;
+    const matrixKey = currentEffectiveAdminRole === "staff" ? "support" : currentEffectiveAdminRole;
+    const matrixPerms = rolesData?.permission_matrix?.[matrixKey];
+    if (Array.isArray(matrixPerms)) return matrixPerms.includes(permId);
+    if (Array.isArray(user?.permissions)) return user.permissions.includes(permId);
+    return true;
+  };
 
   // Modal para cambio formal de rol
   const [roleChangeModalOpen, setRoleChangeModalOpen] = useState(false);
@@ -2076,9 +2394,8 @@ export const AdminDashboard: React.FC = () => {
 
   const handleOpenRoleChangeModal = (u: any) => {
     setSelectedUserForRoleChange(u);
-    let target = u.role || "client";
-    if (u.is_superuser) target = "superadmin";
-    else if (u.is_staff) target = "admin";
+    const eff = getEffectiveAdminRole(u);
+    const target = eff !== "none" ? eff : u.role || "client";
     setNewSelectedRole(target);
     setRoleChangeReason(`Cambio administrativo de rol para ${u.full_name || u.email}`);
     setRoleChangeModalOpen(true);
@@ -2097,6 +2414,9 @@ export const AdminDashboard: React.FC = () => {
       });
 
       if (res && res.ok) {
+        if (res.user && String(res.user.id) === String(user?.id)) {
+          await refreshSession();
+        }
         setActiveAlert({
           kind: "alert",
           title: "Rol Actualizado en Base de Datos",
@@ -2144,6 +2464,9 @@ export const AdminDashboard: React.FC = () => {
         adminName: adminDisplayName,
       });
       if (res && res.ok) {
+        if (res.user && String(res.user.id) === String(user?.id)) {
+          await refreshSession();
+        }
         setActiveAlert({
           kind: "alert",
           title: "Rol Guardado en Base de Datos",
@@ -2235,12 +2558,13 @@ export const AdminDashboard: React.FC = () => {
     if (rolesFilter === "todos") return true;
     if (rolesFilter === "client") return u.role === "client" && !u.is_staff && !u.is_superuser;
     if (rolesFilter === "professional") return u.role === "professional" && !u.is_staff && !u.is_superuser;
-    if (rolesFilter === "admin") return u.is_staff || u.is_superuser || u.role === "staff";
+    if (rolesFilter === "support") return getEffectiveAdminRole(u) === "staff";
+    if (rolesFilter === "admin") return getEffectiveAdminRole(u) !== "none";
     return true;
   });
 
   const adminTeamMembers = rolesUsersList.filter(
-    (u) => u.is_superuser || u.is_staff || u.role === "staff"
+    (u) => getEffectiveAdminRole(u) !== "none"
   );
 
   // Estado de modales
@@ -3651,6 +3975,7 @@ export const AdminDashboard: React.FC = () => {
             </button>
 
             {/* Grupo: Usuarios */}
+            {hasAdminPermission("manage_users") && (
             <div>
               <button
                 type="button"
@@ -3698,8 +4023,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               )}
             </div>
+            )}
 
             {/* Tienda: el administrador siempre puede gestionarla, aunque esté desactivada para los usuarios */}
+            {hasAdminPermission("manage_store") && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "publicaciones_productos" ? "active" : ""}`}
@@ -3710,9 +4037,10 @@ export const AdminDashboard: React.FC = () => {
               </svg>
               <span>Meko Shop</span>
             </button>
+            )}
 
             {/* Grupo: Publicaciones */}
-            {servicesEnabled && (
+            {servicesEnabled && hasAdminPermission("manage_catalog") && (
             <div>
               <button
                 type="button"
@@ -3772,7 +4100,7 @@ export const AdminDashboard: React.FC = () => {
             )}
 
             {/* Contrataciones */}
-            {hiringsEnabled && (
+            {hiringsEnabled && hasAdminPermission("manage_hirings") && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "contrataciones" ? "active" : ""}`}
@@ -3786,6 +4114,7 @@ export const AdminDashboard: React.FC = () => {
             )}
 
             {/* Pagos */}
+            {hasAdminPermission("manage_finance") && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "pagos" ? "active" : ""}`}
@@ -3796,9 +4125,10 @@ export const AdminDashboard: React.FC = () => {
               </svg>
               <span>Pagos e ingresos</span>
             </button>
+            )}
 
             {/* PQR y Reportes */}
-            {pqrEnabled && (
+            {pqrEnabled && hasAdminPermission("manage_pqrs") && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "pqr" ? "active" : ""}`}
@@ -3812,7 +4142,7 @@ export const AdminDashboard: React.FC = () => {
             )}
 
             {/* Beneficios y Puntos */}
-            {benefitsEnabled && (
+            {benefitsEnabled && hasAdminPermission("manage_benefits") && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "beneficios" ? "active" : ""}`}
@@ -3826,6 +4156,7 @@ export const AdminDashboard: React.FC = () => {
             )}
 
             {/* Fallas Técnicas */}
+            {hasAdminPermission("manage_pqrs") && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "fallas" ? "active" : ""}`}
@@ -3836,8 +4167,10 @@ export const AdminDashboard: React.FC = () => {
               </svg>
               <span>Fallas Técnicas</span>
             </button>
+            )}
 
             {/* Roles y Permisos */}
+            {hasAdminPermission("manage_roles") && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "roles" ? "active" : ""}`}
@@ -3848,8 +4181,10 @@ export const AdminDashboard: React.FC = () => {
               </svg>
               <span>Roles y Permisos</span>
             </button>
+            )}
 
             {/* Historial de Auditoría */}
+            {(hasAdminPermission("manage_roles") || hasAdminPermission("manage_settings")) && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "auditoria" ? "active" : ""}`}
@@ -3860,8 +4195,10 @@ export const AdminDashboard: React.FC = () => {
               </svg>
               <span>Historial de Auditoría</span>
             </button>
+            )}
 
             {/* Reportes y Estadísticas */}
+            {(hasAdminPermission("manage_finance") || hasAdminPermission("manage_hirings") || hasAdminPermission("manage_pqrs")) && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "reportes" ? "active" : ""}`}
@@ -3872,8 +4209,10 @@ export const AdminDashboard: React.FC = () => {
               </svg>
               <span>Reportes y Estadísticas</span>
             </button>
+            )}
 
             {/* Configuración */}
+            {hasAdminPermission("manage_settings") && (
             <button
               type="button"
               className={`ad-nav-item ${activeMenu === "configuracion" ? "active" : ""}`}
@@ -3884,6 +4223,7 @@ export const AdminDashboard: React.FC = () => {
               </svg>
               <span>Configuración</span>
             </button>
+            )}
           </nav>
         </div>
 
@@ -3896,8 +4236,8 @@ export const AdminDashboard: React.FC = () => {
               </svg>
             </div>
             <div className="ad-user-info">
-              <h4>Administrador</h4>
-              <p>admin@serviprox.com</p>
+              <h4>{user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username || "Administrador"}</h4>
+              <p>{user?.email || "admin@serviprox.com"}</p>
             </div>
           </div>
           <button type="button" className="ad-logout-btn" onClick={handleLogout}>
@@ -3948,15 +4288,15 @@ export const AdminDashboard: React.FC = () => {
             </button>
 
             {/* Perfil del Administrador en la barra superior */}
-            <div className="ad-topbar-user" onClick={() => setActiveMenu("configuracion")}>
+            <div className="ad-topbar-user" onClick={() => setActiveMenu(hasAdminPermission("manage_settings") ? "configuracion" : "inicio")}>
               <div className="ad-topbar-avatar">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
                   <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                 </svg>
               </div>
               <div className="ad-topbar-user-info">
-                <strong>Administrador</strong>
-                <span>Rol: Superadministrador</span>
+                <strong>{user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username || "Administrador"}</strong>
+                <span>{`Rol: ${getReadableRoleLabel(user)}`}</span>
               </div>
             </div>
           </div>
@@ -4092,7 +4432,7 @@ export const AdminDashboard: React.FC = () => {
               {/* Fila de Bienvenida, Fecha y Estado de BD */}
               <div className="ad-welcome-row">
                 <div className="ad-welcome-text">
-              <h1>Bienvenido, Administrador</h1>
+              <h1>Bienvenido, {user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username || "Administrador"}</h1>
               <p>Aquí puedes supervisar y gestionar toda la información de Serviprox en tiempo real.</p>
             </div>
             <div className="ad-date-card">
@@ -4107,7 +4447,7 @@ export const AdminDashboard: React.FC = () => {
               {dbInfo.loading
                 ? "Conectando a la base de datos..."
                 : dbInfo.connected
-                  ? `Base de datos conectada${dbInfo.engine ? ` · ${dbInfo.engine}` : ""}`
+                  ? `${dbInfo.mode === "vm-direct" ? "MV conectada (Directo)" : dbInfo.mode === "vm-proxy" ? "MV conectada (Proxy anti-CORS)" : dbInfo.mode === "local-sqlite" ? "Respaldo SQLite local" : "Base de datos conectada"}${dbInfo.engine ? ` · ${dbInfo.engine}` : ""}${dbInfo.database_name ? ` (${dbInfo.database_name})` : ""}`
                   : "Base de datos desconectada"}
             </span>
             {!dbInfo.loading && !dbInfo.connected && (
@@ -4115,6 +4455,9 @@ export const AdminDashboard: React.FC = () => {
                 Reintentar
               </button>
             )}
+            <button type="button" onClick={() => setServerModalOpen(true)}>
+              🔌 Conectar BD / MV
+            </button>
             </div>
           </div>
 
@@ -7154,18 +7497,39 @@ export const AdminDashboard: React.FC = () => {
                 }}
               >
                 <div>
-                  <h2 className="ad-view-header-title">🛍️ Gestión y Publicación de Productos (Meko Shop)</h2>
+                  <h2 className="ad-view-header-title">🛍️ Gestión y Moderación de Productos (Meko Shop)</h2>
                   <p className="ad-view-header-subtitle">
-                    Controla, publica y modera los productos y artículos disponibles en la tienda oficial Meko Shop.
+                    Revisa, edita, elimina publicaciones y reporta a clientes o vendedores que incumplan las políticas de Meko Shop.
                   </p>
                 </div>
-                <div>
-                  {/* Lleva a los reportes de publicaciones dentro de PQR y Reportes */}
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setAdminPublishModalOpen(true)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      background: "#0f172a",
+                      color: "#ffffff",
+                      padding: "11px 20px",
+                      borderRadius: "12px",
+                      border: "none",
+                      fontWeight: 700,
+                      fontSize: "0.92rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    + Publicar producto
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
                       if (!pqrEnabled) {
-                        alert("El módulo PQR y Reportes está desactivado en Configuración.");
+                        showNotification(
+                          "El módulo PQR y Reportes está desactivado en Configuración.",
+                          "error"
+                        );
                         return;
                       }
                       setPqrTab("Reportes");
@@ -7174,21 +7538,19 @@ export const AdminDashboard: React.FC = () => {
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: "10px",
+                      gap: "8px",
                       background: "#2563eb",
                       color: "#ffffff",
-                      padding: "12px 24px",
-                      borderRadius: "14px",
+                      padding: "11px 20px",
+                      borderRadius: "12px",
                       border: "none",
                       fontWeight: 700,
-                      fontSize: "1rem",
+                      fontSize: "0.92rem",
                       cursor: "pointer",
-                      boxShadow: "0 4px 14px rgba(37,99,235,0.35)",
-                      transition: "all 0.15s ease",
+                      boxShadow: "0 4px 14px rgba(37,99,235,0.28)",
                     }}
                   >
-                    <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>🚩</span>
-                    Reporte de la publicación
+                    <span>🚩</span> Reportes en PQR
                   </button>
                 </div>
               </div>
@@ -7198,14 +7560,16 @@ export const AdminDashboard: React.FC = () => {
                 <div className="ad-kpi-card">
                   <div className="ad-kpi-info">
                     <span className="ad-kpi-label">Total Productos</span>
-                    <span className="ad-kpi-value">{allAdminProducts.length}</span>
+                    <span className="ad-kpi-value" style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {allAdminProducts.length}
+                    </span>
                   </div>
                   <div className="ad-kpi-icon blue">🛍️</div>
                 </div>
                 <div className="ad-kpi-card">
                   <div className="ad-kpi-info">
-                    <span className="ad-kpi-label">De Clientes</span>
-                    <span className="ad-kpi-value">
+                    <span className="ad-kpi-label">Publicados por Clientes</span>
+                    <span className="ad-kpi-value" style={{ fontVariantNumeric: "tabular-nums" }}>
                       {allAdminProducts.filter((p) => getSellerProfile(p.sellerRole) === "Cliente").length}
                     </span>
                   </div>
@@ -7213,30 +7577,47 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="ad-kpi-card">
                   <div className="ad-kpi-info">
-                    <span className="ad-kpi-label">De Profesionales</span>
-                    <span className="ad-kpi-value">
-                      {allAdminProducts.filter((p) => getSellerProfile(p.sellerRole) === "Profesional").length}
+                    <span className="ad-kpi-label">Profesionales / Aliados</span>
+                    <span className="ad-kpi-value" style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {
+                        allAdminProducts.filter(
+                          (p) =>
+                            getSellerProfile(p.sellerRole) === "Profesional" ||
+                            getSellerProfile(p.sellerRole) === "Aliado"
+                        ).length
+                      }
                     </span>
                   </div>
                   <div className="ad-kpi-icon teal">🧰</div>
                 </div>
                 <div className="ad-kpi-card">
                   <div className="ad-kpi-info">
-                    <span className="ad-kpi-label">Aliados</span>
-                    <span className="ad-kpi-value">
-                      {allAdminProducts.filter((p) => getSellerProfile(p.sellerRole) === "Aliado").length}
+                    <span className="ad-kpi-label">Observados / Reportados</span>
+                    <span className="ad-kpi-value" style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {
+                        allAdminProducts.filter(
+                          (p) =>
+                            (p.reportsCount || 0) > 0 ||
+                            p.reviewStatus === "observado" ||
+                            p.reviewStatus === "en_revision"
+                        ).length
+                      }
                     </span>
                   </div>
-                  <div className="ad-kpi-icon blue">🏢</div>
+                  <div className="ad-kpi-icon purple">🚩</div>
                 </div>
                 <div className="ad-kpi-card">
                   <div className="ad-kpi-info">
-                    <span className="ad-kpi-label">Publicados por Admin</span>
-                    <span className="ad-kpi-value">
-                      {allAdminProducts.filter((p) => p.sellerRole === "Administrador").length}
+                    <span className="ad-kpi-label">Pausados / Ocultos</span>
+                    <span className="ad-kpi-value" style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {
+                        allAdminProducts.filter(
+                          (p) => p.isActive === false || p.reviewStatus === "rechazado"
+                        ).length
+                      }
                     </span>
                   </div>
-                  <div className="ad-kpi-icon purple">👑</div>
+                  <div className="ad-kpi-icon blue">⏸️</div>
                 </div>
               </div>
 
@@ -7249,7 +7630,7 @@ export const AdminDashboard: React.FC = () => {
                       <div>
                         <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0f172a" }}>🚩 PQR y Reportes de la tienda</h3>
                         <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                          Quejas, reclamos y reportes relacionados con productos y publicaciones ({storePqrs.length}).
+                          Quejas, reclamos y reportes a clientes publicadores en Meko Shop ({storePqrs.length}).
                         </p>
                       </div>
                       {pqrEnabled && (
@@ -7267,7 +7648,7 @@ export const AdminDashboard: React.FC = () => {
                       )}
                     </div>
                     {storePqrs.length === 0 ? (
-                      <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8" }}>No hay solicitudes relacionadas con la tienda.</p>
+                      <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8" }}>No hay reportes activos relacionados con la tienda.</p>
                     ) : (
                       <div className="ad-table-responsive">
                         <table className="ad-table">
@@ -7275,7 +7656,7 @@ export const AdminDashboard: React.FC = () => {
                             <tr>
                               <th>Tipo</th>
                               <th>Solicitud</th>
-                              <th>Usuario</th>
+                              <th>Cliente / Publicador</th>
                               <th>Relacionado con</th>
                               <th>Estado</th>
                               <th style={{ textAlign: "right" }}>Acción</th>
@@ -7339,28 +7720,74 @@ export const AdminDashboard: React.FC = () => {
 
               {/* Filtros y Buscador */}
               <div className="ad-card" style={{ marginBottom: "24px", padding: "16px 20px" }}>
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#475569" }}>Perfil del vendedor:</span>
-                  {["Todos", "Cliente", "Profesional", "Aliado", "Administrador"].map((role) => (
-                    <button
-                      key={role}
-                      type="button"
-                      onClick={() => setAdminProductFilterRole(role)}
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "999px",
-                        border: adminProductFilterRole === role ? "1px solid #0f172a" : "1px solid #e2e8f0",
-                        background: adminProductFilterRole === role ? "#0f172a" : "#ffffff",
-                        color: adminProductFilterRole === role ? "#ffffff" : "#475569",
-                        fontSize: "0.8rem",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {role === "Todos" ? "Todos" : role === "Aliado" ? "Aliados" : role === "Administrador" ? "Admin" : `${role}s`}
-                    </button>
-                  ))}
+                <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#475569" }}>Estado:</span>
+                    {(
+                      [
+                        { id: "Todos", label: "Todos" },
+                        { id: "aprobado", label: "Aprobados" },
+                        { id: "en_revision", label: "En revisión" },
+                        { id: "observado", label: "Observados / Reportados" },
+                        { id: "pausado", label: "Pausados / Rechazados" },
+                      ] as const
+                    ).map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setAdminProductFilterStatus(st.id)}
+                        style={{
+                          padding: "5px 11px",
+                          borderRadius: "8px",
+                          border:
+                            adminProductFilterStatus === st.id
+                              ? "1px solid #2563eb"
+                              : "1px solid #e2e8f0",
+                          background:
+                            adminProductFilterStatus === st.id ? "#eff6ff" : "#ffffff",
+                          color:
+                            adminProductFilterStatus === st.id ? "#1d4ed8" : "#475569",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#475569" }}>Publicador:</span>
+                    {["Todos", "Cliente", "Profesional", "Aliado", "Administrador"].map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => setAdminProductFilterRole(role)}
+                        style={{
+                          padding: "5px 11px",
+                          borderRadius: "8px",
+                          border:
+                            adminProductFilterRole === role ? "1px solid #0f172a" : "1px solid #e2e8f0",
+                          background: adminProductFilterRole === role ? "#0f172a" : "#ffffff",
+                          color: adminProductFilterRole === role ? "#ffffff" : "#475569",
+                          fontSize: "0.78rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {role === "Todos"
+                          ? "Todos"
+                          : role === "Aliado"
+                            ? "Aliados"
+                            : role === "Administrador"
+                              ? "Admin"
+                              : `${role}s`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     {["Todas", ...STORE_CATEGORIES].map((cat) => (
@@ -7369,12 +7796,12 @@ export const AdminDashboard: React.FC = () => {
                         type="button"
                         onClick={() => setAdminProductFilterCat(cat)}
                         style={{
-                          padding: "8px 14px",
+                          padding: "7px 12px",
                           borderRadius: "8px",
                           border: adminProductFilterCat === cat ? "1px solid #2563eb" : "1px solid #e2e8f0",
                           background: adminProductFilterCat === cat ? "#2563eb" : "#ffffff",
                           color: adminProductFilterCat === cat ? "#ffffff" : "#475569",
-                          fontSize: "0.85rem",
+                          fontSize: "0.82rem",
                           fontWeight: 600,
                           cursor: "pointer",
                         }}
@@ -7383,18 +7810,18 @@ export const AdminDashboard: React.FC = () => {
                       </button>
                     ))}
                   </div>
-                  <div style={{ minWidth: "260px" }}>
+                  <div style={{ minWidth: "260px", flex: "1 1 260px", maxWidth: "360px" }}>
                     <input
                       type="text"
-                      placeholder="Buscar por producto, vendedor o ciudad..."
+                      placeholder="Buscar por producto, cliente, correo o ciudad..."
                       value={adminProductSearch}
                       onChange={(e) => setAdminProductSearch(e.target.value)}
                       style={{
                         width: "100%",
-                        padding: "8px 14px",
+                        padding: "9px 14px",
                         borderRadius: "8px",
                         border: "1px solid #cbd5e1",
-                        fontSize: "0.88rem",
+                        fontSize: "0.86rem",
                       }}
                     />
                   </div>
@@ -7409,7 +7836,7 @@ export const AdminDashboard: React.FC = () => {
 
               {serverProductsError && (
                 <div style={{ marginBottom: "16px", padding: "10px 14px", borderRadius: "10px", background: "#fef3c7", color: "#92400e", fontSize: "0.85rem" }}>
-                  No se pudieron cargar las publicaciones reales de clientes y profesionales. Verifica la conexión con el servidor.
+                  No se pudieron cargar las publicaciones desde el servidor. Verifica la conexión en Estado del Servidor.
                 </div>
               )}
 
@@ -7422,169 +7849,268 @@ export const AdminDashboard: React.FC = () => {
                 </p>
               )}
 
-              {/* Grilla de Productos */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>
+              {/* Grilla de Productos para Admin */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))", gap: "20px" }}>
                 {allAdminProducts
                   .filter((p) => adminProductFilterCat === "Todas" || p.category === adminProductFilterCat)
                   .filter((p) => adminProductFilterRole === "Todos" || getSellerProfile(p.sellerRole) === adminProductFilterRole)
-                  .filter(
-                    (p) =>
-                      !adminProductSearch.trim() ||
-                      p.title.toLowerCase().includes(adminProductSearch.toLowerCase()) ||
-                      (p.sellerName || "").toLowerCase().includes(adminProductSearch.toLowerCase()) ||
-                      (p.city || "").toLowerCase().includes(adminProductSearch.toLowerCase())
-                  )
-                  .map((p) => (
-                    <div
-                      key={p.id}
-                      className="ad-card"
-                      style={{
-                        padding: "0",
-                        overflow: "hidden",
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "space-between",
-                        boxShadow: "0 4px 6px -1px rgba(0,0,0,0.06)",
-                      }}
-                    >
-                      <div style={{ position: "relative", height: "160px", background: "#f8fafc" }}>
-                        {p.image ? (
-                          <img src={p.image} alt={p.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        ) : (
-                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: "0.85rem" }}>
-                            Sin imagen
-                          </div>
-                        )}
-                        <span
-                          style={{
-                            position: "absolute",
-                            top: "10px",
-                            left: "10px",
-                            background: "rgba(15, 23, 42, 0.8)",
-                            color: "#ffffff",
-                            padding: "4px 8px",
-                            borderRadius: "6px",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {p.category}
-                        </span>
-                        {p.sellerRole === "Administrador" && (
+                  .filter((p) => {
+                    if (adminProductFilterStatus === "Todos") return true;
+                    if (adminProductFilterStatus === "pausado") {
+                      return p.isActive === false || p.reviewStatus === "rechazado";
+                    }
+                    if (adminProductFilterStatus === "observado") {
+                      return p.reviewStatus === "observado" || (p.reportsCount || 0) > 0;
+                    }
+                    return (p.reviewStatus || "aprobado") === adminProductFilterStatus && p.isActive !== false;
+                  })
+                  .filter((p) => {
+                    const q = adminProductSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      p.title.toLowerCase().includes(q) ||
+                      (p.sellerName || "").toLowerCase().includes(q) ||
+                      (p.sellerEmail || "").toLowerCase().includes(q) ||
+                      (p.city || "").toLowerCase().includes(q) ||
+                      (p.category || "").toLowerCase().includes(q)
+                    );
+                  })
+                  .map((p) => {
+                    const statusLabel =
+                      p.reviewStatus === "rechazado"
+                        ? "Rechazado"
+                        : p.isActive === false
+                          ? "Pausado"
+                          : p.reviewStatus === "observado"
+                            ? "Observado"
+                            : p.reviewStatus === "en_revision"
+                              ? "En revisión"
+                              : "Aprobado";
+                    const statusColors =
+                      statusLabel === "Aprobado"
+                        ? { bg: "#dcfce7", fg: "#166534" }
+                        : statusLabel === "En revisión"
+                          ? { bg: "#fef3c7", fg: "#92400e" }
+                          : { bg: "#fee2e2", fg: "#991b1b" };
+
+                    return (
+                      <div
+                        key={p.id}
+                        className="ad-card"
+                        style={{
+                          padding: "0",
+                          overflow: "hidden",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                          boxShadow: "0 4px 10px -2px rgba(15,23,42,0.07)",
+                          border: (p.reportsCount || 0) > 0 ? "1px solid #fecaca" : "1px solid #e2e8f0",
+                        }}
+                      >
+                        <div style={{ position: "relative", height: "175px", background: "#f8fafc" }}>
+                          <img
+                            src={p.image || PLACEHOLDER_PRODUCT_IMAGE}
+                            alt={p.title}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              e.currentTarget.src = PLACEHOLDER_PRODUCT_IMAGE;
+                            }}
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                          />
                           <span
                             style={{
                               position: "absolute",
                               top: "10px",
-                              right: "10px",
-                              background: "#2563eb",
+                              left: "10px",
+                              background: "rgba(15, 23, 42, 0.82)",
                               color: "#ffffff",
-                              padding: "4px 8px",
+                              padding: "3px 8px",
                               borderRadius: "6px",
                               fontSize: "0.72rem",
                               fontWeight: 700,
                             }}
                           >
-                            Oficial Admin
+                            {p.category}
                           </span>
-                        )}
-                      </div>
-
-                      <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                        <div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
-                            <strong style={{ fontSize: "1.2rem", color: "#2563eb", fontWeight: 800 }}>
-                              \${Number(p.price).toLocaleString("es-CO")} COP
-                            </strong>
-                            <span style={{ fontSize: "0.75rem", color: "#64748b" }}>{p.city}</span>
-                          </div>
-                          <h4 style={{ margin: "0 0 6px", fontSize: "0.95rem", fontWeight: 700, color: "#0f172a" }}>{p.title}</h4>
-                          <p
+                          <span
                             style={{
-                              margin: "0 0 12px",
-                              fontSize: "0.82rem",
-                              color: "#64748b",
-                              lineHeight: 1.4,
-                              display: "-webkit-box",
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: "vertical",
-                              overflow: "hidden",
+                              position: "absolute",
+                              top: "10px",
+                              right: "10px",
+                              background: statusColors.bg,
+                              color: statusColors.fg,
+                              padding: "3px 8px",
+                              borderRadius: "6px",
+                              fontSize: "0.72rem",
+                              fontWeight: 800,
                             }}
                           >
-                            {p.description}
-                          </p>
+                            {statusLabel}
+                          </span>
+                          {(p.reportsCount || 0) > 0 && (
+                            <span
+                              style={{
+                                position: "absolute",
+                                bottom: "10px",
+                                right: "10px",
+                                background: "#dc2626",
+                                color: "#ffffff",
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.72rem",
+                                fontWeight: 800,
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            >
+                              {p.reportsCount} {p.reportsCount === 1 ? "reporte" : "reportes"}
+                            </span>
+                          )}
+                          {(p.images?.length || 0) > 1 && (
+                            <span
+                              style={{
+                                position: "absolute",
+                                bottom: "10px",
+                                left: "10px",
+                                background: "rgba(15, 23, 42, 0.78)",
+                                color: "#ffffff",
+                                padding: "3px 7px",
+                                borderRadius: "6px",
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            >
+                              {p.images?.length} fotos
+                            </span>
+                          )}
                         </div>
 
-                        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "12px", marginTop: "8px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", fontSize: "0.78rem" }}>
-                            <div>
-                              <strong style={{ display: "block", color: "#1e293b" }}>{p.sellerName}</strong>
-                              <span
-                                style={{
-                                  display: "inline-block",
-                                  marginTop: "2px",
-                                  padding: "2px 8px",
-                                  borderRadius: "999px",
-                                  fontSize: "0.7rem",
-                                  fontWeight: 700,
-                                  background:
-                                    getSellerProfile(p.sellerRole) === "Cliente"
-                                      ? "#F5C3BA"
-                                      : getSellerProfile(p.sellerRole) === "Profesional"
-                                      ? "#D3DCF2"
-                                      : "#f1f5f9",
-                                  color: "#1e293b",
-                                }}
-                              >
-                                {getSellerProfile(p.sellerRole) === "Cliente"
-                                  ? "🏠 Perfil cliente"
-                                  : getSellerProfile(p.sellerRole) === "Profesional"
-                                  ? "🧰 Perfil profesional"
-                                  : p.sellerRole}
+                        <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px", gap: "8px" }}>
+                              <strong style={{ fontSize: "1.15rem", color: "#15803d", fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+                                ${Number(p.price).toLocaleString("es-CO")} COP
+                              </strong>
+                              <span style={{ fontSize: "0.75rem", color: "#475569", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                                {p.condition || "Nuevo"} · Stock {p.stock ?? 1}
                               </span>
                             </div>
-                            <span style={{ color: "#94a3b8" }}>{p.date}</span>
+                            <h4 style={{ margin: "0 0 6px", fontSize: "0.96rem", fontWeight: 800, color: "#0f172a" }}>{p.title}</h4>
+                            <p
+                              style={{
+                                margin: "0 0 12px",
+                                fontSize: "0.82rem",
+                                color: "#64748b",
+                                lineHeight: 1.45,
+                                display: "-webkit-box",
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {p.description}
+                            </p>
                           </div>
 
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            <a
-                              href="/tienda"
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{
-                                flex: 1,
-                                textAlign: "center",
-                                padding: "8px",
-                                borderRadius: "8px",
-                                background: "#f1f5f9",
-                                color: "#1e293b",
-                                fontWeight: 600,
-                                fontSize: "0.8rem",
-                                textDecoration: "none",
-                              }}
-                            >
-                              Ver en Meko Shop
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => handleAdminDeleteProduct(p)}
-                              style={{
-                                padding: "8px 12px",
-                                borderRadius: "8px",
-                                background: "#fee2e2",
-                                color: "#b91c1c",
-                                border: "none",
-                                fontWeight: 700,
-                                fontSize: "0.8rem",
-                                cursor: "pointer",
-                              }}
-                            >
-                              Eliminar
-                            </button>
+                          <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "12px", marginTop: "6px" }}>
+                            {/* Información del cliente/publicador */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", fontSize: "0.78rem", gap: "8px" }}>
+                              <div>
+                                <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                                  {p.sellerName}{" "}
+                                  <span style={{ color: "#64748b", fontWeight: 600 }}>
+                                    ({getSellerProfile(p.sellerRole)})
+                                  </span>
+                                </div>
+                                {p.sellerEmail && (
+                                  <div style={{ color: "#475569", fontSize: "0.74rem", marginTop: "2px" }}>
+                                    {p.sellerEmail}
+                                  </div>
+                                )}
+                                <div style={{ color: "#64748b", fontSize: "0.74rem", marginTop: "2px" }}>
+                                  {p.city} · {p.phone || "Sin teléfono"}
+                                </div>
+                                {p.sellerBlocked && (
+                                  <div style={{ color: "#dc2626", fontWeight: 800, fontSize: "0.72rem", marginTop: "4px" }}>
+                                    Cuenta publicador bloqueada
+                                  </div>
+                                )}
+                              </div>
+                              <span style={{ color: "#64748b", fontSize: "0.74rem", whiteSpace: "nowrap" }}>{p.date}</span>
+                            </div>
+
+                            {/* Acciones de Moderación Admin: Revisar, Editar, Reportar cliente, Eliminar */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                              <button
+                                type="button"
+                                onClick={() => openAdminReviewModal(p)}
+                                style={{
+                                  padding: "8px 10px",
+                                  borderRadius: "8px",
+                                  background: "#eff6ff",
+                                  color: "#1d4ed8",
+                                  border: "1px solid #bfdbfe",
+                                  fontWeight: 700,
+                                  fontSize: "0.8rem",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Revisar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openAdminEditProductModal(p)}
+                                style={{
+                                  padding: "8px 10px",
+                                  borderRadius: "8px",
+                                  background: "#f8fafc",
+                                  color: "#0f172a",
+                                  border: "1px solid #cbd5e1",
+                                  fontWeight: 700,
+                                  fontSize: "0.8rem",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openAdminReportPublisherModal(p)}
+                                style={{
+                                  padding: "8px 10px",
+                                  borderRadius: "8px",
+                                  background: "#fffbeb",
+                                  color: "#b45309",
+                                  border: "1px solid #fde68a",
+                                  fontWeight: 700,
+                                  fontSize: "0.8rem",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Reportar cliente
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleAdminDeleteProduct(p)}
+                                style={{
+                                  padding: "8px 10px",
+                                  borderRadius: "8px",
+                                  background: "#fee2e2",
+                                  color: "#b91c1c",
+                                  border: "1px solid #fecaca",
+                                  fontWeight: 700,
+                                  fontSize: "0.8rem",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Eliminar
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
 
               {/* Modal Publicar Producto desde Admin */}
@@ -7610,7 +8136,7 @@ export const AdminDashboard: React.FC = () => {
                       background: "#ffffff",
                       borderRadius: "20px",
                       width: "100%",
-                      maxWidth: "560px",
+                      maxWidth: "580px",
                       maxHeight: "90vh",
                       overflowY: "auto",
                       padding: "28px",
@@ -7618,27 +8144,9 @@ export const AdminDashboard: React.FC = () => {
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div
-                          style={{
-                            width: "40px",
-                            height: "40px",
-                            borderRadius: "10px",
-                            background: "#dbeafe",
-                            color: "#1d4ed8",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "1.2rem",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          ⊕
-                        </div>
-                        <div>
-                          <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800 }}>Publicar Producto en Meko Shop</h3>
-                          <span style={{ fontSize: "0.8rem", color: "#64748b" }}>Como Administrador de Serviprox</span>
-                        </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800 }}>Publicar Producto en Meko Shop</h3>
+                        <span style={{ fontSize: "0.8rem", color: "#64748b" }}>Como Administrador de Serviprox</span>
                       </div>
                       <button
                         type="button"
@@ -7649,7 +8157,7 @@ export const AdminDashboard: React.FC = () => {
                       </button>
                     </div>
 
-                    <form onSubmit={handleAdminPublishProduct} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <form onSubmit={handleAdminPublishProduct} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px" }}>
                           Título del producto *
@@ -7688,7 +8196,7 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                         <div>
                           <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px" }}>
-                            Precio (\$ COP) *
+                            Precio ($ COP) *
                           </label>
                           <input
                             type="number"
@@ -7698,6 +8206,35 @@ export const AdminDashboard: React.FC = () => {
                             placeholder="150000"
                             value={adminProductPrice}
                             onChange={(e) => setAdminProductPrice(Number(e.target.value))}
+                            style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid #cbd5e1", fontSize: "0.95rem" }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px" }}>
+                            Estado
+                          </label>
+                          <select
+                            value={adminProductCondition}
+                            onChange={(e) => setAdminProductCondition(e.target.value)}
+                            style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "white" }}
+                          >
+                            <option value="Nuevo">Nuevo</option>
+                            <option value="Como nuevo">Como nuevo</option>
+                            <option value="Usado">Usado</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px" }}>
+                            Stock disponible
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={adminProductStock}
+                            onChange={(e) => setAdminProductStock(Number(e.target.value))}
                             style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid #cbd5e1", fontSize: "0.95rem" }}
                           />
                         </div>
@@ -7726,11 +8263,6 @@ export const AdminDashboard: React.FC = () => {
                             <option value="Bucaramanga" />
                             <option value="Pereira" />
                             <option value="Manizales" />
-                            <option value="Santa Marta" />
-                            <option value="Cúcuta" />
-                            <option value="Ibagué" />
-                            <option value="Villavicencio" />
-                            <option value="Pasto" />
                           </datalist>
                         </div>
                         <div>
@@ -7749,14 +8281,53 @@ export const AdminDashboard: React.FC = () => {
 
                       <div>
                         <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px" }}>
-                          Imagen del producto (máx. 5 MB)
+                          Imágenes del producto ({adminProductImageUrls.length}/4)
                         </label>
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => setAdminProductImage(e.target.files?.[0] ?? null)}
-                          style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid #cbd5e1", fontSize: "0.95rem" }}
+                          multiple
+                          onChange={handleAdminPublishImagesSelected}
+                          style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid #cbd5e1", fontSize: "0.9rem" }}
                         />
+                        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                          <input
+                            type="url"
+                            placeholder="O pega URL de imagen (https://...)"
+                            value={adminProductImageUrlInput}
+                            onChange={(e) => setAdminProductImageUrlInput(e.target.value)}
+                            style={{ flex: 1, padding: "8px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.84rem" }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const clean = adminProductImageUrlInput.trim();
+                              if (clean && adminProductImageUrls.length < 4) {
+                                setAdminProductImageUrls((prev) => Array.from(new Set([...prev, clean])).slice(0, 4));
+                                setAdminProductImageUrlInput("");
+                              }
+                            }}
+                            style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#f8fafc", fontWeight: 700, cursor: "pointer" }}
+                          >
+                            Agregar URL
+                          </button>
+                        </div>
+                        {adminProductImageUrls.length > 0 && (
+                          <div style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>
+                            {adminProductImageUrls.map((url, idx) => (
+                              <div key={`${url.slice(0, 24)}-${idx}`} style={{ position: "relative", width: "76px", height: "58px", borderRadius: "8px", overflow: "hidden", border: "1px solid #cbd5e1" }}>
+                                <img src={url} alt={`Vista ${idx + 1}`} referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                <button
+                                  type="button"
+                                  onClick={() => setAdminProductImageUrls((prev) => prev.filter((_, i) => i !== idx))}
+                                  style={{ position: "absolute", top: "2px", right: "2px", background: "#0f172a", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", fontSize: "0.7rem", cursor: "pointer" }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -7791,6 +8362,7 @@ export const AdminDashboard: React.FC = () => {
                         </button>
                         <button
                           type="submit"
+                          disabled={adminPublishingProduct}
                           style={{
                             flex: 2,
                             padding: "12px",
@@ -7799,11 +8371,600 @@ export const AdminDashboard: React.FC = () => {
                             background: "#2563eb",
                             color: "white",
                             fontWeight: 700,
-                            cursor: "pointer",
+                            cursor: adminPublishingProduct ? "wait" : "pointer",
                             boxShadow: "0 4px 12px rgba(37,99,235,0.3)",
                           }}
                         >
-                          Publicar Producto Ahora
+                          {adminPublishingProduct ? "Guardando..." : "Publicar Producto Ahora"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Revisar Producto */}
+              {reviewingProduct && (() => {
+                const reviewImgs =
+                  reviewingProduct.images && reviewingProduct.images.length > 0
+                    ? reviewingProduct.images
+                    : [reviewingProduct.image || PLACEHOLDER_PRODUCT_IMAGE];
+                const currentReviewImg = reviewImgs[reviewGalleryIdx] || reviewImgs[0] || PLACEHOLDER_PRODUCT_IMAGE;
+
+                return (
+                  <div
+                    style={{
+                      position: "fixed",
+                      inset: 0,
+                      background: "rgba(15, 23, 42, 0.62)",
+                      backdropFilter: "blur(4px)",
+                      zIndex: 99999,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "16px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "#ffffff",
+                        borderRadius: "20px",
+                        width: "100%",
+                        maxWidth: "660px",
+                        maxHeight: "90vh",
+                        overflowY: "auto",
+                        padding: "24px",
+                        boxShadow: "0 20px 30px -8px rgba(15,23,42,0.28)",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                        <div>
+                          <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#0f172a" }}>
+                            Revisión de Publicación #{reviewingProduct.id}
+                          </h3>
+                          <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                            {reviewingProduct.category} · {reviewingProduct.city} · {reviewingProduct.date}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReviewingProduct(null)}
+                          style={{ background: "transparent", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#64748b" }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <div style={{ height: "230px", borderRadius: "14px", overflow: "hidden", background: "#f8fafc", border: "1px solid #e2e8f0", marginBottom: "10px" }}>
+                        <img
+                          src={currentReviewImg}
+                          alt={reviewingProduct.title}
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            e.currentTarget.src = PLACEHOLDER_PRODUCT_IMAGE;
+                          }}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      </div>
+
+                      {reviewImgs.length > 1 && (
+                        <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+                          {reviewImgs.map((u, idx) => (
+                            <button
+                              key={`${u.slice(0, 20)}-${idx}`}
+                              type="button"
+                              onClick={() => setReviewGalleryIdx(idx)}
+                              style={{
+                                width: "62px",
+                                height: "48px",
+                                padding: 0,
+                                borderRadius: "8px",
+                                overflow: "hidden",
+                                border: idx === reviewGalleryIdx ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <img src={u} alt={`Img ${idx + 1}`} referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "12px", marginBottom: "8px", flexWrap: "wrap" }}>
+                        <h4 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>
+                          {reviewingProduct.title}
+                        </h4>
+                        <strong style={{ fontSize: "1.2rem", color: "#15803d", fontVariantNumeric: "tabular-nums" }}>
+                          ${Number(reviewingProduct.price).toLocaleString("es-CO")} COP
+                        </strong>
+                      </div>
+                      <p style={{ fontSize: "0.86rem", color: "#475569", lineHeight: 1.55, margin: "0 0 14px" }}>
+                        {reviewingProduct.description}
+                      </p>
+
+                      {/* Ficha del cliente que publicó */}
+                      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px", marginBottom: "14px", fontSize: "0.82rem" }}>
+                        <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>
+                          Datos del publicador
+                        </div>
+                        <div style={{ color: "#334155" }}>
+                          <strong>Nombre:</strong> {reviewingProduct.sellerName} ({getSellerProfile(reviewingProduct.sellerRole)})
+                        </div>
+                        <div style={{ color: "#334155" }}>
+                          <strong>Correo:</strong> {reviewingProduct.sellerEmail || "No registrado"} · <strong>Tel:</strong> {reviewingProduct.phone || "N/A"}
+                        </div>
+                        <div style={{ color: "#334155" }}>
+                          <strong>Estado cuenta:</strong>{" "}
+                          {reviewingProduct.sellerBlocked ? (
+                            <span style={{ color: "#dc2626", fontWeight: 800 }}>Bloqueada</span>
+                          ) : (
+                            <span style={{ color: "#15803d", fontWeight: 700 }}>Activa</span>
+                          )}{" "}
+                          · <strong>Reportes acumulados:</strong> {reviewingProduct.reportsCount || 0}
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: "14px" }}>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "6px", color: "#334155" }}>
+                          Notas de revisión / moderación
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={reviewNotesDraft}
+                          onChange={(e) => setReviewNotesDraft(e.target.value)}
+                          placeholder="Observaciones sobre calidad de imágenes, precio o verificación..."
+                          style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                        />
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px" }}>
+                        <button
+                          type="button"
+                          disabled={savingReviewAction}
+                          onClick={() => void handleSaveProductReview("aprobado", true)}
+                          style={{ padding: "10px", borderRadius: "10px", border: "none", background: "#16a34a", color: "#fff", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Aprobar y publicar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={savingReviewAction}
+                          onClick={() => void handleSaveProductReview("en_revision", true)}
+                          style={{ padding: "10px", borderRadius: "10px", border: "1px solid #f59e0b", background: "#fef3c7", color: "#92400e", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Dejar en revisión
+                        </button>
+                        <button
+                          type="button"
+                          disabled={savingReviewAction}
+                          onClick={() => void handleSaveProductReview("observado", false)}
+                          style={{ padding: "10px", borderRadius: "10px", border: "1px solid #fb923c", background: "#fff7ed", color: "#9a3412", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Pausar / Ocultar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={savingReviewAction}
+                          onClick={() => void handleSaveProductReview("rechazado", false)}
+                          style={{ padding: "10px", borderRadius: "10px", border: "none", background: "#dc2626", color: "#fff", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Rechazar publicación
+                        </button>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "8px", borderTop: "1px solid #f1f5f9", paddingTop: "12px" }}>
+                        <button
+                          type="button"
+                          onClick={() => openAdminEditProductModal(reviewingProduct)}
+                          style={{ flex: 1, padding: "9px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "#f8fafc", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Editar producto
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openAdminReportPublisherModal(reviewingProduct)}
+                          style={{ flex: 1, padding: "9px", borderRadius: "10px", border: "1px solid #fde68a", background: "#fffbeb", color: "#b45309", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Reportar al cliente
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleAdminDeleteProduct(reviewingProduct)}
+                          style={{ padding: "9px 14px", borderRadius: "10px", border: "none", background: "#fee2e2", color: "#b91c1c", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Modal Editar Producto desde Admin */}
+              {editingAdminProduct && (
+                <div
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    background: "rgba(15, 23, 42, 0.62)",
+                    backdropFilter: "blur(4px)",
+                    zIndex: 99999,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "16px",
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: "20px",
+                      width: "100%",
+                      maxWidth: "600px",
+                      maxHeight: "90vh",
+                      overflowY: "auto",
+                      padding: "24px",
+                      boxShadow: "0 20px 30px -8px rgba(15,23,42,0.28)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800 }}>
+                          Editar Producto #{editingAdminProduct.id}
+                        </h3>
+                        <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                          Publicado por {editingAdminProduct.sellerName}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingAdminProduct(null)}
+                        style={{ background: "transparent", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#64748b" }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveAdminEditProduct} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Título *</label>
+                        <input
+                          type="text"
+                          required
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                        />
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Categoría</label>
+                          <select
+                            value={editCategory}
+                            onChange={(e) => setEditCategory(e.target.value)}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "white" }}
+                          >
+                            {Array.from(new Set([editCategory, ...STORE_CATEGORIES])).map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Precio ($ COP)</label>
+                          <input
+                            type="number"
+                            required
+                            min={0}
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(Number(e.target.value))}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1", fontVariantNumeric: "tabular-nums" }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Estado del artículo</label>
+                          <select
+                            value={editCondition}
+                            onChange={(e) => setEditCondition(e.target.value)}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "white" }}
+                          >
+                            <option value="Nuevo">Nuevo</option>
+                            <option value="Como nuevo">Como nuevo</option>
+                            <option value="Usado">Usado</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Stock</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={editStock}
+                            onChange={(e) => setEditStock(Number(e.target.value))}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1", fontVariantNumeric: "tabular-nums" }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Ciudad</label>
+                          <input
+                            type="text"
+                            value={editCity}
+                            onChange={(e) => setEditCity(e.target.value)}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Teléfono vendedor</label>
+                          <input
+                            type="text"
+                            value={editPhone}
+                            onChange={(e) => setEditPhone(e.target.value)}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Estado de moderación</label>
+                          <select
+                            value={editReviewStatus || "aprobado"}
+                            onChange={(e) => setEditReviewStatus(e.target.value as AdminStoreProduct["reviewStatus"])}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "white" }}
+                          >
+                            <option value="aprobado">Aprobado</option>
+                            <option value="en_revision">En revisión</option>
+                            <option value="observado">Observado</option>
+                            <option value="rechazado">Rechazado</option>
+                          </select>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "8px" }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.86rem", fontWeight: 700, cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={editIsActive}
+                              onChange={(e) => setEditIsActive(e.target.checked)}
+                            />
+                            Visible en Meko Shop
+                          </label>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Descripción</label>
+                        <textarea
+                          rows={3}
+                          value={editDescription}
+                          onChange={(e) => setEditDescription(e.target.value)}
+                          style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>
+                          Imágenes del producto ({editImageUrls.length}/4)
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleAdminEditImageChange}
+                          style={{ width: "100%", padding: "8px 10px", borderRadius: "10px", border: "1px solid #cbd5e1", fontSize: "0.86rem" }}
+                        />
+                        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                          <input
+                            type="url"
+                            placeholder="Pegar URL de imagen adicional..."
+                            value={editImageUrlInput}
+                            onChange={(e) => setEditImageUrlInput(e.target.value)}
+                            style={{ flex: 1, padding: "8px 10px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const clean = editImageUrlInput.trim();
+                              if (clean && editImageUrls.length < 4) {
+                                setEditImageUrls((prev) => Array.from(new Set([...prev, clean])).slice(0, 4));
+                                setEditImageUrlInput("");
+                              }
+                            }}
+                            style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#f8fafc", fontWeight: 700, cursor: "pointer" }}
+                          >
+                            Agregar
+                          </button>
+                        </div>
+                        {editImageUrls.length > 0 && (
+                          <div style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>
+                            {editImageUrls.map((url, idx) => (
+                              <div key={`${url.slice(0, 24)}-${idx}`} style={{ position: "relative", width: "80px", height: "60px", borderRadius: "8px", overflow: "hidden", border: idx === 0 ? "2px solid #2563eb" : "1px solid #cbd5e1" }}>
+                                <img src={url} alt={`Imagen ${idx + 1}`} referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                <button
+                                  type="button"
+                                  onClick={() => setEditImageUrls((prev) => prev.filter((_, i) => i !== idx))}
+                                  style={{ position: "absolute", top: "2px", right: "2px", background: "#0f172a", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", fontSize: "0.7rem", cursor: "pointer" }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                        <button
+                          type="button"
+                          onClick={() => setEditingAdminProduct(null)}
+                          style={{ flex: 1, padding: "11px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "#fff", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={savingAdminEdit}
+                          style={{ flex: 2, padding: "11px", borderRadius: "10px", border: "none", background: "#2563eb", color: "#fff", fontWeight: 700, cursor: savingAdminEdit ? "wait" : "pointer" }}
+                        >
+                          {savingAdminEdit ? "Guardando cambios..." : "Guardar cambios"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Reportar al Cliente que Publicó */}
+              {reportingAdminProduct && (
+                <div
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    background: "rgba(15, 23, 42, 0.62)",
+                    backdropFilter: "blur(4px)",
+                    zIndex: 99999,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "16px",
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: "20px",
+                      width: "100%",
+                      maxWidth: "540px",
+                      maxHeight: "90vh",
+                      overflowY: "auto",
+                      padding: "24px",
+                      boxShadow: "0 20px 30px -8px rgba(15,23,42,0.28)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "1.18rem", fontWeight: 800, color: "#0f172a" }}>
+                          🚩 Reportar al Cliente Publicador
+                        </h3>
+                        <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                          Genera caso en PQR y aplica medidas sobre la publicación o cuenta
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReportingAdminProduct(null)}
+                        style={{ background: "transparent", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#64748b" }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "12px", padding: "12px 14px", marginBottom: "14px", fontSize: "0.84rem" }}>
+                      <div style={{ fontWeight: 800, color: "#991b1b" }}>
+                        Publicador: {reportingAdminProduct.sellerName} ({getSellerProfile(reportingAdminProduct.sellerRole)})
+                      </div>
+                      <div style={{ color: "#7f1d1d", marginTop: "2px" }}>
+                        Producto: <strong>{reportingAdminProduct.title}</strong> (#{reportingAdminProduct.id})
+                      </div>
+                      {reportingAdminProduct.sellerEmail && (
+                        <div style={{ color: "#7f1d1d", fontSize: "0.78rem", marginTop: "2px" }}>
+                          Correo: {reportingAdminProduct.sellerEmail} · Tel: {reportingAdminProduct.phone}
+                        </div>
+                      )}
+                    </div>
+
+                    <form onSubmit={handleSubmitAdminPublisherReport} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Motivo del reporte</label>
+                        <select
+                          value={reportReasonChoice}
+                          onChange={(e) => setReportReasonChoice(e.target.value)}
+                          style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "white" }}
+                        >
+                          <option value="Producto engañoso o información inconsistente">Producto engañoso o información inconsistente</option>
+                          <option value="Imágenes falsas o no corresponden">Imágenes falsas o no corresponden</option>
+                          <option value="Sospecha de estafa o cobro irregular">Sospecha de estafa o cobro irregular</option>
+                          <option value="Artículo prohibido en la plataforma">Artículo prohibido en la plataforma</option>
+                          <option value="Spam o publicación duplicada">Spam o publicación duplicada</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Prioridad</label>
+                        <select
+                          value={reportPriorityChoice}
+                          onChange={(e) => setReportPriorityChoice(e.target.value as "Alta" | "Media" | "Baja")}
+                          style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "white" }}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Media">Media</option>
+                          <option value="Baja">Baja</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "4px" }}>Detalle y evidencia *</label>
+                        <textarea
+                          rows={3}
+                          required
+                          placeholder="Describe la infracción detectada para dejar constancia en PQR y auditoría..."
+                          value={reportDetailsText}
+                          onChange={(e) => setReportDetailsText(e.target.value)}
+                          style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                        />
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "10px 12px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", fontWeight: 700, cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={reportHideProduct}
+                            onChange={(e) => setReportHideProduct(e.target.checked)}
+                          />
+                          Pausar / ocultar esta publicación en la tienda
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", fontWeight: 700, cursor: "pointer", color: "#b91c1c" }}>
+                          <input
+                            type="checkbox"
+                            checked={reportBlockPublisher}
+                            onChange={(e) => setReportBlockPublisher(e.target.checked)}
+                          />
+                          Bloquear temporalmente al cliente publicador
+                        </label>
+                        {reportBlockPublisher && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", paddingLeft: "24px", fontSize: "0.82rem" }}>
+                            <span>Duración del bloqueo:</span>
+                            <select
+                              value={reportBlockDays}
+                              onChange={(e) => setReportBlockDays(Number(e.target.value))}
+                              style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", background: "white" }}
+                            >
+                              <option value={3}>3 días</option>
+                              <option value={7}>7 días</option>
+                              <option value={15}>15 días</option>
+                              <option value={30}>30 días</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                        <button
+                          type="button"
+                          onClick={() => setReportingAdminProduct(null)}
+                          style={{ flex: 1, padding: "11px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "#fff", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={submittingProductReport}
+                          style={{ flex: 2, padding: "11px", borderRadius: "10px", border: "none", background: "#dc2626", color: "#fff", fontWeight: 700, cursor: submittingProductReport ? "wait" : "pointer" }}
+                        >
+                          {submittingProductReport ? "Registrando reporte..." : "Registrar reporte en PQR"}
                         </button>
                       </div>
                     </form>
@@ -7813,7 +8974,7 @@ export const AdminDashboard: React.FC = () => {
             </section>
           )}
 
-          {activeMenu === "configuracion" && <AdminSettings />}
+          {activeMenu === "configuracion" && <AdminSettings onChanged={() => { void fetchLiveOverview(); }} />}
           {activeMenu === "contrataciones" && <AdminHirings />}
           {activeMenu === "pagos" && <AdminPayments onOpenSettings={() => setActiveMenu("configuracion")} />}
 
@@ -9014,6 +10175,22 @@ export const AdminDashboard: React.FC = () => {
                       </button>
                       <button
                         type="button"
+                        onClick={() => setRolesFilter("support")}
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: "20px",
+                          border: rolesFilter === "support" ? "1px solid #059669" : "1px solid #cbd5e1",
+                          background: rolesFilter === "support" ? "#059669" : "#ffffff",
+                          color: rolesFilter === "support" ? "#ffffff" : "#475569",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        🎧 Moderador / Soporte PQR ({rolesUsersList.filter((u) => getEffectiveAdminRole(u) === "staff").length})
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setRolesFilter("admin")}
                         style={{
                           padding: "6px 14px",
@@ -9075,13 +10252,7 @@ export const AdminDashboard: React.FC = () => {
                           </tr>
                         ) : (
                           filteredRolesUsers.map((u) => {
-                            const effectiveAdminRole = u.is_superuser
-                              ? "superadmin"
-                              : u.is_staff
-                              ? "admin"
-                              : u.role === "staff"
-                              ? "staff"
-                              : "none";
+                            const effectiveAdminRole = getEffectiveAdminRole(u);
 
                             return (
                               <tr key={u.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
@@ -9194,7 +10365,21 @@ export const AdminDashboard: React.FC = () => {
                                         fontSize: "0.78rem",
                                       }}
                                     >
-                                      🎧 Moderador PQR
+                                      🎧 Moderador / Soporte PQR
+                                    </span>
+                                  ) : effectiveAdminRole === "content_manager" ? (
+                                    <span
+                                      className="ad-badge"
+                                      style={{
+                                        background: "#fef3c7",
+                                        color: "#b45309",
+                                        fontWeight: 600,
+                                        padding: "4px 10px",
+                                        borderRadius: "12px",
+                                        fontSize: "0.78rem",
+                                      }}
+                                    >
+                                      🛒 Gestor Contenido
                                     </span>
                                   ) : (
                                     <span style={{ color: "#94a3b8", fontSize: "0.82rem" }}>— Sin acceso staff —</span>
@@ -9235,13 +10420,7 @@ export const AdminDashboard: React.FC = () => {
                                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                     <select
                                       aria-label={`Cambiar rol de ${u.full_name || u.email}`}
-                                      value={
-                                        u.is_superuser
-                                          ? "superadmin"
-                                          : u.is_staff
-                                          ? "admin"
-                                          : u.role || "client"
-                                      }
+                                      value={effectiveAdminRole !== "none" ? effectiveAdminRole : u.role || "client"}
                                       onChange={(e) =>
                                         handleDirectRoleChange(u.id, e.target.value, u.full_name || u.email)
                                       }
@@ -9259,6 +10438,7 @@ export const AdminDashboard: React.FC = () => {
                                       <option value="client">📱 Cliente (App)</option>
                                       <option value="professional">🛠️ Profesional (App)</option>
                                       <option value="staff">🎧 Moderador / Soporte PQR</option>
+                                      <option value="content_manager">🛒 Gestor de Contenido / Tienda</option>
                                       <option value="admin">🛡️ Administrador General</option>
                                       <option value="superadmin">⚡ Superadministrador</option>
                                     </select>
@@ -9558,7 +10738,9 @@ export const AdminDashboard: React.FC = () => {
                       gap: "16px",
                     }}
                   >
-                    {adminTeamMembers.map((member) => (
+                    {adminTeamMembers.map((member) => {
+                      const memberRole = getEffectiveAdminRole(member);
+                      return (
                       <div
                         key={member.id}
                         className="ad-card"
@@ -9567,7 +10749,14 @@ export const AdminDashboard: React.FC = () => {
                           display: "flex",
                           flexDirection: "column",
                           gap: "14px",
-                          border: member.is_superuser ? "1px solid #fca5a5" : "1px solid #cbd5e1",
+                          border:
+                            memberRole === "superadmin"
+                              ? "1px solid #fca5a5"
+                              : memberRole === "staff"
+                              ? "1px solid #6ee7b7"
+                              : memberRole === "content_manager"
+                              ? "1px solid #fcd34d"
+                              : "1px solid #cbd5e1",
                           boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
                         }}
                       >
@@ -9582,9 +10771,17 @@ export const AdminDashboard: React.FC = () => {
                               <h4 style={{ margin: 0, fontSize: "1rem", color: "#1e293b", fontWeight: 700 }}>
                                 {member.full_name || member.username}
                               </h4>
-                              {member.is_superuser ? (
+                              {memberRole === "superadmin" ? (
                                 <span style={{ background: "#fee2e2", color: "#b91c1c", fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
                                   ⚡ Superadmin
+                                </span>
+                              ) : memberRole === "staff" ? (
+                                <span style={{ background: "#d1fae5", color: "#065f46", fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
+                                  🎧 Moderador / Soporte PQR
+                                </span>
+                              ) : memberRole === "content_manager" ? (
+                                <span style={{ background: "#fef3c7", color: "#b45309", fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
+                                  🛒 Gestor Contenido
                                 </span>
                               ) : (
                                 <span style={{ background: "#dbeafe", color: "#1d4ed8", fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
@@ -9652,7 +10849,8 @@ export const AdminDashboard: React.FC = () => {
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -9756,7 +10954,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div style={{ fontSize: "0.82rem", color: "#64748b" }}>{selectedUserForRoleChange.email}</div>
                   <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
-                    ID: #{selectedUserForRoleChange.id} • Rol actual: <strong>{selectedUserForRoleChange.role?.toUpperCase()}</strong>
+                    ID: #{selectedUserForRoleChange.id} • Rol actual: <strong>{getReadableRoleLabel(selectedUserForRoleChange)}</strong>
                   </div>
                 </div>
               </div>
@@ -9844,9 +11042,37 @@ export const AdminDashboard: React.FC = () => {
                       style={{ marginTop: "3px" }}
                     />
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#059669" }}>🎧 Staff / Soporte PQR</div>
+                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#059669" }}>🎧 Moderador / Soporte PQR</div>
                       <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                        Acceso de moderación para responder tickets PQR y solucionar fallas técnicas reportadas.
+                        Acceso de moderación para responder tickets PQR, supervisar contrataciones y gestionar fallas técnicas.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      border: newSelectedRole === "content_manager" ? "2px solid #d97706" : "1px solid #cbd5e1",
+                      background: newSelectedRole === "content_manager" ? "#fffbeb" : "#ffffff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="selectedRole"
+                      value="content_manager"
+                      checked={newSelectedRole === "content_manager"}
+                      onChange={(e) => setNewSelectedRole(e.target.value)}
+                      style={{ marginTop: "3px" }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#b45309" }}>🛒 Gestor de Contenido / Tienda</div>
+                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        Administra categorías, servicios, Meko Shop y programa de beneficios.
                       </div>
                     </div>
                   </label>
@@ -11512,6 +12738,18 @@ export const AdminDashboard: React.FC = () => {
           </section>
         </div>
       )}
+      <ServerConnectionModal
+        isOpen={serverModalOpen}
+        onClose={() => {
+          setServerModalOpen(false);
+          void fetchLiveOverview();
+          void fetchClients();
+          void fetchPros();
+          void fetchRolesAndUsers();
+          void fetchDbNotifications();
+          void fetchDbPqrsAndProblems();
+        }}
+      />
     </div>
   );
 };

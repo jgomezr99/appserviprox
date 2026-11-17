@@ -19,6 +19,12 @@ describe("API de produccion", () => {
     const client = await import("./api");
     expect(client.getCandidateBaseUrls()).toEqual([BASE]);
     expect(client.normalizeApiUrl(BASE + "///")).toBe(BASE);
+    expect(client.normalizeApiUrl("https://serviprox-pte.duckdns.org/api/v1/health/")).toBe(
+      "https://serviprox-pte.duckdns.org/api/v1"
+    );
+    expect(client.normalizeApiUrl("https://serviprox-pte.duckdns.org")).toBe(
+      "https://serviprox-pte.duckdns.org/api/v1"
+    );
     client.setWorkingBaseUrl("https://otro.example.com");
     expect(client.getApiBaseUrl()).toBe(BASE);
   });
@@ -91,5 +97,42 @@ describe("API de produccion", () => {
       ok: false,
       database: "disconnected",
     });
+  });
+
+  it("en modo web prioriza MV directa, luego proxy anti-CORS y luego SQLite local", async () => {
+    vi.stubEnv("PROD", "false");
+    vi.stubEnv("VITEST", "");
+    vi.stubEnv("VITE_API_URL", "https://serviprox-pte.duckdns.org/api/v1/health/");
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "https://serviprox-pte.duckdns.org/api/v1/health/") {
+        throw new TypeError("CORS");
+      }
+      if (url === "http://localhost/api/vm/v1/health/") {
+        return json({ status: "ok", database: "connected", engine: "postgresql" });
+      }
+      if (url === "http://localhost/api/vm/v1/professionals/?page=2") {
+        return json({ results: [{ id: 99 }] });
+      }
+      return json({}, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { api, checkBackendHealth } = await import("./api");
+    const health = await checkBackendHealth();
+    expect(health).toMatchObject({
+      ok: true,
+      mode: "vm-proxy",
+      engine: "postgresql",
+      url: "http://localhost/api/vm/v1",
+    });
+
+    const page2 = await api.get<{ results: Array<{ id: number }> }>(
+      "https://serviprox-pte.duckdns.org/api/v1/professionals/?page=2"
+    );
+    expect(page2.results[0].id).toBe(99);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost/api/vm/v1/professionals/?page=2",
+      expect.any(Object)
+    );
   });
 });

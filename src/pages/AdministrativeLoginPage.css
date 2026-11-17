@@ -397,6 +397,7 @@
   font-size: 13.5px !important;
   line-height: 1.55 !important;
   word-break: break-word !important;
+  white-space: pre-line !important;
 }
 
 .admin-chat-bubble.support-bubble {

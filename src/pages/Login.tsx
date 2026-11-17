@@ -22,7 +22,7 @@ import {
   shieldCheckmarkOutline,
 } from "ionicons/icons";
 import { useHistory } from "react-router-dom";
-import { ApiError, checkBackendHealth, getApiBaseUrl } from "../services/api";
+import { ApiError, checkBackendHealth, getApiBaseUrl, getConnectionMode, type ConnectionMode } from "../services/api";
 import { authService } from "../services/auth";
 import { useAuth } from "../context/AuthContext";
 import { usePlatformSettings } from "../services/platformSettings";
@@ -139,7 +139,8 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   const [activeSlide, setActiveSlide] = useState(0);
   const [isAdminLogin, setIsAdminLogin] = useState(administrative);
   const [serverModalOpen, setServerModalOpen] = useState(false);
-  const [, setServerConnected] = useState<boolean | null>(null);
+  const [serverConnected, setServerConnected] = useState<boolean | null>(null);
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode | null>(getConnectionMode());
   const [blockedAccountInfo, setBlockedAccountInfo] = useState<BlockedAccountInfo | null>(null);
   const platform = usePlatformSettings();
   const showMaintenance = platform.features.maintenance && !administrative;
@@ -147,13 +148,15 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   useEffect(() => {
     checkBackendHealth().then((res) => {
       setServerConnected(res.ok);
+      if (res.mode) setConnectionMode(res.mode);
     });
   }, []);
 
   useEffect(() => {
     const handleStatus = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
+      const detail = (e as CustomEvent<{ connected?: boolean; mode?: ConnectionMode }>).detail;
       setServerConnected(Boolean(detail?.connected));
+      if (detail?.mode) setConnectionMode(detail.mode);
       if (detail?.connected) {
         if (error && (error.includes("backend") || error.includes("puerto 8000") || error.includes("conexión"))) {
           setError("");
@@ -172,6 +175,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
     try {
       const health = await checkBackendHealth();
       setServerConnected(health.ok);
+      if (health.mode) setConnectionMode(health.mode);
       if (health.ok) {
         setError("");
         setConnectionSuccess("¡Conexión verificada exitosamente con la base de datos!");
@@ -540,7 +544,19 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                           "🔄 Reintentar"
                         )}
                       </IonButton>
-                     
+                      <IonButton
+                        fill="outline"
+                        size="small"
+                        style={{
+                          flex: 1,
+                          "--border-radius": "12px",
+                          textTransform: "none",
+                          fontWeight: 800,
+                        }}
+                        onClick={() => setServerModalOpen(true)}
+                      >
+                        🌐 Configurar MV
+                      </IonButton>
                     </div>
                   )}
                 </div>
@@ -557,6 +573,32 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
 
             </form>
 
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "8px" }}>
+              <IonButton
+                type="button"
+                fill="clear"
+                size="small"
+                onClick={() => setServerModalOpen(true)}
+                style={{
+                  textTransform: "none",
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  "--color": serverConnected === false ? "#b91c1c" : "#0369a1",
+                }}
+              >
+                🌐 Base de datos:{" "}
+                {serverConnected === false
+                  ? "Desconectada · Configurar MV"
+                  : connectionMode === "vm-direct"
+                    ? "Máquina Virtual (Directo)"
+                    : connectionMode === "vm-proxy"
+                      ? "Máquina Virtual (Proxy)"
+                      : connectionMode === "local-sqlite"
+                        ? "Respaldo SQLite local"
+                        : "Configurar MV"}
+              </IonButton>
+            </div>
+
             {!administrative && platform.features.new_users !== false && <div className={styles.footerPrompt}>
               <span>¿Aún no tienes cuenta?</span>
               <IonButton routerLink="/register" fill="clear" className={styles.linkButton}>
@@ -564,7 +606,14 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
               </IonButton>
             </div>}
 
-            
+            {!administrative && (
+              <div style={{ display: "flex", justifyContent: "center", marginTop: "4px" }}>
+                <IonButton routerLink="/login/administrativo" fill="clear" size="small" className={styles.adminLoginButton}>
+                  Acceso administrador
+                </IonButton>
+              </div>
+            )}
+
           </section>}
         </main>
         <IonModal

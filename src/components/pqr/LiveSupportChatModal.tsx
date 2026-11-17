@@ -26,8 +26,6 @@ import {
   Bot,
   CheckCircle2,
   Paperclip,
-  Building2,
-  ShieldAlert,
 } from 'lucide-react';
 import type {
   LiveChatMessage,
@@ -55,6 +53,7 @@ type ChatFlow =
   | 'admin_phone'
   | 'admin_area'
   | 'admin_password'
+  | 'admin_saving'
   | 'queja_contratista'
   | 'queja_cual_contratista'
   | 'queja_descripcion'
@@ -169,15 +168,17 @@ function userMsg(text: string): LiveChatMessage {
   };
 }
 
-function extractApiErrorMessage(err: any): string {
+function extractApiErrorMessage(err: unknown): string {
   if (!err) return 'Ocurrió un error inesperado al procesar la solicitud.';
-  const payload = err.payload || err.data || err;
+  const record = err as { payload?: unknown; data?: unknown; message?: unknown };
+  const payload = record.payload ?? record.data ?? err;
   if (typeof payload === 'string') return payload;
-  if (typeof payload?.detail === 'string') return payload.detail;
-  if (typeof payload?.message === 'string') return payload.message;
-  if (typeof payload === 'object' && payload !== null) {
+  if (payload && typeof payload === 'object') {
+    const p = payload as Record<string, unknown>;
+    if (typeof p.detail === 'string') return p.detail;
+    if (typeof p.message === 'string') return p.message;
     const messages: string[] = [];
-    for (const [, val] of Object.entries(payload)) {
+    for (const [, val] of Object.entries(p)) {
       if (Array.isArray(val)) {
         messages.push(val.join(' '));
       } else if (typeof val === 'string') {
@@ -186,10 +187,20 @@ function extractApiErrorMessage(err: any): string {
     }
     if (messages.length > 0) return messages.join('\n');
   }
-  if (typeof err.message === 'string' && !err.message.startsWith('API request failed')) {
-    return err.message;
+  if (typeof record.message === 'string' && !record.message.startsWith('API request failed')) {
+    return record.message;
   }
   return 'No fue posible conectar con el servidor backend ni la base de datos.';
+}
+
+function renderFormattedChatText(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return <strong key={idx}>{part.slice(2, -2)}</strong>;
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
 }
 
 // ─── Mensaje inicial exacto de la interfaz ────────────────────────────────────
@@ -214,7 +225,7 @@ export function LiveSupportChatModal({
   onPqrCreatedFromChat,
   onAppProblemReported,
 }: LiveSupportChatModalProps) {
-  const { user } = useAuth();
+  const { user, login, logout } = useAuth();
   // Lista unificada de contratistas registrados en base de datos
   const registeredContractors =
     propsContractors && propsContractors.length > 0
@@ -226,6 +237,11 @@ export function LiveSupportChatModal({
   const [isTyping, setIsTyping] = useState(false);
   const [flow, setFlow] = useState<ChatFlow>('inicio');
   const [adminDraft, setAdminDraft] = useState<AdminWorkerDraft>({});
+  const [createdAdminCreds, setCreatedAdminCreds] = useState<{
+    username: string;
+    email: string;
+    password: string;
+  } | null>(null);
   const [quejaDraft, setQuejaDraft] = useState<QuejaDraft>({});
   const [problemaDraft, setProblemaAppDraft] = useState<ProblemaAppDraft>({});
   const [apelacionDraft, setApelacionDraft] = useState<ApelacionDraft>({});
@@ -233,10 +249,19 @@ export function LiveSupportChatModal({
   const [simulatedScreenshot, setSimulatedScreenshot] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const savingReportRef = useRef(false);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -253,8 +278,12 @@ export function LiveSupportChatModal({
     ticket?: LiveChatMessage['ticketCreated'],
     delay = 600
   ) => {
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+    }
     setIsTyping(true);
-    setTimeout(() => {
+    typingTimerRef.current = setTimeout(() => {
+      typingTimerRef.current = null;
       setIsTyping(false);
       setMessages((prev) => [...prev, agentMsg(text, opts, ticket)]);
     }, delay);
@@ -275,8 +304,10 @@ export function LiveSupportChatModal({
 
   // Finalizar creación de trabajador administrativo
   const finalizarCrearAdminWorker = async (password: string) => {
+    if (savingReportRef.current) return;
+    savingReportRef.current = true;
+    setFlow('admin_saving');
     setIsTyping(true);
-    setFlow('fin');
     const payload = {
       worker_key: adminDraft.worker_key || 'Juanpablo9*',
       username: adminDraft.username || '',
@@ -290,9 +321,19 @@ export function LiveSupportChatModal({
     try {
       const res = await authService.registerAdminWorker(payload);
       setIsTyping(false);
+      setFlow('fin');
       setAdminDraft({});
+      setCreatedAdminCreds({
+        username: res.user.username,
+        email: res.user.email,
+        password,
+      });
+      const storageNotice =
+        res.storage_mode === 'local-sqlite'
+          ? 'Cuenta administrativa guardada en el servidor administrativo local (SQLite) porque la Máquina Virtual aún no expone el endpoint público de alta administrativa; podrás iniciar sesión inmediatamente.'
+          : 'Tu cuenta ya quedó reflejada y conectada a la base de datos oficial. Puedes iniciar sesión inmediatamente en el login administrativo.';
       pushAgent(
-        `🎉 **¡Cuenta administrativa creada exitosamente en la base de datos de Serviprox!**\n\n` +
+        `🎉 **¡Cuenta administrativa creada exitosamente en Serviprox!**\n\n` +
         `📋 **Ficha de Trabajador Registrado:**\n` +
         `• 👤 **Usuario:** ${res.user.username}\n` +
         `• 🏷️ **Nombre:** ${res.user.full_name}\n` +
@@ -300,52 +341,137 @@ export function LiveSupportChatModal({
         `• 📞 **Teléfono:** ${res.user.phone || 'No registrado'}\n` +
         `• 🏢 **Área:** ${res.user.area}\n` +
         `• 🛡️ **Rol:** Personal Administrativo (\`staff\` / \`is_staff = True\`)\n\n` +
-        `Tu cuenta ya quedó reflejada y conectada a la base de datos oficial. Puedes iniciar sesión inmediatamente en el login administrativo.`,
+        storageNotice,
         [
+          { label: '⚡ Entrar al Panel Administrativo', action: 'instant_admin_login' },
           { label: '🚀 Ir al Login Administrativo', action: 'goto_admin_login' },
           { label: '🔄 Registrar otro trabajador', action: 'iniciar_crear_admin' },
           { label: '✕ Cerrar chat', action: 'cerrar_chat' },
         ],
         undefined,
-        400
+        250
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsTyping(false);
       const detail = extractApiErrorMessage(err);
+      const lowerDetail = detail.toLowerCase();
+      const isPasswordError =
+        lowerDetail.includes('contraseña') || lowerDetail.includes('password');
+      const isUsernameError =
+        lowerDetail.includes('usuario') || lowerDetail.includes('username');
+      const isEmailError =
+        lowerDetail.includes('correo') || lowerDetail.includes('email');
+
+      if (isUsernameError) {
+        setFlow('admin_username');
+      } else if (isEmailError) {
+        setFlow('admin_email');
+      } else if (isPasswordError) {
+        setFlow('admin_password');
+      } else {
+        setFlow('fin');
+      }
+
+      const recoveryPrompt = isUsernameError
+        ? `❌ **No se pudo registrar la cuenta administrativa:**\n\n${detail}\n\nEscribe otro **nombre de usuario** diferente aquí mismo para continuar sin perder tus datos:`
+        : isEmailError
+          ? `❌ **No se pudo registrar la cuenta administrativa:**\n\n${detail}\n\nEscribe otro **correo electrónico** aquí mismo para continuar sin perder tus datos:`
+          : isPasswordError
+            ? `❌ **No se pudo registrar la cuenta administrativa:**\n\n${detail}\n\nEscribe una nueva contraseña directamente aquí para intentarlo sin perder tus datos:`
+            : `❌ **No se pudo registrar la cuenta administrativa:**\n\n${detail}\n\n¿Deseas ajustar la contraseña o reiniciar el registro?`;
+
       pushAgent(
-        `❌ **No se pudo registrar la cuenta administrativa:**\n\n${detail}\n\n¿Deseas intentarlo de nuevo?`,
+        recoveryPrompt,
         [
-          { label: '🔄 Intentar nuevamente', action: 'iniciar_crear_admin' },
+          ...(isUsernameError || isEmailError
+            ? []
+            : [{ label: '🔁 Cambiar contraseña', action: 'retry_admin_password' }]),
+          { label: '🔄 Reiniciar registro', action: 'iniciar_crear_admin' },
           { label: '✕ Cerrar chat', action: 'cerrar_chat' },
         ],
         undefined,
-        400
+        250
       );
+    } finally {
+      savingReportRef.current = false;
     }
   };
 
   // ───────────────────────────────────────────────────────────────────────────
   // Manejo de botones de acción rápida
   // ───────────────────────────────────────────────────────────────────────────
-  const handleQuickAction = (action: string) => {
+  const handleQuickAction = async (action: string) => {
     switch (action) {
       case 'iniciar_crear_admin': {
         pushUser('Deseo dar de alta mi cuenta administrativa en la base de datos.');
         setFlow('admin_worker_key');
         setAdminDraft({});
+        setCreatedAdminCreds(null);
         pushAgent(
-          '🔐 **Módulo de Alta para Trabajadores Administrativos Serviprox**\n\nPara autorizar la creación de tu cuenta en la base de datos oficial, por favor ingresa la **Clave de Trabajador Autorizado**:'
+          '🔐 **Módulo de Alta para Trabajadores Administrativos Serviprox**\n\nPara autorizar la creación de tu cuenta en la base de datos oficial, por favor ingresa la **Clave de Trabajador Autorizado**:',
+          undefined,
+          undefined,
+          250
         );
         break;
       }
 
+      case 'retry_admin_password': {
+        setFlow('admin_password');
+        pushAgent(
+          '👉 Ingresa una nueva **Contraseña de acceso** para completar el registro de tu cuenta administrativa (mínimo 6 caracteres):',
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'instant_admin_login': {
+        if (!createdAdminCreds) {
+          onClose();
+          window.location.href = '/login/administrativo';
+          break;
+        }
+        const creds = createdAdminCreds;
+        setIsTyping(true);
+        try {
+          const logged = await login(
+            {
+              username: creds.username,
+              email: creds.email,
+              password: creds.password,
+            },
+            { allowLocalWorkerFallback: true }
+          );
+          setIsTyping(false);
+          if (!(logged.role === 'staff' || logged.is_staff || logged.is_superuser)) {
+            logout();
+            pushAgent('⚠️ La cuenta se creó, pero no obtuvo permisos administrativos. Ve al Login Administrativo.');
+            break;
+          }
+          setCreatedAdminCreds(null);
+          onClose();
+          window.location.href = '/admin';
+        } catch (err: unknown) {
+          setIsTyping(false);
+          pushAgent(
+            `⚠️ No se pudo iniciar sesión automáticamente (${extractApiErrorMessage(err)}). Puedes acceder desde el Login Administrativo.`,
+            [{ label: '🚀 Ir al Login Administrativo', action: 'goto_admin_login' }]
+          );
+        }
+        break;
+      }
+
       case 'goto_admin_login': {
+        setCreatedAdminCreds(null);
         onClose();
-        window.location.href = '/admin/login';
+        window.location.href = '/login/administrativo';
         break;
       }
 
       case 'cerrar_chat': {
+        setCreatedAdminCreds(null);
         onClose();
         break;
       }
@@ -559,19 +685,24 @@ export function LiveSupportChatModal({
   // ───────────────────────────────────────────────────────────────────────────
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
+    if (flow === 'admin_saving') return;
     const text = inputText.trim();
     if (!text) return;
     setInputText('');
-    pushUser(text);
+    pushUser(flow === 'admin_password' ? '••••••••' : text);
 
     const lower = text.toLowerCase();
 
-    // 0. Detección directa de la clave de trabajador autorizada en cualquier momento
-    if (text === 'Juanpablo9*') {
+    // 0. Detección directa de la clave de trabajador autorizada solo al inicio o esperando clave
+    if (text === 'Juanpablo9*' && (flow === 'inicio' || flow === 'admin_worker_key')) {
       setAdminDraft({ worker_key: 'Juanpablo9*' });
+      setCreatedAdminCreds(null);
       setFlow('admin_username');
       pushAgent(
-        '🔐 **¡Clave de trabajador autorizada correctamente!**\n\nBienvenido al registro de personal administrativo de Serviprox Bogotá.\n\n👉 **Paso 1 de 6:** Escribe tu **Nombre de usuario** administrativo (ejemplo: `jpablo`, `admin_bogota`):'
+        '🔐 **¡Clave de trabajador autorizada correctamente!**\n\nBienvenido al registro de personal administrativo de Serviprox Bogotá.\n\n👉 **Paso 1 de 6:** Escribe tu **Nombre de usuario** administrativo (ejemplo: `jpablo`, `admin_bogota`):',
+        undefined,
+        undefined,
+        250
       );
       return;
     }
@@ -587,7 +718,7 @@ export function LiveSupportChatModal({
         lower.includes('alta') ||
         lower.includes('clave'))
     ) {
-      handleQuickAction('iniciar_crear_admin');
+      void handleQuickAction('iniciar_crear_admin');
       return;
     }
 
@@ -599,7 +730,7 @@ export function LiveSupportChatModal({
         lower.includes('quitar bloqueo') ||
         lower.includes('activar cuenta'))
     ) {
-      handleQuickAction('iniciar_desbloqueo');
+      void handleQuickAction('iniciar_desbloqueo');
       return;
     }
 
@@ -629,7 +760,7 @@ export function LiveSupportChatModal({
         lower.includes('bloque') ||
         lower.includes('suspend'))
     ) {
-      handleQuickAction('iniciar_apelacion');
+      void handleQuickAction('iniciar_apelacion');
       return;
     }
 
@@ -640,11 +771,17 @@ export function LiveSupportChatModal({
           setAdminDraft({ worker_key: 'Juanpablo9*' });
           setFlow('admin_username');
           pushAgent(
-            '✅ **Clave de trabajador autorizada correctamente.**\n\nVamos a crear tu cuenta administrativa en la base de datos oficial de Serviprox.\n\n👉 **Paso 1 de 6:** Escribe tu **Nombre de usuario** administrativo (ejemplo: `jpablo`, `admin_bogota`):'
+            '✅ **Clave de trabajador autorizada correctamente.**\n\nVamos a crear tu cuenta administrativa en la base de datos oficial de Serviprox.\n\n👉 **Paso 1 de 6:** Escribe tu **Nombre de usuario** administrativo (ejemplo: `jpablo`, `admin_bogota`):',
+            undefined,
+            undefined,
+            250
           );
         } else {
           pushAgent(
-            '❌ **Clave de trabajador incorrecta.**\n\nPor motivos de seguridad y control de la base de datos, ingresa la clave de trabajador autorizada para continuar:'
+            '❌ **Clave de trabajador incorrecta.**\n\nPor motivos de seguridad y control de la base de datos, ingresa la clave de trabajador autorizada para continuar:',
+            undefined,
+            undefined,
+            250
           );
         }
         break;
@@ -653,31 +790,60 @@ export function LiveSupportChatModal({
       case 'admin_username': {
         if (text.includes(' ')) {
           pushAgent(
-            '⚠️ El nombre de usuario no puede contener espacios. Por favor escribe un usuario válido (ejemplo: `jpablo` o `admin_bogota`):'
+            '⚠️ El nombre de usuario no puede contener espacios. Por favor escribe un usuario válido (ejemplo: `jpablo` o `admin_bogota`):',
+            undefined,
+            undefined,
+            250
           );
           break;
         }
-        if (text.length < 3) {
-          pushAgent('⚠️ El nombre de usuario debe tener al menos 3 caracteres. Inténtalo de nuevo:');
+        if (!/^[a-zA-Z0-9._+-]{3,150}$/.test(text)) {
+          pushAgent(
+            '⚠️ El nombre de usuario debe tener entre 3 y 150 caracteres válidos (letras, números y `. _ + -`). Inténtalo de nuevo:',
+            undefined,
+            undefined,
+            250
+          );
           break;
         }
         setAdminDraft((prev) => ({ ...prev, username: text }));
+        if (adminDraft.full_name && adminDraft.email && adminDraft.area) {
+          setFlow('admin_password');
+          pushAgent(
+            `Usuario actualizado a **${text}**.\n\n👉 Ingresa tu **Contraseña de acceso** para completar el registro (mínimo 6 caracteres):`,
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
         setFlow('admin_fullname');
         pushAgent(
-          `Excelente usuario: **${text}**.\n\n👉 **Paso 2 de 6:** Escribe tu **Nombre y apellidos completos** (ejemplo: Juan Pablo Gómez):`
+          `Excelente usuario: **${text}**.\n\n👉 **Paso 2 de 6:** Escribe tu **Nombre y apellidos completos** (ejemplo: Juan Pablo Gómez):`,
+          undefined,
+          undefined,
+          250
         );
         break;
       }
 
       case 'admin_fullname': {
         if (text.length < 3) {
-          pushAgent('⚠️ Por favor escribe tu nombre y apellidos completos (ejemplo: Juan Pablo Gómez):');
+          pushAgent(
+            '⚠️ Por favor escribe tu nombre y apellidos completos (ejemplo: Juan Pablo Gómez):',
+            undefined,
+            undefined,
+            250
+          );
           break;
         }
         setAdminDraft((prev) => ({ ...prev, full_name: text }));
         setFlow('admin_email');
         pushAgent(
-          `Mucho gusto, **${text}**.\n\n👉 **Paso 3 de 6:** Escribe tu **Correo electrónico corporativo / oficial** (ejemplo: juanpablo@serviprox.com):`
+          `Mucho gusto, **${text}**.\n\n👉 **Paso 3 de 6:** Escribe tu **Correo electrónico corporativo / oficial** (ejemplo: juanpablo@serviprox.com):`,
+          undefined,
+          undefined,
+          250
         );
         break;
       }
@@ -685,14 +851,31 @@ export function LiveSupportChatModal({
       case 'admin_email': {
         if (!text.includes('@') || !text.includes('.')) {
           pushAgent(
-            '⚠️ Por favor ingresa un correo electrónico válido (ejemplo: nombre@serviprox.com):'
+            '⚠️ Por favor ingresa un correo electrónico válido (ejemplo: nombre@serviprox.com):',
+            undefined,
+            undefined,
+            250
           );
           break;
         }
-        setAdminDraft((prev) => ({ ...prev, email: text.toLowerCase() }));
+        const normalizedEmail = text.toLowerCase();
+        setAdminDraft((prev) => ({ ...prev, email: normalizedEmail }));
+        if (adminDraft.area) {
+          setFlow('admin_password');
+          pushAgent(
+            `Correo actualizado a **${normalizedEmail}**.\n\n👉 Ingresa tu **Contraseña de acceso** para completar el registro (mínimo 6 caracteres):`,
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
         setFlow('admin_phone');
         pushAgent(
-          `Correo registrado: **${text.toLowerCase()}**.\n\n👉 **Paso 4 de 6:** Escribe tu **Número de teléfono o celular** de contacto (ejemplo: 3101234567):`
+          `Correo registrado: **${normalizedEmail}**.\n\n👉 **Paso 4 de 6:** Escribe tu **Número de teléfono o celular** de contacto (ejemplo: 3101234567):`,
+          undefined,
+          undefined,
+          250
         );
         break;
       }
@@ -707,7 +890,9 @@ export function LiveSupportChatModal({
             { label: '🛠️ Soporte Técnico e Infraestructura', action: 'sel_admin_area:Soporte Técnico e Infraestructura' },
             { label: '💰 Finanzas y Liquidaciones', action: 'sel_admin_area:Finanzas y Liquidaciones' },
             { label: '📋 Supervisión y Control Staff', action: 'sel_admin_area:Supervisión y Control Staff' },
-          ]
+          ],
+          undefined,
+          250
         );
         break;
       }
@@ -716,7 +901,10 @@ export function LiveSupportChatModal({
         setAdminDraft((prev) => ({ ...prev, area: text }));
         setFlow('admin_password');
         pushAgent(
-          `Área asignada: **${text}**.\n\n👉 **Paso 6 de 6:** Define tu **Contraseña de acceso** para el login administrativo (mínimo 6 caracteres):`
+          `Área asignada: **${text}**.\n\n👉 **Paso 6 de 6:** Define tu **Contraseña de acceso** para el login administrativo (mínimo 6 caracteres):`,
+          undefined,
+          undefined,
+          250
         );
         break;
       }
@@ -724,7 +912,10 @@ export function LiveSupportChatModal({
       case 'admin_password': {
         if (text.length < 6) {
           pushAgent(
-            '⚠️ La contraseña debe tener al menos 6 caracteres por seguridad. Por favor ingresa una contraseña válida:'
+            '⚠️ La contraseña debe tener al menos 6 caracteres por seguridad. Por favor ingresa una contraseña válida:',
+            undefined,
+            undefined,
+            250
           );
           break;
         }
@@ -1039,7 +1230,9 @@ export function LiveSupportChatModal({
       if (user?.email) delete stored[user.email.trim().toLowerCase()];
       if (user?.username) delete stored[user.username.trim().toLowerCase()];
       localStorage.setItem('serviprox_blocked_users', JSON.stringify(stored));
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
 
     // 2. Ejecutar acción de desbloqueo en backend
     adminService
@@ -1467,7 +1660,7 @@ export function LiveSupportChatModal({
                         {msg.agentName}
                       </div>
                     )}
-                    <p style={{ margin: 0 }}>{msg.text}</p>
+                    <p style={{ margin: 0 }}>{renderFormattedChatText(msg.text)}</p>
 
                     {/* Ticket Creado */}
                     {msg.ticketCreated && (
@@ -1539,7 +1732,7 @@ export function LiveSupportChatModal({
                         <button
                           key={i}
                           type="button"
-                          onClick={() => handleQuickAction(opt.action)}
+                          onClick={() => void handleQuickAction(opt.action)}
                           className="live-chat-chip-btn bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300 font-bold text-[11px] px-3 py-1.5 rounded-xl shadow-2xs transition-all active:scale-95 cursor-pointer flex items-center gap-1"
                           style={{
                             background: '#ffffff',
@@ -1660,9 +1853,12 @@ export function LiveSupportChatModal({
             <input
               type="text"
               value={inputText}
+              disabled={flow === 'admin_saving'}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={
-                flow === 'admin_worker_key'
+                flow === 'admin_saving'
+                  ? 'Guardando cuenta administrativa...'
+                  : flow === 'admin_worker_key'
                   ? 'Escribe la clave de trabajador autorizada...'
                   : flow === 'admin_username'
                   ? 'Escribe tu usuario administrativo (ej: jpablo)...'
@@ -1706,7 +1902,7 @@ export function LiveSupportChatModal({
 
             <button
               type="submit"
-              disabled={!inputText.trim()}
+              disabled={!inputText.trim() || flow === 'admin_saving'}
               className="live-chat-send-btn bg-rose-500 hover:bg-rose-600 disabled:opacity-40 active:scale-95 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0"
               style={{
                 height: '44px',

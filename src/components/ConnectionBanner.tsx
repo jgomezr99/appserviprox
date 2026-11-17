@@ -1,17 +1,32 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { IonButton, IonSpinner } from "@ionic/react";
-import { checkBackendHealth } from "../services/api";
+import { checkBackendHealth, type ConnectionMode } from "../services/api";
+
+const getReconnectedLabel = (mode: ConnectionMode | null): string => {
+  switch (mode) {
+    case "vm-direct":
+      return "Máquina Virtual conectada correctamente";
+    case "vm-proxy":
+      return "Máquina Virtual conectada (proxy anti-CORS)";
+    case "local-sqlite":
+      return "Base de datos conectada (respaldo SQLite local)";
+    default:
+      return "Base de datos conectada correctamente";
+  }
+};
 
 export const ConnectionBanner: React.FC = () => {
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [justReconnected, setJustReconnected] = useState(false);
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode | null>(null);
 
   const testConnection = useCallback(async () => {
     setIsReconnecting(true);
     try {
       const res = await checkBackendHealth();
       if (res.ok) {
+        setConnectionMode(res.mode || null);
         setIsDisconnected(false);
         setJustReconnected(true);
         setTimeout(() => setJustReconnected(false), 3000);
@@ -27,7 +42,14 @@ export const ConnectionBanner: React.FC = () => {
 
   useEffect(() => {
     const handleStatus = (event: Event) => {
-      const customEvent = event as CustomEvent<{ connected: boolean; url?: string }>;
+      const customEvent = event as CustomEvent<{
+        connected: boolean;
+        url?: string;
+        mode?: ConnectionMode;
+      }>;
+      if (customEvent.detail?.mode) {
+        setConnectionMode(customEvent.detail.mode);
+      }
       if (customEvent.detail?.connected === false) {
         setIsDisconnected(true);
       } else if (customEvent.detail?.connected === true) {
@@ -56,6 +78,9 @@ export const ConnectionBanner: React.FC = () => {
       const res = await checkBackendHealth();
       if (!active) return;
       if (res.ok) {
+        if (res.mode) {
+          setConnectionMode(res.mode);
+        }
         setIsDisconnected((wasDisconnected) => {
           if (wasDisconnected) {
             setJustReconnected(true);
@@ -111,7 +136,7 @@ export const ConnectionBanner: React.FC = () => {
       </span>
       <span>
         {justReconnected
-          ? "Base de datos conectada correctamente"
+          ? getReconnectedLabel(connectionMode)
           : "Servidor o base de datos desconectada"}
       </span>
 

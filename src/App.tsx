@@ -201,6 +201,9 @@ const App: React.FC = () => {
               <Route path="/login/administrativo" exact={true}>
                 <LazyAdministrativeLoginPage />
               </Route>
+              <Route path="/admin/login" exact={true}>
+                <Redirect to="/login/administrativo" />
+              </Route>
               {/* alternate entry path used by the Menu */}
               <Route path="/ingresar" exact={true}>
                 <Redirect to="/login" />

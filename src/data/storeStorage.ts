@@ -1,5 +1,3 @@
-import { DEFAULT_MOCK_PRODUCTS } from "./mockStoreProducts";
-
 export interface MekoCartItem {
   id: string | number;
   productId: string | number;
@@ -107,7 +105,7 @@ const DEFAULT_DEMO_ORDERS: MekoOrder[] = [
     id: "ORD-2026-0891",
     reference: "WOMPI-MEKO-89102",
     date: "05/11/2026, 14:20",
-    total: 320000,
+    total: 340000,
     status: "En camino",
     paymentMethod: "Wompi (Nequi)",
     wompiTransactionId: "TX-WOMPI-9941203",
@@ -122,9 +120,9 @@ const DEFAULT_DEMO_ORDERS: MekoOrder[] = [
       {
         id: "item-1",
         productId: 5,
-        title: "Control PS5 DualSense",
-        price: 320000,
-        image: "/assets/prod-ps5.jpg",
+        title: "Control Inalámbrico Pro DualSense",
+        price: 340000,
+        image: "/assets/products/control-gamer.jpg",
         city: "Bogotá",
         category: "Multimedia",
         quantity: 1,
@@ -165,11 +163,11 @@ const DEFAULT_DEMO_PAYMENTS: MekoPaymentRecord[] = [
     orderId: "ORD-2026-0891",
     reference: "WOMPI-MEKO-89102",
     date: "05/11/2026, 14:21",
-    amount: 320000,
+    amount: 340000,
     status: "Aprobado",
     gateway: "Wompi (Bancolombia)",
     method: "Nequi",
-    productNames: "Control PS5 DualSense (1 unidad)",
+    productNames: "Control Inalámbrico Pro DualSense (1 unidad)",
     customerName: "Carlos Gómez",
     customerPhone: "+57 314 220 8910",
     city: "Bogotá",

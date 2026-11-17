@@ -15,7 +15,6 @@ import {
   alertCircleOutline,
   arrowBackOutline,
   closeOutline,
-  imageOutline,
   trashOutline,
 } from "ionicons/icons";
 import {
@@ -29,22 +28,22 @@ import {
   X,
   Phone,
   MessageCircle,
-  Check,
-  Sparkles,
   ShoppingBag,
   ShoppingCart,
   Truck,
   ShieldAlert,
   CreditCard,
   Package,
+  Pencil,
+  Flag,
+  ImagePlus,
+  Link2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { api } from "../services/api";
 import { usePlatformSettings } from "../services/platformSettings";
 import { useHistory, useLocation } from "react-router-dom";
 import { ColombiaCityModal } from "../components/store/ColombiaCityModal";
 import { StoreCategoryIcon } from "../components/store/StoreCategoryIcon";
-import { StoreHeroIllustration } from "../components/store/StoreHeroIllustration";
 import { MekoShopCarousel } from "../components/store/MekoShopCarousel";
 import { StoreDeliveryCheckoutModal } from "../components/store/StoreDeliveryCheckoutModal";
 import { StoreCartDrawerModal } from "../components/store/StoreCartDrawerModal";
@@ -57,12 +56,7 @@ import {
   getMekoCart,
   saveMekoCart,
   getMekoOrders,
-  saveMekoOrder,
   getMekoPayments,
-  saveMekoPayment,
-  getCustomStoredProducts,
-  saveCustomStoredProduct,
-  removeCustomStoredProduct,
 } from "../data/storeStorage";
 import {
   ALL_COLOMBIA_OPTION,
@@ -74,106 +68,14 @@ import {
   EXTRA_STORE_CATEGORIES,
   ALL_PUBLISH_CATEGORIES,
 } from "../data/storeCategories";
-import { DEFAULT_MOCK_PRODUCTS, MockStoreProduct } from "../data/mockStoreProducts";
+import {
+  storeService,
+  compressProductImage,
+  fileToDataUrl,
+  PLACEHOLDER_PRODUCT_IMAGE,
+  type StoreProduct,
+} from "../services/storeService";
 import "./RolePages.css";
-
-interface StoreProduct {
-  id: string | number;
-  title: string;
-  category: string;
-  price: number;
-  description: string;
-  sellerName: string;
-  sellerRole: "Contratista" | "Cliente" | "Ferretería Aliada" | "Administrador";
-  phone: string;
-  city: string;
-  image: string;
-  date: string;
-  isOwner?: boolean;
-  featured?: boolean;
-}
-
-interface ApiStoreProduct {
-  id: number;
-  title: string;
-  category: string;
-  price: number;
-  description: string;
-  seller_name: string;
-  seller_role: StoreProduct["sellerRole"];
-  phone: string;
-  city: string;
-  image_url: string;
-  is_owner: boolean;
-  created_at: string;
-}
-
-const PLACEHOLDER_IMAGE =
-  "data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' width='400' height='240'><rect width='100%' height='100%' fill='#f1f5f9'/><text x='50%' y='50%' fill='#94a3b8' font-family='sans-serif' font-size='18' text-anchor='middle' dominant-baseline='middle'>Sin imagen</text></svg>"
-  );
-
-const fromApiProduct = (item: ApiStoreProduct): StoreProduct => ({
-  id: item.id,
-  title: item.title,
-  category: item.category,
-  price: item.price,
-  description: item.description,
-  sellerName: item.seller_name,
-  sellerRole: item.seller_role,
-  phone: item.phone,
-  city: item.city || "Bogotá",
-  image: item.image_url || PLACEHOLDER_IMAGE,
-  date: new Date(item.created_at).toLocaleDateString("es-CO"),
-  isOwner: item.is_owner,
-  featured: item.id % 2 === 1,
-});
-
-const MAX_IMAGE_SIDE = 1280;
-
-const compressImage = (file: File): Promise<File> =>
-  new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        resolve(file);
-        return;
-      }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob || blob.size >= file.size) {
-            resolve(file);
-            return;
-          }
-          resolve(new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }));
-        },
-        "image/jpeg",
-        0.85
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("invalid image"));
-    };
-    img.src = url;
-  });
-
-const fileToBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 
 export const StorePage: React.FC = () => {
   const { user } = useAuth();
@@ -188,7 +90,6 @@ export const StorePage: React.FC = () => {
 
   // Estado de publicaciones
   const [serverProducts, setServerProducts] = useState<StoreProduct[]>([]);
-  const [hasLoadedFromApi, setHasLoadedFromApi] = useState(false);
 
   // Filtros
   const [search, setSearch] = useState("");
@@ -199,7 +100,14 @@ export const StorePage: React.FC = () => {
   // Modales
   const [cityModalOpen, setCityModalOpen] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<StoreProduct | null>(null);
   const [selectedProductDetail, setSelectedProductDetail] = useState<StoreProduct | null>(null);
+  const [activeGalleryIdx, setActiveGalleryIdx] = useState(0);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("Producto engañoso o información falsa");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reporting, setReporting] = useState(false);
 
   // Carrito de compras (Persistente)
   const [cartItems, setCartItems] = useState<MekoCartItem[]>(() => getMekoCart());
@@ -291,7 +199,7 @@ export const StorePage: React.FC = () => {
     setDeliveryCheckoutOpen(true);
   };
 
-  const handleOrderSuccess = (newOrder: MekoOrder) => {
+  const handleOrderSuccess = () => {
     setOrders(getMekoOrders());
     setPayments(getMekoPayments());
     // Si la orden contenía los items del carrito, vaciar carrito
@@ -327,23 +235,31 @@ export const StorePage: React.FC = () => {
   const [toastMessage, setToastMessage] = useState("");
   const [publishing, setPublishing] = useState(false);
 
-  // Carga de productos desde el servidor y mezcla con guardados localmente
-  const loadProducts = useCallback(async () => {
-    const custom = getCustomStoredProducts();
-    try {
-      const data = await api.get<ApiStoreProduct[]>("store/products/");
-      if (Array.isArray(data) && data.length > 0) {
-        const apiProds = data.map(fromApiProduct);
-        const merged = [...custom, ...apiProds.filter((ap) => !custom.some((c: any) => c.id === ap.id))];
-        setServerProducts(merged);
-      } else {
-        setServerProducts([...custom, ...(DEFAULT_MOCK_PRODUCTS as StoreProduct[])]);
+  // Carga de productos desde el servidor (SQLite / VM) con imágenes persistentes
+  const isUserOwner = useCallback(
+    (product: StoreProduct) => {
+      if (product.isOwner) return true;
+      if (!user) return false;
+      if (user.role === "staff" || user.is_staff || user.is_superuser) return true;
+      if (product.ownerId && Number(product.ownerId) === Number(user.id)) return true;
+      if (
+        product.sellerEmail &&
+        user.email &&
+        product.sellerEmail.toLowerCase() === user.email.toLowerCase()
+      ) {
+        return true;
       }
-    } catch {
-      setServerProducts([...custom, ...(DEFAULT_MOCK_PRODUCTS as StoreProduct[])]);
-    } finally {
-      setHasLoadedFromApi(true);
-    }
+      return false;
+    },
+    [user]
+  );
+
+  const loadProducts = useCallback(async () => {
+    const { products } = await storeService.listProducts({ includeAll: false });
+    const visible = products.filter(
+      (p) => p.isActive !== false && p.reviewStatus !== "rechazado"
+    );
+    setServerProducts(visible);
   }, []);
 
   useEffect(() => {
@@ -357,47 +273,109 @@ export const StorePage: React.FC = () => {
     }
   }, [location.search]);
 
-  // Formulario nuevo producto
+  // Formulario de publicación / edición de producto
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] = useState("Tecnología");
   const [newPrice, setNewPrice] = useState(150000);
+  const [newStock, setNewStock] = useState(1);
+  const [newCondition, setNewCondition] = useState("Nuevo");
   const [newDescription, setNewDescription] = useState("");
   const [newPhone, setNewPhone] = useState("+57 310 123 4567");
   const [newCity, setNewCity] = useState("Bogotá");
-  const [newImage, setNewImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState("");
+  const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+  const [imageUrlInput, setImageUrlInput] = useState("");
 
-  useEffect(() => {
-    if (!newImage) {
-      setImagePreview("");
-      return;
-    }
-    const url = URL.createObjectURL(newImage);
-    setImagePreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [newImage]);
+  const openNewPublishModal = () => {
+    setEditingProduct(null);
+    setNewTitle("");
+    setNewCategory("Tecnología");
+    setNewPrice(150000);
+    setNewStock(1);
+    setNewCondition("Nuevo");
+    setNewDescription("");
+    setNewPhone(user?.phone || "+57 310 123 4567");
+    setNewCity(selectedCity === ALL_COLOMBIA_OPTION ? "Bogotá" : selectedCity);
+    setGalleryPreviews([]);
+    setImageUrlInput("");
+    setPublishModalOpen(true);
+  };
+
+  const openEditPublishModal = (product: StoreProduct) => {
+    setSelectedProductDetail(null);
+    setEditingProduct(product);
+    setNewTitle(product.title);
+    setNewCategory(product.category || "Otros");
+    setNewPrice(product.price);
+    setNewStock(product.stock ?? 1);
+    setNewCondition(product.condition || "Nuevo");
+    setNewDescription(product.description);
+    setNewPhone(product.phone || "+57 310 123 4567");
+    setNewCity(product.city || "Bogotá");
+    const imgs =
+      product.images && product.images.length > 0
+        ? product.images
+        : product.image && product.image !== PLACEHOLDER_PRODUCT_IMAGE
+          ? [product.image]
+          : [];
+    setGalleryPreviews(imgs);
+    setImageUrlInput("");
+    setPublishModalOpen(true);
+  };
 
   const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
     event.target.value = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setToastMessage("Selecciona un archivo de imagen (JPG, PNG o WEBP).");
+    if (files.length === 0) return;
+
+    const remaining = Math.max(0, 4 - galleryPreviews.length);
+    if (remaining === 0) {
+      setToastMessage("Puedes cargar máximo 4 imágenes por producto.");
       return;
     }
-    try {
-      setNewImage(await compressImage(file));
-    } catch {
-      setToastMessage("No pudimos procesar esa imagen. Prueba con otra.");
+
+    const addedUrls: string[] = [];
+    for (const file of files.slice(0, remaining)) {
+      if (!file.type.startsWith("image/")) {
+        setToastMessage("Selecciona archivos de imagen válidos (JPG, PNG o WEBP).");
+        continue;
+      }
+      try {
+        const compressed = await compressProductImage(file);
+        const dataUrl = await fileToDataUrl(compressed);
+        if (dataUrl) addedUrls.push(dataUrl);
+      } catch {
+        setToastMessage("No pudimos procesar una de las imágenes. Intenta con otra.");
+      }
     }
+
+    if (addedUrls.length > 0) {
+      setGalleryPreviews((prev) => Array.from(new Set([...prev, ...addedUrls])).slice(0, 4));
+    }
+  };
+
+  const handleAddImageUrl = () => {
+    const clean = imageUrlInput.trim();
+    if (!clean) return;
+    if (!/^https?:\/\/|^data:image\/|^\/assets\//i.test(clean)) {
+      setToastMessage("Ingresa una URL de imagen válida (https://...).");
+      return;
+    }
+    if (galleryPreviews.length >= 4) {
+      setToastMessage("Máximo 4 imágenes por producto.");
+      return;
+    }
+    setGalleryPreviews((prev) => Array.from(new Set([...prev, clean])).slice(0, 4));
+    setImageUrlInput("");
   };
 
   const closePublishModal = () => {
     setPublishModalOpen(false);
-    setNewImage(null);
+    setEditingProduct(null);
+    setGalleryPreviews([]);
+    setImageUrlInput("");
   };
 
-  const handleCreateProduct = async (e: React.FormEvent) => {
+  const handleCreateOrUpdateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (publishing) return;
     if (!newTitle.trim()) {
@@ -411,94 +389,114 @@ export const StorePage: React.FC = () => {
 
     setPublishing(true);
 
-    // Obtener la imagen en base64 permanente si hay archivo o preview
-    let finalBase64Image = PLACEHOLDER_IMAGE;
-    if (newImage) {
-      try {
-        finalBase64Image = await fileToBase64(newImage);
-      } catch {
-        finalBase64Image = imagePreview || PLACEHOLDER_IMAGE;
-      }
-    } else if (imagePreview) {
-      finalBase64Image = imagePreview;
-    }
-
     const sellerName =
       `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email || "Usuario";
-    const sellerRole =
+    const sellerRole: StoreProduct["sellerRole"] =
       user.role === "professional"
         ? "Contratista"
         : user.role === "staff"
-        ? "Administrador"
-        : "Cliente";
-
-    // Objeto de producto completo con foto y texto
-    const localProd: StoreProduct = {
-      id: `prod-${Date.now()}`,
-      title: newTitle.trim(),
-      category: newCategory,
-      price: Math.round(Number(newPrice)) || 0,
-      description: newDescription.trim() || "Producto garantizado por el vendedor en Meko Shop.",
-      sellerName,
-      sellerRole,
-      phone: newPhone.trim(),
-      city: newCity.trim() || selectedCity,
-      image: finalBase64Image,
-      date: "Hoy",
-      isOwner: true,
-      featured: true,
-    };
-
-    // Guardar permanentemente en almacenamiento local
-    saveCustomStoredProduct(localProd);
-
-    // Intentar sincronizar con el backend
-    const form = new FormData();
-    form.append("title", newTitle.trim());
-    form.append("category", newCategory);
-    form.append("price", String(Math.round(Number(newPrice)) || 0));
-    form.append("description", newDescription.trim() || "Producto garantizado por el vendedor.");
-    form.append("phone", newPhone.trim());
-    form.append("city", newCity.trim() || selectedCity);
-    if (newImage) form.append("image", newImage);
+          ? "Administrador"
+          : "Cliente";
 
     try {
-      const created = await api.post<ApiStoreProduct>("store/products/", form);
-      const newProd = fromApiProduct(created);
-      if (newProd.image && newProd.image !== PLACEHOLDER_IMAGE) {
-        localProd.image = newProd.image;
-        saveCustomStoredProduct(localProd);
+      if (editingProduct) {
+        const updated = await storeService.updateProduct(editingProduct.id, {
+          title: newTitle.trim(),
+          category: newCategory,
+          price: Math.round(Number(newPrice)) || 0,
+          stock: Math.max(0, Math.round(Number(newStock)) || 1),
+          condition: newCondition,
+          description:
+            newDescription.trim() || "Producto garantizado por el vendedor en Meko Shop.",
+          phone: newPhone.trim(),
+          city: newCity.trim() || selectedCity,
+          imageUrls: galleryPreviews,
+        });
+        setServerProducts((current) =>
+          current.map((item) => (String(item.id) === String(updated.id) ? updated : item))
+        );
+        closePublishModal();
+        setToastMessage("Publicación actualizada y guardada correctamente.");
+      } else {
+        const created = await storeService.createProduct({
+          title: newTitle.trim(),
+          category: newCategory,
+          price: Math.round(Number(newPrice)) || 0,
+          stock: Math.max(0, Math.round(Number(newStock)) || 1),
+          condition: newCondition,
+          description:
+            newDescription.trim() || "Producto garantizado por el vendedor en Meko Shop.",
+          phone: newPhone.trim(),
+          city: newCity.trim() || selectedCity,
+          sellerName,
+          sellerEmail: user.email || "",
+          sellerUsername: user.username || "",
+          sellerRole,
+          ownerId: user.id,
+          imageUrls: galleryPreviews,
+        });
+        setServerProducts((current) => [
+          created,
+          ...current.filter((p) => String(p.id) !== String(created.id)),
+        ]);
+        closePublishModal();
+        setNewTitle("");
+        setNewDescription("");
+        setToastMessage("¡Producto publicado y guardado con sus imágenes en Meko Shop!");
       }
-      setServerProducts((current) => [localProd, ...current.filter((p) => p.id !== localProd.id)]);
-      closePublishModal();
-      setNewTitle("");
-      setNewDescription("");
-      setToastMessage("¡Producto publicado exitosamente en Meko Shop!");
     } catch (err) {
-      setServerProducts((current) => [localProd, ...current.filter((p) => p.id !== localProd.id)]);
-      closePublishModal();
-      setNewTitle("");
-      setNewDescription("");
-      setToastMessage("¡Producto publicado en Meko Shop!");
+      setToastMessage(
+        err instanceof Error ? err.message : "No se pudo guardar el producto. Intenta de nuevo."
+      );
     } finally {
       setPublishing(false);
     }
   };
 
-  const handleDeleteProduct = async (product: StoreProduct, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (!window.confirm("¿Seguro que deseas eliminar esta publicación?")) return;
+  const handleDeleteProduct = async (product: StoreProduct) => {
     try {
-      await api.delete(`store/products/${product.id}/`);
+      await storeService.deleteProduct(product.id);
+      setServerProducts((current) =>
+        current.filter((item) => String(item.id) !== String(product.id))
+      );
+      setConfirmDeleteId(null);
+      if (selectedProductDetail && String(selectedProductDetail.id) === String(product.id)) {
+        setSelectedProductDetail(null);
+      }
+      setToastMessage("Publicación eliminada correctamente.");
     } catch {
-      // Ignorar error si era producto demo o local
+      setToastMessage("No se pudo eliminar la publicación. Inténtalo nuevamente.");
     }
-    removeCustomStoredProduct(product.id);
-    setServerProducts((current) => current.filter((item) => item.id !== product.id));
-    if (selectedProductDetail?.id === product.id) {
-      setSelectedProductDetail(null);
+  };
+
+  const handleSubmitClientReport = async (product: StoreProduct) => {
+    if (reporting) return;
+    if (!reportDetails.trim()) {
+      setToastMessage("Describe brevemente el motivo del reporte.");
+      return;
     }
-    setToastMessage("Publicación eliminada correctamente.");
+    setReporting(true);
+    try {
+      const reporterName = user
+        ? `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email || "Cliente"
+        : "Cliente de Meko Shop";
+      await storeService.reportProductAndPublisher(product, {
+        reason: reportReason,
+        description: reportDetails.trim(),
+        priority: "Media",
+        hideProduct: false,
+        blockPublisher: false,
+        reporterName,
+      });
+      setReportOpen(false);
+      setReportDetails("");
+      setToastMessage("Reporte enviado al equipo administrativo de Serviprox.");
+      await loadProducts();
+    } catch {
+      setToastMessage("No pudimos enviar el reporte. Intenta de nuevo.");
+    } finally {
+      setReporting(false);
+    }
   };
 
   // Filtrado de productos por Categoría, Ciudad (toda Colombia o municipio) y Búsqueda
@@ -947,7 +945,7 @@ export const StorePage: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setPublishModalOpen(true)}
+              onClick={openNewPublishModal}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -969,7 +967,7 @@ export const StorePage: React.FC = () => {
 
           {/* CARRUSEL OFICIAL MEKO SHOP: BANNERS 1, 2, 3 Y 4 */}
           <MekoShopCarousel
-            onPublishClick={() => setPublishModalOpen(true)}
+            onPublishClick={openNewPublishModal}
             onExploreClick={() => {
               const el = document.getElementById("publicaciones-recientes-section");
               if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -1266,7 +1264,7 @@ export const StorePage: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPublishModalOpen(true)}
+                    onClick={openNewPublishModal}
                     style={{
                       background: "#f1f5f9",
                       color: "#1e293b",
@@ -1285,22 +1283,29 @@ export const StorePage: React.FC = () => {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
-                  gap: "14px",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(215px, 1fr))",
+                  gap: "16px",
                 }}
               >
                 {filteredProducts.map((p) => {
                   const isFav = !!favorites[p.id];
+                  const ownerFlag = isUserOwner(p);
                   return (
                     <article
                       key={p.id}
-                      onClick={() => setSelectedProductDetail(p)}
+                      onClick={() => {
+                        setActiveGalleryIdx(0);
+                        setConfirmDeleteId(null);
+                        setReportOpen(false);
+                        setReportDetails("");
+                        setSelectedProductDetail(p);
+                      }}
                       style={{
                         background: "#ffffff",
                         borderRadius: "16px",
                         overflow: "hidden",
-                        border: "1px solid #eef2f6",
-                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
+                        border: "1px solid #e2e8f0",
+                        boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
                         display: "flex",
                         flexDirection: "column",
                         cursor: "pointer",
@@ -1308,38 +1313,76 @@ export const StorePage: React.FC = () => {
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = "translateY(-3px)";
-                        e.currentTarget.style.boxShadow = "0 8px 16px -2px rgba(0,0,0,0.08)";
+                        e.currentTarget.style.boxShadow = "0 10px 20px -4px rgba(15,23,42,0.1)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.transform = "none";
-                        e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.04)";
+                        e.currentTarget.style.boxShadow = "0 2px 8px rgba(15, 23, 42, 0.04)";
                       }}
                     >
-                      {/* Imagen limpia con botón de corazón outline */}
+                      {/* Imagen limpia de producto */}
                       <div
                         style={{
                           position: "relative",
-                          height: "145px",
-                          background: "#ffffff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
+                          aspectRatio: "4 / 3",
+                          background: "#f8fafc",
                           overflow: "hidden",
-                          borderBottom: "1px solid #f8fafc",
+                          borderBottom: "1px solid #f1f5f9",
                         }}
                       >
                         <img
-                          src={p.image}
+                          src={p.image || PLACEHOLDER_PRODUCT_IMAGE}
                           alt={p.title}
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            e.currentTarget.src = PLACEHOLDER_PRODUCT_IMAGE;
+                          }}
                           style={{
                             width: "100%",
                             height: "100%",
-                            objectFit: "contain",
-                            padding: "8px",
+                            objectFit: "cover",
+                            display: "block",
                           }}
                         />
 
-                        {/* Botón Favorito / Corazón outline idéntico a la referencia */}
+                        {(p.images?.length || 0) > 1 && (
+                          <span
+                            style={{
+                              position: "absolute",
+                              bottom: "8px",
+                              left: "8px",
+                              background: "rgba(15,23,42,0.75)",
+                              color: "#ffffff",
+                              borderRadius: "6px",
+                              padding: "2px 7px",
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              fontVariantNumeric: "tabular-nums",
+                            }}
+                          >
+                            {p.images?.length} fotos
+                          </span>
+                        )}
+
+                        {ownerFlag && (
+                          <span
+                            style={{
+                              position: "absolute",
+                              top: "8px",
+                              left: "8px",
+                              background: "rgba(37,99,235,0.92)",
+                              color: "#ffffff",
+                              borderRadius: "6px",
+                              padding: "2px 8px",
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                            }}
+                          >
+                            Tu publicación
+                          </span>
+                        )}
+
+                        {/* Botón Favorito / Corazón */}
                         <button
                           type="button"
                           onClick={(e) => toggleFavorite(p.id, e)}
@@ -1357,12 +1400,11 @@ export const StorePage: React.FC = () => {
                             alignItems: "center",
                             justifyContent: "center",
                             cursor: "pointer",
-                            boxShadow: "0 2px 5px rgba(0,0,0,0.06)",
-                            transition: "all 0.15s",
+                            boxShadow: "0 2px 5px rgba(0,0,0,0.08)",
                           }}
                         >
                           <Heart
-                            size={16}
+                            size={15}
                             strokeWidth={2}
                             color={isFav ? "#ef4444" : "#475569"}
                             fill={isFav ? "#ef4444" : "none"}
@@ -1370,7 +1412,7 @@ export const StorePage: React.FC = () => {
                         </button>
                       </div>
 
-                      {/* Información del Producto: Título, Precio Verde y Ubicación */}
+                      {/* Información del Producto */}
                       <div
                         style={{
                           padding: "12px 14px 14px",
@@ -1381,65 +1423,68 @@ export const StorePage: React.FC = () => {
                         }}
                       >
                         <div>
+                          <div
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              color: "#64748b",
+                              marginBottom: "4px",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {p.category} · {p.condition || "Nuevo"}
+                          </div>
                           <h3
                             style={{
-                              fontSize: "0.92rem",
+                              fontSize: "0.94rem",
                               fontWeight: 700,
                               color: "#0f172a",
                               margin: "0 0 6px",
                               lineHeight: 1.3,
-                              whiteSpace: "nowrap",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
                               overflow: "hidden",
-                              textOverflow: "ellipsis",
                             }}
                             title={p.title}
                           >
                             {p.title}
                           </h3>
 
-                          {/* Precio en COP en verde vibrante (#16a34a) idéntico a la imagen */}
                           <div
                             style={{
-                              fontSize: "1.05rem",
+                              fontSize: "1.06rem",
                               fontWeight: 800,
-                              color: "#16a34a",
+                              color: "#15803d",
                               marginBottom: "10px",
                               letterSpacing: "-0.01em",
+                              fontVariantNumeric: "tabular-nums",
                             }}
                           >
                             ${p.price.toLocaleString("es-CO")} COP
                           </div>
                         </div>
 
-                        {/* Pie de tarjeta: Ciudad 📍 y badge Destacado */}
                         <div
                           style={{
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",
-                            fontSize: "0.78rem",
+                            fontSize: "0.76rem",
                             color: "#64748b",
+                            borderTop: "1px solid #f1f5f9",
+                            paddingTop: "8px",
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                             <MapPin size={13} color="#64748b" />
-                            <span style={{ fontWeight: 500 }}>{p.city}</span>
+                            <span style={{ fontWeight: 600 }}>{p.city}</span>
                           </div>
-
-                          {p.featured && (
-                            <span
-                              style={{
-                                background: "#dbeafe",
-                                color: "#1d4ed8",
-                                padding: "2px 8px",
-                                borderRadius: "8px",
-                                fontWeight: 700,
-                                fontSize: "0.72rem",
-                              }}
-                            >
-                              Destacado
-                            </span>
-                          )}
+                          <span style={{ fontVariantNumeric: "tabular-nums", color: "#475569", fontWeight: 600 }}>
+                            Stock: {p.stock ?? 1}
+                          </span>
                         </div>
                       </div>
                     </article>
@@ -1461,359 +1506,592 @@ export const StorePage: React.FC = () => {
         {/* MODAL DETALLES DEL PRODUCTO */}
         <IonModal
           isOpen={!!selectedProductDetail}
-          onDidDismiss={() => setSelectedProductDetail(null)}
+          onDidDismiss={() => {
+            setSelectedProductDetail(null);
+            setConfirmDeleteId(null);
+            setReportOpen(false);
+          }}
         >
-          {selectedProductDetail && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                background: "#ffffff",
-                maxWidth: "600px",
-                margin: "0 auto",
-              }}
-            >
-              {/* Header modal */}
+          {selectedProductDetail && (() => {
+            const gallery =
+              selectedProductDetail.images && selectedProductDetail.images.length > 0
+                ? selectedProductDetail.images
+                : [selectedProductDetail.image || PLACEHOLDER_PRODUCT_IMAGE];
+            const currentImg = gallery[activeGalleryIdx] || gallery[0] || PLACEHOLDER_PRODUCT_IMAGE;
+            const ownerFlag = isUserOwner(selectedProductDetail);
+            const cleanPhone = selectedProductDetail.phone.replace(/[^0-9]/g, "");
+            const waHref = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+              `¡Hola ${selectedProductDetail.sellerName}! Me interesa tu publicación "${selectedProductDetail.title}" vista en Meko Shop (${selectedProductDetail.city}). ¿Sigue disponible?`
+            )}`;
+
+            return (
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 20px",
-                  borderBottom: "1px solid #f1f5f9",
+                  flexDirection: "column",
+                  height: "100%",
+                  background: "#ffffff",
+                  maxWidth: "600px",
+                  width: "100%",
+                  margin: "0 auto",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span
-                    style={{
-                      background: "#eff6ff",
-                      color: "#2563eb",
-                      padding: "4px 10px",
-                      borderRadius: "12px",
-                      fontSize: "0.78rem",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {selectedProductDetail.category}
-                  </span>
-                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                    Publicado en {selectedProductDetail.city}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProductDetail(null)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}
-                >
-                  <IonIcon icon={closeOutline} style={{ fontSize: "1.5rem" }} />
-                </button>
-              </div>
-
-              {/* Contenido scrolleable */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
-                {/* Imagen del producto */}
-                <div
-                  style={{
-                    height: "260px",
-                    background: "#f8fafc",
-                    borderRadius: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                    marginBottom: "18px",
-                  }}
-                >
-                  <img
-                    src={selectedProductDetail.image}
-                    alt={selectedProductDetail.title}
-                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                  />
-                </div>
-
-                {/* Título y Precio */}
-                <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", margin: "0 0 8px" }}>
-                  {selectedProductDetail.title}
-                </h2>
-                <div
-                  style={{
-                    fontSize: "1.6rem",
-                    fontWeight: 900,
-                    color: "#16a34a",
-                    marginBottom: "16px",
-                  }}
-                >
-                  ${selectedProductDetail.price.toLocaleString("es-CO")} COP
-                </div>
-
-                {/* Ubicación */}
+                {/* Header modal */}
                 <div
                   style={{
                     display: "flex",
+                    justifyContent: "space-between",
                     alignItems: "center",
-                    gap: "6px",
-                    color: "#475569",
-                    fontSize: "0.88rem",
-                    marginBottom: "16px",
+                    padding: "16px 20px",
+                    borderBottom: "1px solid #f1f5f9",
                   }}
                 >
-                  <MapPin size={18} color="#2563eb" />
-                  <span>
-                    Ubicación: <strong>{selectedProductDetail.city}, Colombia</strong>
-                  </span>
+                  <div style={{ fontSize: "0.82rem", color: "#475569", fontWeight: 600 }}>
+                    {selectedProductDetail.category} · {selectedProductDetail.city} ·{" "}
+                    {selectedProductDetail.condition || "Nuevo"}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Cerrar detalle"
+                    onClick={() => setSelectedProductDetail(null)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}
+                  >
+                    <IonIcon icon={closeOutline} style={{ fontSize: "1.5rem" }} />
+                  </button>
                 </div>
 
-                {/* Descripción */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h4 style={{ fontSize: "0.88rem", fontWeight: 700, color: "#334155", margin: "0 0 6px" }}>
-                    Descripción del producto
-                  </h4>
-                  <p style={{ fontSize: "0.9rem", color: "#475569", lineHeight: 1.6, margin: 0 }}>
-                    {selectedProductDetail.description}
-                  </p>
-                </div>
-
-                {/* Datos del Vendedor */}
-                <div
-                  style={{
-                    padding: "14px 16px",
-                    background: "#f8fafc",
-                    borderRadius: "14px",
-                    border: "1px solid #e2e8f0",
-                    marginBottom: "20px",
-                  }}
-                >
-                  <span
+                {/* Contenido scrolleable */}
+                <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+                  {/* Imagen principal del producto */}
+                  <div
                     style={{
-                      display: "block",
-                      fontSize: "0.75rem",
-                      fontWeight: 800,
-                      textTransform: "uppercase",
-                      color: "#94a3b8",
-                      marginBottom: "6px",
+                      height: "260px",
+                      background: "#f8fafc",
+                      borderRadius: "14px",
+                      overflow: "hidden",
+                      marginBottom: gallery.length > 1 ? "10px" : "18px",
+                      border: "1px solid #e2e8f0",
                     }}
                   >
-                    Vendido por
-                  </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <img
+                      src={currentImg}
+                      alt={selectedProductDetail.title}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.src = PLACEHOLDER_PRODUCT_IMAGE;
+                      }}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  </div>
+
+                  {gallery.length > 1 && (
                     <div
                       style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "50%",
-                        background: "#e0e7ff",
-                        color: "#4338ca",
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: 800,
-                        fontSize: "0.95rem",
+                        gap: "8px",
+                        marginBottom: "18px",
+                        overflowX: "auto",
                       }}
                     >
-                      {selectedProductDetail.sellerName.slice(0, 1).toUpperCase()}
+                      {gallery.map((imgUrl, idx) => (
+                        <button
+                          key={`${imgUrl.slice(0, 32)}-${idx}`}
+                          type="button"
+                          onClick={() => setActiveGalleryIdx(idx)}
+                          style={{
+                            width: "60px",
+                            height: "48px",
+                            padding: 0,
+                            borderRadius: "8px",
+                            overflow: "hidden",
+                            border:
+                              idx === activeGalleryIdx
+                                ? "2px solid #2563eb"
+                                : "1px solid #cbd5e1",
+                            cursor: "pointer",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`Miniatura ${idx + 1}`}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              e.currentTarget.src = PLACEHOLDER_PRODUCT_IMAGE;
+                            }}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        </button>
+                      ))}
                     </div>
-                    <div>
-                      <span style={{ fontWeight: 800, color: "#0f172a", display: "block", fontSize: "0.95rem" }}>
-                        {selectedProductDetail.sellerName}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "0.78rem",
-                          color: selectedProductDetail.sellerRole === "Administrador" ? "#2563eb" : "#64748b",
-                          fontWeight: selectedProductDetail.sellerRole === "Administrador" ? 700 : 500,
-                        }}
-                      >
-                        {selectedProductDetail.sellerRole === "Administrador"
-                          ? "👑 Tienda Oficial Meko Shop"
-                          : selectedProductDetail.sellerRole}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  )}
 
-                {/* AVISO DE SEGURIDAD PARA EL CLIENTE */}
-                <div
-                  style={{
-                    background: "#fffbeb",
-                    border: "1px solid #fde68a",
-                    borderRadius: "14px",
-                    padding: "14px 16px",
-                    marginBottom: "20px",
-                  }}
-                >
+                  {/* Título, Precio y Stock */}
+                  <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", margin: "0 0 8px" }}>
+                    {selectedProductDetail.title}
+                  </h2>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      marginBottom: "16px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "1.55rem",
+                        fontWeight: 900,
+                        color: "#15803d",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      ${selectedProductDetail.price.toLocaleString("es-CO")} COP
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "0.85rem",
+                        fontWeight: 700,
+                        color: "#475569",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      Unidades disponibles: {selectedProductDetail.stock ?? 1}
+                    </span>
+                  </div>
+
+                  {/* Ubicación */}
                   <div
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: "8px",
-                      color: "#b45309",
-                      fontWeight: 800,
+                      gap: "6px",
+                      color: "#475569",
                       fontSize: "0.88rem",
-                      marginBottom: "6px",
+                      marginBottom: "16px",
                     }}
                   >
-                    <ShieldAlert size={18} color="#d97706" />
-                    <span>Aviso de Seguridad para el Cliente</span>
+                    <MapPin size={18} color="#2563eb" />
+                    <span>
+                      Ubicación: <strong>{selectedProductDetail.city}, Colombia</strong>
+                    </span>
                   </div>
-                  <ul
-                    style={{
-                      margin: 0,
-                      paddingLeft: "18px",
-                      fontSize: "0.8rem",
-                      color: "#92400e",
-                      lineHeight: 1.55,
-                    }}
-                  >
-                    <li>Nunca envíes dinero por adelantado a cuentas desconocidas sin verificar la publicación.</li>
-                    <li>
-                      Para una compra 100% protegida con garantía de entrega, usa nuestro botón oficial de{" "}
-                      <strong>"Pedido a Domicilio con Wompi"</strong> donde tus fondos quedan custodiados.
-                    </li>
-                    <li>
-                      Si acuerdas entrega presencial, reúnete en lugares públicos y concurridos (centros comerciales o estaciones).
-                    </li>
-                    <li>Revisa el funcionamiento y estado físico del artículo antes de finalizar la compra.</li>
-                  </ul>
-                </div>
 
-                {/* Botones de Acción: Pedido a Domicilio con Wompi, Carrito y WhatsApp */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {/* Botón Pedido a Domicilio con Pasarela Wompi */}
-                  <button
-                    type="button"
-                    onClick={() => handleOpenDeliveryForProduct(selectedProductDetail)}
+                  {/* Descripción */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <h4 style={{ fontSize: "0.88rem", fontWeight: 700, color: "#334155", margin: "0 0 6px" }}>
+                      Descripción del producto
+                    </h4>
+                    <p style={{ fontSize: "0.9rem", color: "#475569", lineHeight: 1.6, margin: 0 }}>
+                      {selectedProductDetail.description}
+                    </p>
+                  </div>
+
+                  {/* Datos del Vendedor */}
+                  <div
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
-                      color: "#ffffff",
-                      border: "none",
-                      padding: "14px",
+                      padding: "14px 16px",
+                      background: "#f8fafc",
                       borderRadius: "14px",
-                      fontWeight: 900,
-                      fontSize: "0.98rem",
-                      cursor: "pointer",
-                      boxShadow: "0 4px 14px rgba(37,99,235,0.35)",
+                      border: "1px solid #e2e8f0",
+                      marginBottom: "20px",
                     }}
                   >
-                    <Truck size={20} /> Pedido a Domicilio · Pagar con Wompi
-                  </button>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "0.75rem",
+                        fontWeight: 800,
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      Publicado por
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div
+                        style={{
+                          width: "36px",
+                          height: "36px",
+                          borderRadius: "50%",
+                          background: "#e0e7ff",
+                          color: "#3730a3",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 800,
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        {selectedProductDetail.sellerName.slice(0, 1).toUpperCase()}
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: 800, color: "#0f172a", display: "block", fontSize: "0.95rem" }}>
+                          {selectedProductDetail.sellerName}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "0.78rem",
+                            color:
+                              selectedProductDetail.sellerRole === "Administrador" ? "#2563eb" : "#64748b",
+                            fontWeight: selectedProductDetail.sellerRole === "Administrador" ? 700 : 500,
+                          }}
+                        >
+                          {selectedProductDetail.sellerRole === "Administrador"
+                            ? "Tienda Oficial Meko Shop"
+                            : selectedProductDetail.sellerRole}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-                  {/* Botón Agregar al Carrito */}
-                  <button
-                    type="button"
-                    onClick={() => handleAddToCart(selectedProductDetail)}
+                  {/* AVISO DE SEGURIDAD PARA EL CLIENTE */}
+                  <div
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      background: "#eff6ff",
-                      color: "#1d4ed8",
-                      border: "1px solid #bfdbfe",
-                      padding: "12px",
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
                       borderRadius: "14px",
-                      fontWeight: 800,
-                      fontSize: "0.92rem",
-                      cursor: "pointer",
+                      padding: "14px 16px",
+                      marginBottom: "20px",
                     }}
                   >
-                    <ShoppingCart size={18} /> Agregar al Carrito de Compras
-                  </button>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        color: "#b45309",
+                        fontWeight: 800,
+                        fontSize: "0.88rem",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <ShieldAlert size={18} color="#d97706" />
+                      <span>Aviso de Seguridad para el Cliente</span>
+                    </div>
+                    <ul
+                      style={{
+                        margin: 0,
+                        paddingLeft: "18px",
+                        fontSize: "0.8rem",
+                        color: "#92400e",
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      <li>Nunca envíes dinero por adelantado a cuentas desconocidas sin verificar la publicación.</li>
+                      <li>
+                        Usa nuestro botón oficial de <strong>"Pedido a Domicilio con Wompi"</strong> donde tus fondos quedan custodiados.
+                      </li>
+                      <li>Revisa el funcionamiento y estado físico del artículo antes de finalizar la compra.</li>
+                    </ul>
+                  </div>
 
-                  {/* Botón WhatsApp */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const cleanPhone = selectedProductDetail.phone.replace(/[^0-9]/g, "");
-                      window.open(
-                        `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-                          `¡Hola ${selectedProductDetail.sellerName}! Me interesa tu publicación "${selectedProductDetail.title}" vista en Meko Shop (${selectedProductDetail.city}). ¿Sigue disponible?`
-                        )}`,
-                        "_blank"
-                      );
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      background: "#25d366",
-                      color: "#ffffff",
-                      border: "none",
-                      padding: "13px",
-                      borderRadius: "14px",
-                      fontWeight: 800,
-                      fontSize: "0.95rem",
-                      cursor: "pointer",
-                      boxShadow: "0 4px 12px rgba(37,211,102,0.25)",
-                    }}
-                  >
-                    <MessageCircle size={20} /> Contactar por WhatsApp ({selectedProductDetail.phone})
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.location.href = `tel:${selectedProductDetail.phone}`;
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      background: "#0f172a",
-                      color: "#ffffff",
-                      border: "none",
-                      padding: "12px",
-                      borderRadius: "12px",
-                      fontWeight: 700,
-                      fontSize: "0.9rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Phone size={18} /> Llamar al vendedor
-                  </button>
-
-                  {/* Botón eliminar si es propietario o admin */}
-                  {(selectedProductDetail.isOwner || user?.role === "staff") && (
+                  {/* Botones de Acción */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     <button
                       type="button"
-                      onClick={(e) => void handleDeleteProduct(selectedProductDetail, e)}
+                      onClick={() => handleOpenDeliveryForProduct(selectedProductDetail)}
                       style={{
-                        marginTop: "8px",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        gap: "6px",
-                        background: "#fef2f2",
-                        border: "1px solid #fecaca",
-                        color: "#dc2626",
-                        padding: "10px",
-                        borderRadius: "12px",
-                        fontWeight: 700,
-                        fontSize: "0.85rem",
+                        gap: "8px",
+                        background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+                        color: "#ffffff",
+                        border: "none",
+                        padding: "14px",
+                        borderRadius: "14px",
+                        fontWeight: 900,
+                        fontSize: "0.98rem",
+                        cursor: "pointer",
+                        boxShadow: "0 4px 14px rgba(37,99,235,0.35)",
+                      }}
+                    >
+                      <Truck size={20} /> Pedido a Domicilio · Pagar con Wompi
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAddToCart(selectedProductDetail)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "8px",
+                        background: "#eff6ff",
+                        color: "#1d4ed8",
+                        border: "1px solid #bfdbfe",
+                        padding: "12px",
+                        borderRadius: "14px",
+                        fontWeight: 800,
+                        fontSize: "0.92rem",
                         cursor: "pointer",
                       }}
                     >
-                      <IonIcon icon={trashOutline} /> Eliminar publicación
+                      <ShoppingCart size={18} /> Agregar al Carrito de Compras
                     </button>
-                  )}
+
+                    <a
+                      href={waHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "8px",
+                        background: "#16a34a",
+                        color: "#ffffff",
+                        textDecoration: "none",
+                        padding: "13px",
+                        borderRadius: "14px",
+                        fontWeight: 800,
+                        fontSize: "0.95rem",
+                        boxShadow: "0 4px 12px rgba(22,163,74,0.25)",
+                      }}
+                    >
+                      <MessageCircle size={20} /> Contactar por WhatsApp ({selectedProductDetail.phone})
+                    </a>
+
+                    <a
+                      href={`tel:${selectedProductDetail.phone}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "8px",
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        textDecoration: "none",
+                        padding: "12px",
+                        borderRadius: "12px",
+                        fontWeight: 700,
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      <Phone size={18} /> Llamar al vendedor
+                    </a>
+
+                    {ownerFlag && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "6px" }}>
+                        <button
+                          type="button"
+                          onClick={() => openEditPublishModal(selectedProductDetail)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            background: "#f8fafc",
+                            border: "1px solid #cbd5e1",
+                            color: "#0f172a",
+                            padding: "10px",
+                            borderRadius: "12px",
+                            fontWeight: 700,
+                            fontSize: "0.86rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Pencil size={15} /> Editar publicación e imágenes
+                        </button>
+
+                        {confirmDeleteId === selectedProductDetail.id ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              background: "#fef2f2",
+                              border: "1px solid #fecaca",
+                              padding: "10px",
+                              borderRadius: "12px",
+                            }}
+                          >
+                            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#991b1b", flex: 1 }}>
+                              ¿Confirmas eliminar este producto?
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "8px",
+                                border: "1px solid #cbd5e1",
+                                background: "#ffffff",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              No
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteProduct(selectedProductDetail)}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: "8px",
+                                border: "none",
+                                background: "#dc2626",
+                                color: "#ffffff",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Sí, eliminar
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(selectedProductDetail.id)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "6px",
+                              background: "#fef2f2",
+                              border: "1px solid #fecaca",
+                              color: "#dc2626",
+                              padding: "10px",
+                              borderRadius: "12px",
+                              fontWeight: 700,
+                              fontSize: "0.85rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <IonIcon icon={trashOutline} /> Eliminar publicación
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Reportar publicación / cliente vendedor */}
+                    <div style={{ marginTop: "6px", borderTop: "1px solid #f1f5f9", paddingTop: "10px" }}>
+                      {!reportOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => setReportOpen(true)}
+                          style={{
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            background: "transparent",
+                            border: "1px dashed #cbd5e1",
+                            color: "#475569",
+                            padding: "9px",
+                            borderRadius: "10px",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Flag size={14} color="#dc2626" /> Reportar publicación o vendedor
+                        </button>
+                      ) : (
+                        <div
+                          style={{
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "12px",
+                            padding: "12px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                          }}
+                        >
+                          <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#0f172a" }}>
+                            Reportar a {selectedProductDetail.sellerName} ante Moderación
+                          </div>
+                          <select
+                            value={reportReason}
+                            onChange={(e) => setReportReason(e.target.value)}
+                            style={{
+                              padding: "8px 10px",
+                              borderRadius: "8px",
+                              border: "1px solid #cbd5e1",
+                              background: "#ffffff",
+                              fontSize: "0.82rem",
+                            }}
+                          >
+                            <option value="Producto engañoso o información falsa">Producto engañoso o información falsa</option>
+                            <option value="Imágenes no corresponden al producto">Imágenes no corresponden al producto</option>
+                            <option value="Posible estafa o cobro irregular">Posible estafa o cobro irregular</option>
+                            <option value="Artículo prohibido o inapropiado">Artículo prohibido o inapropiado</option>
+                            <option value="Otro motivo">Otro motivo</option>
+                          </select>
+                          <textarea
+                            rows={2}
+                            placeholder="Cuéntanos qué sucede con esta publicación..."
+                            value={reportDetails}
+                            onChange={(e) => setReportDetails(e.target.value)}
+                            style={{
+                              padding: "8px 10px",
+                              borderRadius: "8px",
+                              border: "1px solid #cbd5e1",
+                              fontSize: "0.82rem",
+                              resize: "vertical",
+                            }}
+                          />
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <button
+                              type="button"
+                              onClick={() => setReportOpen(false)}
+                              style={{
+                                flex: 1,
+                                padding: "8px",
+                                borderRadius: "8px",
+                                border: "1px solid #cbd5e1",
+                                background: "#ffffff",
+                                fontSize: "0.8rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={reporting}
+                              onClick={() => void handleSubmitClientReport(selectedProductDetail)}
+                              style={{
+                                flex: 2,
+                                padding: "8px",
+                                borderRadius: "8px",
+                                border: "none",
+                                background: "#dc2626",
+                                color: "#ffffff",
+                                fontSize: "0.8rem",
+                                fontWeight: 700,
+                                cursor: reporting ? "wait" : "pointer",
+                              }}
+                            >
+                              {reporting ? "Enviando reporte..." : "Enviar reporte a Admin"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </IonModal>
 
-        {/* MODAL: PUBLICAR PRODUCTO CON CATEGORÍA Y TODA CIUDAD DE COLOMBIA */}
+        {/* MODAL: PUBLICAR O EDITAR PRODUCTO */}
         <IonModal isOpen={publishModalOpen} onDidDismiss={closePublishModal}>
           <div
             style={{
               padding: "24px",
-              maxWidth: "540px",
+              maxWidth: "560px",
+              width: "100%",
               margin: "0 auto",
               background: "#ffffff",
               height: "100%",
@@ -1830,14 +2108,15 @@ export const StorePage: React.FC = () => {
             >
               <div>
                 <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                  Publicar Producto en Meko Shop
+                  {editingProduct ? "Editar Publicación en Meko Shop" : "Publicar Producto en Meko Shop"}
                 </h2>
                 <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
-                  Llega a compradores en tu ciudad o en toda Colombia con Meko Shop
+                  Sube hasta 4 imágenes nítidas para que tu publicación destaque y se guarde en la tienda
                 </p>
               </div>
               <button
                 type="button"
+                aria-label="Cerrar formulario"
                 onClick={closePublishModal}
                 style={{
                   background: "#f8fafc",
@@ -1856,7 +2135,7 @@ export const StorePage: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateProduct}>
+            <form onSubmit={handleCreateOrUpdateProduct}>
               {/* Título */}
               <div style={{ marginBottom: "14px" }}>
                 <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
@@ -1921,6 +2200,54 @@ export const StorePage: React.FC = () => {
                       borderRadius: "10px",
                       border: "1px solid #cbd5e1",
                       fontSize: "0.9rem",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Estado y Stock */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
+                    Estado del producto
+                  </label>
+                  <select
+                    value={newCondition}
+                    onChange={(e) => setNewCondition(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "11px 14px",
+                      borderRadius: "10px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      fontSize: "0.88rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <option value="Nuevo">Nuevo</option>
+                    <option value="Como nuevo">Como nuevo</option>
+                    <option value="Usado">Usado</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
+                    Cantidad disponible (Stock)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={newStock}
+                    onChange={(e) => setNewStock(Number(e.target.value))}
+                    style={{
+                      width: "100%",
+                      padding: "11px 14px",
+                      borderRadius: "10px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "0.9rem",
+                      fontVariantNumeric: "tabular-nums",
                     }}
                   />
                 </div>
@@ -1945,7 +2272,7 @@ export const StorePage: React.FC = () => {
                       fontWeight: 600,
                     }}
                   >
-                    <option value={ALL_COLOMBIA_OPTION}>🇨🇴 Toda Colombia (Envíos a todo el país)</option>
+                    <option value={ALL_COLOMBIA_OPTION}>Toda Colombia (Envíos a todo el país)</option>
                     <optgroup label="Principales Ciudades">
                       <option value="Bogotá">Bogotá D.C.</option>
                       <option value="Medellín">Medellín (Antioquia)</option>
@@ -2021,11 +2348,12 @@ export const StorePage: React.FC = () => {
                 />
               </div>
 
-              {/* Foto del Producto */}
+              {/* Imágenes del Producto (archivo o URL, hasta 4) */}
               <div style={{ marginBottom: "22px" }}>
-                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
-                  Imagen del producto
+                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                  Imágenes del producto ({galleryPreviews.length}/4)
                 </label>
+
                 <label
                   style={{
                     display: "flex",
@@ -2033,52 +2361,178 @@ export const StorePage: React.FC = () => {
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "6px",
-                    minHeight: "130px",
+                    minHeight: "104px",
                     border: "2px dashed #cbd5e1",
                     borderRadius: "12px",
                     cursor: "pointer",
-                    color: "#64748b",
-                    fontSize: "0.85rem",
-                    overflow: "hidden",
+                    color: "#475569",
+                    fontSize: "0.84rem",
                     background: "#f8fafc",
+                    padding: "12px",
                   }}
                 >
-                  {imagePreview ? (
-                    <img
-                      src={imagePreview}
-                      alt="Vista previa"
-                      style={{ width: "100%", maxHeight: "200px", objectFit: "contain" }}
-                    />
-                  ) : (
-                    <>
-                      <IonIcon icon={imageOutline} style={{ fontSize: "2rem", color: "#94a3b8" }} />
-                      <span>Subir foto del producto (JPG, PNG o WEBP)</span>
-                    </>
-                  )}
+                  <ImagePlus size={26} color="#2563eb" />
+                  <span style={{ fontWeight: 600 }}>
+                    Subir fotos desde tu dispositivo (JPG, PNG o WEBP)
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    Se optimizan y guardan directamente en la tienda
+                  </span>
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     onChange={handleImageChange}
                     style={{ display: "none" }}
-                    aria-label="Subir imagen del producto"
+                    aria-label="Subir imágenes del producto"
                   />
                 </label>
-                {newImage && (
-                  <button
-                    type="button"
-                    onClick={() => setNewImage(null)}
+
+                {/* Opción agregar imagen por enlace */}
+                <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                  <div
                     style={{
-                      marginTop: "6px",
-                      background: "none",
-                      border: "none",
-                      color: "#dc2626",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontSize: "0.8rem",
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "10px",
+                      padding: "0 10px",
+                      background: "#ffffff",
                     }}
                   >
-                    Quitar foto
+                    <Link2 size={15} color="#64748b" />
+                    <input
+                      type="url"
+                      placeholder="O pega URL de imagen (https://...)"
+                      value={imageUrlInput}
+                      onChange={(e) => setImageUrlInput(e.target.value)}
+                      style={{
+                        flex: 1,
+                        border: "none",
+                        outline: "none",
+                        padding: "9px 0",
+                        fontSize: "0.84rem",
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddImageUrl}
+                    style={{
+                      padding: "0 14px",
+                      borderRadius: "10px",
+                      border: "1px solid #cbd5e1",
+                      background: "#f1f5f9",
+                      color: "#1e293b",
+                      fontWeight: 700,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Añadir URL
                   </button>
+                </div>
+
+                {/* Miniaturas con opción de eliminar o establecer como portada */}
+                {galleryPreviews.length > 0 && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, 1fr)",
+                      gap: "8px",
+                      marginTop: "10px",
+                    }}
+                  >
+                    {galleryPreviews.map((url, idx) => (
+                      <div
+                        key={`${url.slice(0, 28)}-${idx}`}
+                        style={{
+                          position: "relative",
+                          aspectRatio: "4 / 3",
+                          borderRadius: "10px",
+                          overflow: "hidden",
+                          border: idx === 0 ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                          background: "#f8fafc",
+                        }}
+                      >
+                        <img
+                          src={url}
+                          alt={`Vista previa ${idx + 1}`}
+                          referrerPolicy="no-referrer"
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                        {idx === 0 ? (
+                          <span
+                            style={{
+                              position: "absolute",
+                              bottom: "4px",
+                              left: "4px",
+                              background: "#2563eb",
+                              color: "#ffffff",
+                              fontSize: "0.65rem",
+                              fontWeight: 700,
+                              padding: "1px 5px",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            Portada
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setGalleryPreviews((prev) => [
+                                url,
+                                ...prev.filter((_, i) => i !== idx),
+                              ])
+                            }
+                            style={{
+                              position: "absolute",
+                              bottom: "4px",
+                              left: "4px",
+                              background: "rgba(15,23,42,0.75)",
+                              color: "#ffffff",
+                              border: "none",
+                              fontSize: "0.65rem",
+                              fontWeight: 700,
+                              padding: "2px 5px",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Principal
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          aria-label="Quitar imagen"
+                          onClick={() =>
+                            setGalleryPreviews((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                          style={{
+                            position: "absolute",
+                            top: "4px",
+                            right: "4px",
+                            width: "20px",
+                            height: "20px",
+                            borderRadius: "50%",
+                            border: "none",
+                            background: "rgba(15,23,42,0.8)",
+                            color: "#ffffff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -2101,7 +2555,11 @@ export const StorePage: React.FC = () => {
                   boxShadow: "0 4px 14px rgba(37,99,235,0.3)",
                 }}
               >
-                {publishing ? "Publicando producto..." : "Publicar Producto Ahora"}
+                {publishing
+                  ? "Guardando producto e imágenes..."
+                  : editingProduct
+                    ? "Guardar Cambios"
+                    : "Publicar Producto Ahora"}
               </button>
               <button
                 type="button"

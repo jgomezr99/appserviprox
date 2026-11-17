@@ -118,6 +118,12 @@
   transition: all 0.2s;
 }
 
+.scm-status-banner.checking {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
 .scm-status-banner.connected {
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
@@ -136,6 +142,11 @@
   border-radius: 50%;
   display: inline-block;
   margin-right: 8px;
+}
+
+.checking .scm-status-dot {
+  background: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
 }
 
 .connected .scm-status-dot {
@@ -168,12 +179,49 @@
   gap: 6px;
 }
 
+.scm-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .scm-field label {
   font-size: 0.82rem;
   font-weight: 700;
   color: #334155;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.scm-preset-btn {
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #0369a1;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.scm-preset-btn:hover:not(:disabled) {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+}
+
+.scm-preset-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.scm-hint {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.4;
 }
 
 .scm-input-wrapper {

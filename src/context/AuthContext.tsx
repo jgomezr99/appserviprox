@@ -26,7 +26,9 @@ const getCachedUser = (): User | null => {
     if (demo && demoUsers[demo]) return demoUsers[demo];
     const cached = localStorage.getItem(CACHED_USER_KEY);
     if (cached) return JSON.parse(cached);
-  } catch {}
+  } catch {
+    // Almacenamiento local no disponible
+  }
   return null;
 };
 
@@ -129,7 +131,7 @@ type AuthContextValue = {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (payload: LoginPayload) => Promise<User>;
+  login: (payload: LoginPayload, options?: { allowLocalWorkerFallback?: boolean }) => Promise<User>;
   register: (payload: RegisterPayload) => Promise<User>;
   logout: () => void;
   refreshSession: () => Promise<User | null>;
@@ -158,7 +160,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       } else {
         localStorage.removeItem(CACHED_USER_KEY);
       }
-    } catch {}
+    } catch {
+      // Almacenamiento local no disponible
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -215,15 +219,22 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }
   }, [logout, saveUser]);
 
-  const login = useCallback(async (payload: LoginPayload) => {
+  const login = useCallback(async (
+    payload: LoginPayload,
+    options?: { allowLocalWorkerFallback?: boolean }
+  ) => {
     const demoUser = getDemoUser(payload);
     if (demoUser) {
       try {
-        await authService.login(payload);
+        await authService.login(payload, options);
         const currentUser = await authService.getCurrentUser();
+        localStorage.removeItem(DEMO_SESSION_KEY);
         saveUser(currentUser);
         return currentUser;
       } catch (error) {
+        if (error instanceof ApiError && [400, 401, 403, 404].includes(error.status)) {
+          throw error;
+        }
         console.warn("Autenticación con backend no disponible para demo, activando sesión demo local:", error);
         localStorage.setItem(DEMO_SESSION_KEY, demoUser.email);
         saveUser(demoUser);
@@ -231,8 +242,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       }
     }
 
-    await authService.login(payload);
+    await authService.login(payload, options);
     const currentUser = await authService.getCurrentUser();
+    localStorage.removeItem(DEMO_SESSION_KEY);
     saveUser(currentUser);
     return currentUser;
   }, [saveUser]);
@@ -241,6 +253,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     await authService.register(payload);
     await authService.login({ email: payload.email, password: payload.password });
     const currentUser = await authService.getCurrentUser();
+    localStorage.removeItem(DEMO_SESSION_KEY);
     saveUser(currentUser);
     return currentUser;
   }, [saveUser]);
@@ -290,7 +303,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     };
     try {
       localStorage.setItem(DEMO_SESSION_KEY, "admin@serviprox.com");
-    } catch {}
+    } catch {
+      // Almacenamiento local no disponible
+    }
     saveUser(adminUser);
     return adminUser;
   }, [saveUser]);

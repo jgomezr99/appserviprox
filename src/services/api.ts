@@ -22,32 +22,190 @@ export class ApiError extends Error {
   }
 }
 
-export const normalizeApiUrl = (url: string): string => {
-  const clean = url.trim().replace(/\/+$/, "");
-  return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
+export type ConnectionMode = "vm-direct" | "vm-proxy" | "local-sqlite" | "custom";
+
+const DEFAULT_WEB_VM_API_URL = "https://serviprox-pte.duckdns.org/api/v1";
+
+const isVitestEnv = (): boolean => {
+  if (typeof process !== "undefined" && process.env && "VITEST" in process.env) {
+    return Boolean(process.env.VITEST);
+  }
+  return Boolean((import.meta as { env?: Record<string, unknown> }).env?.VITEST);
 };
 
-export const getSavedCustomHost = (): string => {
-  if (import.meta.env.PROD) return "";
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("serviprox_api_host") || "";
+const isProdMode = (): boolean => {
+  if (typeof process !== "undefined" && process.env?.PROD !== undefined) {
+    return process.env.PROD === "true" || process.env.PROD === "1";
+  }
+  return Boolean(import.meta.env.PROD);
+};
+
+const getRawViteApiUrl = (): string => {
+  if (typeof process !== "undefined" && typeof process.env?.VITE_API_URL === "string" && process.env.VITE_API_URL) {
+    return process.env.VITE_API_URL;
+  }
+  return import.meta.env.VITE_API_URL || "";
+};
+
+export const normalizeApiUrl = (url: string): string => {
+  let clean = url.trim().replace(/\/+$/, "");
+  clean = clean.replace(/\/health$/i, "");
+  if (clean.endsWith("/api/v1") || clean.endsWith("/api/vm/v1")) {
+    return clean;
+  }
+  return `${clean}/api/v1`;
+};
+
+const getConfiguredVmUrl = (): string => {
+  const raw = getRawViteApiUrl();
+  if (raw) {
+    return normalizeApiUrl(raw);
+  }
+  if (!Capacitor.isNativePlatform() && !isVitestEnv()) {
+    return DEFAULT_WEB_VM_API_URL;
   }
   return "";
 };
 
-const resolveApiBaseUrl = (): string => {
-  // 1. Configuración explícita en variable de entorno
-  if (import.meta.env.VITE_API_URL) {
-    return normalizeApiUrl(import.meta.env.VITE_API_URL);
+export const getSavedCustomHost = (): string => {
+  if (isProdMode() && isVitestEnv()) return "";
+  if (typeof window !== "undefined") {
+    if (localStorage.getItem("serviprox_custom_host_explicit") === "1") {
+      return localStorage.getItem("serviprox_api_host") || "";
+    }
+  }
+  return "";
+};
+
+export const getConnectionMode = (baseUrl?: string): ConnectionMode => {
+  const target = (baseUrl || activeBaseUrl || "").trim();
+  if (target.includes("/api/vm/v1")) return "vm-proxy";
+  const configured = getConfiguredVmUrl();
+  if (configured && target === configured) return "vm-direct";
+  if (
+    typeof window !== "undefined" &&
+    window.location?.origin &&
+    target === `${window.location.origin.replace(/\/$/, "")}/api/v1`
+  ) {
+    return "local-sqlite";
+  }
+  return target.includes("serviprox-pte.duckdns.org") ? "vm-direct" : "custom";
+};
+
+const getPriorityCandidateBaseUrls = (): string[] => {
+  const candidates: string[] = [];
+  const configuredUrl = getConfiguredVmUrl();
+
+  // En suite unitaria de producción (Vitest), respetar estrictamente el contrato de solo VITE_API_URL
+  if (isProdMode() && configuredUrl && isVitestEnv()) {
+    return [configuredUrl];
   }
 
-  // 2. Anulación manual en localStorage si se requiere conectar a un servidor específico
+  // 1. Host personalizado guardado explícitamente por el usuario desde el modal
+  const saved = getSavedCustomHost();
+  if (saved) {
+    candidates.push(normalizeApiUrl(saved));
+  }
+
+  // 2. Conexión directa configurada en VITE_API_URL (Máquina Virtual)
+  if (configuredUrl) {
+    candidates.push(configuredUrl);
+  }
+
+  // 3. Proxy anti-CORS en servidor + respaldo SQLite local para paneles web
+  if (!Capacitor.isNativePlatform() && typeof window !== "undefined" && window.location) {
+    const hostname = window.location.hostname;
+    const isNetlify = hostname.includes("netlify.app");
+    const origin = window.location.origin ? window.location.origin.replace(/\/$/, "") : "";
+
+    if (origin && !isNetlify) {
+      if (configuredUrl && !configuredUrl.startsWith(origin)) {
+        candidates.push(`${origin}/api/vm/v1`);
+      }
+      candidates.push(`${origin}/api/v1`);
+    }
+
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      candidates.push("http://127.0.0.1:8000/api/v1");
+      candidates.push("http://localhost:8000/api/v1");
+    }
+  }
+
+  // 4. Candidatos de respaldo para entornos nativos Capacitor
+  if (Capacitor.isNativePlatform()) {
+    candidates.push("http://192.168.0.6:8000/api/v1");
+    candidates.push("http://10.0.2.2:8000/api/v1");
+    candidates.push("http://127.0.0.1:8000/api/v1");
+  }
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+};
+
+export const ACCESS_TOKEN_KEY = "serviprox_access_token";
+export const REFRESH_TOKEN_KEY = "serviprox_refresh_token";
+const SESSION_AUTH_MODE_KEY = "serviprox_auth_mode";
+
+export const getSessionAuthMode = (): "vm" | "local-sqlite" | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const val = localStorage.getItem(SESSION_AUTH_MODE_KEY);
+    return val === "local-sqlite" || val === "vm" ? val : null;
+  } catch {
+    return null;
+  }
+};
+
+export const setSessionAuthMode = (mode: "vm" | "local-sqlite" | null) => {
+  if (typeof window === "undefined") return;
+  try {
+    if (mode) {
+      localStorage.setItem(SESSION_AUTH_MODE_KEY, mode);
+    } else {
+      localStorage.removeItem(SESSION_AUTH_MODE_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+};
+
+export const getLocalFallbackApiUrl = (): string | null => {
+  if (isProdMode() && isVitestEnv()) return null;
+  if (Capacitor.isNativePlatform() || typeof window === "undefined" || !window.location?.origin) {
+    return null;
+  }
+  if (window.location.hostname.includes("netlify.app")) return null;
+  return `${window.location.origin.replace(/\/$/, "")}/api/v1`;
+};
+
+const hasLocalAuthenticatedSession = (): boolean => {
+  if (typeof window === "undefined" || (isProdMode() && isVitestEnv())) return false;
+  try {
+    return (
+      getSessionAuthMode() === "local-sqlite" &&
+      Boolean(localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem(REFRESH_TOKEN_KEY)) &&
+      Boolean(getLocalFallbackApiUrl())
+    );
+  } catch {
+    return false;
+  }
+};
+
+const resolveApiBaseUrl = (): string => {
+  if (hasLocalAuthenticatedSession()) {
+    const localBase = getLocalFallbackApiUrl();
+    if (localBase) return localBase;
+  }
+
   const customHost = getSavedCustomHost();
   if (customHost) {
     return normalizeApiUrl(customHost);
   }
 
-  // 2.5. Última URL funcional comprobada en la sesión actual o anterior
+  const configuredUrl = getConfiguredVmUrl();
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
   if (typeof window !== "undefined") {
     try {
       const working =
@@ -61,21 +219,13 @@ const resolveApiBaseUrl = (): string => {
     }
   }
 
-  // 3. Dispositivo nativo compilado con Capacitor (Emulador o App instalada)
   if (Capacitor.isNativePlatform()) {
-    // Celular físico conectado por Wi-Fi usa la IP local del servidor (192.168.0.6)
     return "http://192.168.0.6:8000/api/v1";
   }
 
-  // 4. Navegador Web y Móvil (DevTunnels, Red Local, Localhost)
   if (typeof window !== "undefined" && window.location?.origin) {
-    // En Netlify estático, window.location.origin no ejecuta Python
     if (window.location.hostname.includes("netlify.app")) {
       return "/api/v1";
-    }
-    // En localhost, conectar directo al puerto 8000 de Django evita el socket timeout del proxy de Vite
-    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      return "http://127.0.0.1:8000/api/v1";
     }
     return `${window.location.origin.replace(/\/$/, "")}/api/v1`;
   }
@@ -85,94 +235,90 @@ const resolveApiBaseUrl = (): string => {
 
 // Base URL dinámica y reactiva
 let activeBaseUrl = resolveApiBaseUrl();
+let lastFallbackAt = 0;
+const MV_RETRY_COOLDOWN_MS = 15000;
 export let API_BASE_URL = activeBaseUrl;
 
 export const getApiBaseUrl = (): string => activeBaseUrl;
 
 export const getCandidateBaseUrls = (): string[] => {
-  const candidates: string[] = [];
-  const isNative = Capacitor.isNativePlatform();
-  const isLocalBrowser =
-    !isNative &&
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const priority = getPriorityCandidateBaseUrls();
+  if (isProdMode() && getRawViteApiUrl() && isVitestEnv()) {
+    return priority;
+  }
 
-  // 1. Si ya se verificó un host exitoso en esta sesión o guardado, darle máxima prioridad absoluta
+  const ordered: string[] = [];
+  const localFallback = getLocalFallbackApiUrl();
+  const pinnedLocal = hasLocalAuthenticatedSession();
+  if (pinnedLocal && localFallback && priority.includes(localFallback)) {
+    ordered.push(localFallback);
+  }
+
+  const activeMode = activeBaseUrl ? getConnectionMode(activeBaseUrl) : null;
+  const keepFallbackFirst =
+    pinnedLocal || (activeMode === "local-sqlite" && Date.now() - lastFallbackAt < MV_RETRY_COOLDOWN_MS);
+
+  if (activeBaseUrl && priority.includes(activeBaseUrl) && (activeMode !== "local-sqlite" || keepFallbackFirst)) {
+    ordered.push(activeBaseUrl);
+  }
+
   if (typeof window !== "undefined") {
     try {
-      const working =
-        sessionStorage.getItem("serviprox_working_base_url") ||
-        localStorage.getItem("serviprox_last_working_url");
-      if (working) {
-        candidates.push(normalizeApiUrl(working));
+      const sessionWorking = sessionStorage.getItem("serviprox_working_base_url");
+      if (sessionWorking) {
+        const normalized = normalizeApiUrl(sessionWorking);
+        const sessionMode = getConnectionMode(normalized);
+        if (
+          priority.includes(normalized) &&
+          (sessionMode !== "local-sqlite" || pinnedLocal || Date.now() - lastFallbackAt < MV_RETRY_COOLDOWN_MS)
+        ) {
+          ordered.push(normalized);
+        }
       }
     } catch {
       // ignore
     }
   }
 
-  const saved = getSavedCustomHost();
-  if (saved) {
-    candidates.push(normalizeApiUrl(saved));
+  for (const cand of priority) {
+    ordered.push(cand);
   }
 
-  // En el navegador local o móvil, URL configurada
-  const configuredUrl = import.meta.env.VITE_API_URL ? normalizeApiUrl(import.meta.env.VITE_API_URL) : "";
-  if (configuredUrl) {
-    candidates.push(configuredUrl);
-  }
-
-  if (typeof window !== "undefined" && window.location) {
-    const hostname = window.location.hostname;
-    const isNetlify = hostname.includes("netlify.app");
-
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      candidates.push("http://127.0.0.1:8000/api/v1");
-      candidates.push("http://localhost:8000/api/v1");
-    } else if (hostname && !hostname.includes("devtunnels.ms") && !isNetlify) {
-      candidates.push(`http://${hostname}:8000/api/v1`);
-    }
-
-    if (window.location.origin && !isNetlify) {
-      candidates.push(`${window.location.origin.replace(/\/$/, "")}/api/v1`);
-    }
-  }
-
-  if (activeBaseUrl && activeBaseUrl !== "/api/v1") {
-    candidates.push(activeBaseUrl);
-  }
-
-  // Candidatos para dispositivos nativos / emuladores (MV) y red local
-  candidates.push("http://192.168.0.6:8000/api/v1");
-  candidates.push("http://10.0.2.2:8000/api/v1");
-  candidates.push("http://127.0.0.1:8000/api/v1");
-
-  // Eliminar duplicados manteniendo orden de prioridad
-  return Array.from(new Set(candidates.filter(Boolean)));
+  return Array.from(new Set(ordered.filter(Boolean)));
 };
 
-export const setWorkingBaseUrl = (url: string) => {
+export const setWorkingBaseUrl = (
+  url: string,
+  meta?: { database?: string; engine?: string; mode?: ConnectionMode }
+) => {
+  if (isProdMode() && getRawViteApiUrl() && isVitestEnv()) return;
   const normalized = normalizeApiUrl(url);
   activeBaseUrl = normalized;
   API_BASE_URL = activeBaseUrl;
+  const mode = meta?.mode || getConnectionMode(normalized);
+  lastFallbackAt = mode === "local-sqlite" ? Date.now() : 0;
   if (typeof window !== "undefined") {
     try {
       sessionStorage.setItem("serviprox_working_base_url", activeBaseUrl);
-      localStorage.setItem("serviprox_last_working_url", activeBaseUrl);
-      localStorage.setItem("serviprox_api_host", activeBaseUrl.replace(/\/api\/v1$/, ""));
+      if (mode !== "local-sqlite") {
+        localStorage.setItem("serviprox_last_working_url", activeBaseUrl);
+      }
     } catch {
       // Ignorar restricciones de almacenamiento
     }
     window.dispatchEvent(
       new CustomEvent("serviprox:connection-status", {
-        detail: { connected: true, url: activeBaseUrl },
+        detail: {
+          connected: true,
+          url: activeBaseUrl,
+          mode,
+          database: meta?.database || "connected",
+          engine: meta?.engine,
+        },
       })
     );
   }
 };
-
-export const ACCESS_TOKEN_KEY = "serviprox_access_token";
-export const REFRESH_TOKEN_KEY = "serviprox_refresh_token";
 
 export const tokenStorage = {
   getAccessToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
@@ -186,7 +332,23 @@ export const tokenStorage = {
   clear: () => {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
+    setSessionAuthMode(null);
   },
+};
+
+const getKnownApiOrigins = (): string[] => {
+  const origins: string[] = [];
+  const configured = getConfiguredVmUrl();
+  const saved = getSavedCustomHost();
+  for (const candidate of [configured, saved ? normalizeApiUrl(saved) : ""]) {
+    if (!candidate) continue;
+    try {
+      origins.push(new URL(candidate).origin);
+    } catch {
+      // ignore invalid URL
+    }
+  }
+  return Array.from(new Set(origins));
 };
 
 const buildUrlForBase = (
@@ -194,16 +356,29 @@ const buildUrlForBase = (
   path: string,
   params?: Record<string, string | number | boolean | undefined | null>
 ) => {
-  if (import.meta.env.PROD && /^https?:\/\//i.test(path)) {
+  let effectivePath = path;
+  if (/^https?:\/\//i.test(path)) {
     const target = new URL(path);
-    const configured = new URL(baseUrl);
-    if (target.origin !== configured.origin || !target.pathname.startsWith(configured.pathname + "/")) {
-      throw new ApiError(400, "La URL solicitada no pertenece a la API configurada.", null);
+    const configured = new URL(baseUrl, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    const matchesTarget =
+      target.origin === configured.origin && target.pathname.startsWith(configured.pathname + "/");
+
+    if (!matchesTarget) {
+      const knownVmOrigins = isVitestEnv() ? [] : getKnownApiOrigins();
+      const isKnownVmApiUrl =
+        knownVmOrigins.includes(target.origin) && target.pathname.startsWith("/api/v1/");
+
+      if (isKnownVmApiUrl) {
+        effectivePath = `${target.pathname.replace(/^\/api\/v1\/?/, "")}${target.search}`;
+      } else if (isProdMode()) {
+        throw new ApiError(400, "La URL solicitada no pertenece a la API configurada.", null);
+      }
     }
   }
-  let fullUrl = /^https?:\/\//i.test(path)
-    ? path
-    : `${baseUrl}/${path.replace(/^\//, "")}`;
+
+  let fullUrl = /^https?:\/\//i.test(effectivePath)
+    ? effectivePath
+    : `${baseUrl}/${effectivePath.replace(/^\//, "")}`;
 
   if (params) {
     const searchParams = new URLSearchParams();
@@ -278,9 +453,18 @@ async function fetchWithResilience(
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const reqHeaders = new Headers(init.headers);
+        const savedHost = getSavedCustomHost();
+        if (base.includes("/api/vm/v1") && savedHost) {
+          reqHeaders.set("X-Serviprox-Target-Base", normalizeApiUrl(savedHost));
+        }
         let response: Response;
         try {
-          response = await fetch(url, { ...init, signal: init.signal || controller.signal });
+          response = await fetch(url, {
+            ...init,
+            headers: reqHeaders,
+            signal: init.signal || controller.signal,
+          });
         } finally {
           clearTimeout(timeoutId);
         }
@@ -483,55 +667,100 @@ async function blobRequest(
  * Comprueba el estado de la base de datos y la API de Serviprox.
  */
 export const checkBackendHealth = async (
-  customCandidate?: string
+  customCandidate?: string,
+  proxyTargetOverride?: string
 ): Promise<{
   ok: boolean;
   database: string;
   url?: string;
   engine?: string;
+  mode?: ConnectionMode;
   error?: string;
 }> => {
-  const candidates = customCandidate
-    ? [normalizeApiUrl(customCandidate)]
-    : getCandidateBaseUrls();
+  const normalizedCustom = customCandidate ? normalizeApiUrl(customCandidate) : "";
+  const localPinnedBase = !normalizedCustom && hasLocalAuthenticatedSession() ? getLocalFallbackApiUrl() : null;
+  const candidates: Array<{ base: string; targetOverride?: string }> = normalizedCustom
+    ? [{ base: normalizedCustom, targetOverride: proxyTargetOverride }]
+    : localPinnedBase
+      ? [{ base: localPinnedBase }]
+      : getPriorityCandidateBaseUrls().map((base) => ({
+          base,
+          targetOverride:
+            base.includes("/api/vm/v1") && getSavedCustomHost()
+              ? normalizeApiUrl(getSavedCustomHost())
+              : undefined,
+        }));
+
+  if (
+    normalizedCustom &&
+    !normalizedCustom.includes("/api/vm/v1") &&
+    !Capacitor.isNativePlatform() &&
+    typeof window !== "undefined" &&
+    window.location?.origin &&
+    !window.location.hostname.includes("netlify.app") &&
+    !normalizedCustom.startsWith(window.location.origin.replace(/\/$/, ""))
+  ) {
+    candidates.push({
+      base: `${window.location.origin.replace(/\/$/, "")}/api/vm/v1`,
+      targetOverride: normalizedCustom,
+    });
+  }
 
   if (candidates.length === 0) {
     return {
       ok: false,
       database: "disconnected",
-      error: "No hay servidores backend configurados. En Netlify debes configurar VITE_API_URL o la URL del backend.",
+      error: "No hay servidores backend configurados. Configura VITE_API_URL o la URL del backend.",
     };
   }
 
-  for (const base of candidates) {
+  let lastDetail = "";
+
+  for (const candidate of candidates) {
+    const base = candidate.base;
     try {
       const url = `${base.replace(/\/$/, "")}/health/`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 7500);
+      const headers = new Headers({ Accept: "application/json" });
+      if (candidate.targetOverride && base.includes("/api/vm/v1")) {
+        headers.set("X-Serviprox-Target-Base", candidate.targetOverride);
+      }
       const res = await fetch(url, {
         method: "GET",
-        headers: { Accept: "application/json" },
+        headers,
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
 
       const contentType = res.headers.get("content-type") || "";
-      if (res.ok && contentType.includes("application/json")) {
+      if (contentType.includes("application/json")) {
         const data = (await res.json()) as {
           status?: string;
           database?: string;
           engine?: string;
+          source?: string;
+          detail?: string;
         };
-        if (data.status !== "ok" || data.database !== "connected") {
-          continue;
+        if (res.ok && data.status === "ok" && data.database === "connected") {
+          const mode: ConnectionMode =
+            data.source === "local-sqlite" ? "local-sqlite" : getConnectionMode(base);
+          setWorkingBaseUrl(base, {
+            database: data.database,
+            engine: data.engine,
+            mode,
+          });
+          return {
+            ok: true,
+            database: data.database,
+            engine: data.engine,
+            mode,
+            url: base,
+          };
         }
-        setWorkingBaseUrl(base);
-        return {
-          ok: true,
-          database: data.database,
-          engine: data.engine,
-          url: base,
-        };
+        if (data.detail) {
+          lastDetail = data.detail;
+        }
       }
     } catch {
       // Intentar con el siguiente candidato
@@ -541,41 +770,55 @@ export const checkBackendHealth = async (
   return {
     ok: false,
     database: "disconnected",
-    error: "No pudimos conectar con el backend o la base de datos.",
+    error: lastDetail || "No pudimos conectar con el backend o la base de datos.",
   };
 };
 
 /**
- * Guarda y prueba una URL personalizada para el backend (ej: Render, DevTunnel, o IP local).
+ * Guarda y prueba una URL personalizada para el backend (ej: MV DuckDNS, Render, o IP local).
  */
 export const saveCustomApiHost = async (
   host: string
-): Promise<{ ok: boolean; message: string; database?: string; engine?: string; url?: string }> => {
+): Promise<{
+  ok: boolean;
+  message: string;
+  database?: string;
+  engine?: string;
+  mode?: ConnectionMode;
+  url?: string;
+}> => {
   if (!host.trim()) {
     clearCustomApiHost();
     return { ok: true, message: "Se restauró la configuración por defecto." };
   }
 
   const normalized = normalizeApiUrl(host);
-  if (import.meta.env.PROD && normalized !== resolveApiBaseUrl()) {
+  if (isProdMode() && isVitestEnv() && normalized !== resolveApiBaseUrl()) {
     return { ok: false, message: "La API productiva se configura en VITE_API_URL durante la compilacion." };
   }
   const health = await checkBackendHealth(normalized);
   if (health.ok) {
+    const activeUrl = health.url || normalized;
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem("serviprox_api_host", host.trim());
+        localStorage.setItem("serviprox_api_host", normalized);
+        localStorage.setItem("serviprox_custom_host_explicit", "1");
       } catch {
         // ignore
       }
     }
-    setWorkingBaseUrl(normalized);
+    setWorkingBaseUrl(activeUrl, {
+      database: health.database,
+      engine: health.engine,
+      mode: health.mode,
+    });
     return {
       ok: true,
       message: `¡Conexión exitosa! Base de datos: ${health.database} (${health.engine || "API"}).`,
       database: health.database,
       engine: health.engine,
-      url: normalized,
+      mode: health.mode,
+      url: activeUrl,
     };
   }
 
@@ -586,12 +829,15 @@ export const saveCustomApiHost = async (
 };
 
 /**
- * Limpia la URL personalizada de localStorage y restaura el valor por defecto.
+ * Limpia la URL personalizada de localStorage y restaura el valor por defecto (VITE_API_URL).
  */
 export const clearCustomApiHost = () => {
   if (typeof window !== "undefined") {
     try {
       localStorage.removeItem("serviprox_api_host");
+      localStorage.removeItem("serviprox_custom_host_explicit");
+      localStorage.removeItem("serviprox_last_working_url");
+      sessionStorage.removeItem("serviprox_working_base_url");
     } catch {
       // ignore
     }
@@ -601,7 +847,7 @@ export const clearCustomApiHost = () => {
   if (typeof window !== "undefined") {
     window.dispatchEvent(
       new CustomEvent("serviprox:connection-status", {
-        detail: { connected: false, url: activeBaseUrl },
+        detail: { connected: false, url: activeBaseUrl, mode: getConnectionMode(activeBaseUrl) },
       })
     );
   }

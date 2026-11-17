@@ -38,6 +38,8 @@ export interface User {
   is_currently_blocked?: boolean;
   is_staff?: boolean;
   is_superuser?: boolean;
+  admin_role?: "superadmin" | "admin" | "support" | "content_manager" | null;
+  permissions?: string[];
   has_professional_certificate?: boolean;
   created_at: string;
 }
