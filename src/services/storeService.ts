@@ -9,6 +9,13 @@ import {
   removeCustomStoredProduct,
   saveCustomStoredProduct,
 } from "../data/storeStorage";
+import {
+  isSellerStoreBlocked,
+  blockSellerStore,
+  unblockSellerStore,
+  saveProductReport,
+  type ProductReportItem,
+} from "../data/productReportsStorage";
 
 export type StoreProduct = MockStoreProduct;
 
@@ -72,6 +79,7 @@ export interface ReportStoreProductInput {
   hideProduct?: boolean;
   blockPublisher?: boolean;
   reporterName?: string;
+  reporterEmail?: string;
   blockDurationDays?: number;
 }
 
@@ -130,22 +138,147 @@ export const fileToDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+export const dataUrlToFile = (dataUrl: string, filename = "product.jpg"): File | null => {
+  try {
+    const arr = dataUrl.split(",");
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
+  } catch {
+    return null;
+  }
+};
+
+export const getCuratedProductImage = (title = "", category = ""): string => {
+  const t = (title || "").toLowerCase();
+  const c = (category || "").toLowerCase();
+
+  if (t.includes("sierra") || t.includes("circular") || t.includes("cortadora")) {
+    return "/assets/products/sierra-circular.jpg";
+  }
+  if (
+    t.includes("taladro") ||
+    t.includes("bosch") ||
+    t.includes("percutor") ||
+    t.includes("herramient") ||
+    c.includes("herramient") ||
+    c.includes("equipo")
+  ) {
+    return "/assets/products/taladro-percutor.jpg";
+  }
+  if (
+    t.includes("ps5") ||
+    t.includes("control") ||
+    t.includes("dualsense") ||
+    t.includes("gamer") ||
+    t.includes("consola") ||
+    c.includes("multimedia") ||
+    c.includes("juguete")
+  ) {
+    return "/assets/products/control-gamer.jpg";
+  }
+  if (
+    t.includes("sofá") ||
+    t.includes("sofa") ||
+    t.includes("nórdico") ||
+    t.includes("nordico") ||
+    t.includes("mueble") ||
+    c.includes("mueble") ||
+    c.includes("hogar")
+  ) {
+    return "/assets/products/sofa-nordico.jpg";
+  }
+  if (
+    t.includes("lenovo") ||
+    t.includes("laptop") ||
+    t.includes("portátil") ||
+    t.includes("portatil") ||
+    t.includes("computador") ||
+    t.includes("ultrabook")
+  ) {
+    return "/assets/products/laptop-pro.jpg";
+  }
+  if (
+    t.includes("iphone") ||
+    t.includes("celular") ||
+    t.includes("smartphone") ||
+    t.includes("teléfono") ||
+    t.includes("telefono") ||
+    c.includes("tecnolog")
+  ) {
+    return "/assets/products/smartphone-pro.jpg";
+  }
+  if (
+    t.includes("bici") ||
+    t.includes("mtb") ||
+    t.includes("bicicleta") ||
+    c.includes("deporte")
+  ) {
+    return "/assets/products/bicicleta-mtb.jpg";
+  }
+
+  // Fallbacks curados por categoría para evitar "Sin imagen disponible"
+  if (c.includes("tecnolog")) return "/assets/products/laptop-pro.jpg";
+  if (c.includes("mueble")) return "/assets/products/sofa-nordico.jpg";
+  if (c.includes("herramient")) return "/assets/products/taladro-percutor.jpg";
+  if (c.includes("multimedia")) return "/assets/products/control-gamer.jpg";
+  if (c.includes("deporte")) return "/assets/products/bicicleta-mtb.jpg";
+
+  return "/assets/products/herramientas.jpg";
+};
+
 export const normalizeStoreProduct = (item: ApiStoreProduct): StoreProduct => {
   const rawImages = Array.isArray(item.images)
     ? item.images.filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
     : [];
-  const primaryImage = (item.image_url || rawImages[0] || PLACEHOLDER_PRODUCT_IMAGE).trim();
+
+  const localCustom = getCustomStoredProducts().find(
+    (p) => String(p.id) === String(item.id)
+  );
+
+  let primaryImage = "";
+  if (
+    item.image_url &&
+    typeof item.image_url === "string" &&
+    item.image_url.trim() &&
+    item.image_url !== PLACEHOLDER_PRODUCT_IMAGE
+  ) {
+    primaryImage = item.image_url.trim();
+  } else if (rawImages[0] && rawImages[0] !== PLACEHOLDER_PRODUCT_IMAGE) {
+    primaryImage = rawImages[0].trim();
+  } else if (localCustom?.image && localCustom.image !== PLACEHOLDER_PRODUCT_IMAGE) {
+    primaryImage = localCustom.image.trim();
+  } else if (localCustom?.images?.[0] && localCustom.images[0] !== PLACEHOLDER_PRODUCT_IMAGE) {
+    primaryImage = localCustom.images[0].trim();
+  }
+
+  const seedFallback = DEFAULT_MOCK_PRODUCTS.find((p) => Number(p.id) === Number(item.id));
+  if (!primaryImage && seedFallback?.image && seedFallback.image !== PLACEHOLDER_PRODUCT_IMAGE) {
+    primaryImage = seedFallback.image;
+  }
+
+  if (!primaryImage || primaryImage === PLACEHOLDER_PRODUCT_IMAGE) {
+    primaryImage = getCuratedProductImage(item.title, item.category);
+  }
+
   const images =
     rawImages.length > 0
       ? rawImages
-      : primaryImage && primaryImage !== PLACEHOLDER_PRODUCT_IMAGE
-        ? [primaryImage]
-        : [];
-  const seedFallback = DEFAULT_MOCK_PRODUCTS.find((p) => Number(p.id) === Number(item.id));
-  const resolvedImage =
-    primaryImage && primaryImage !== PLACEHOLDER_PRODUCT_IMAGE
-      ? primaryImage
-      : seedFallback?.image || PLACEHOLDER_PRODUCT_IMAGE;
+      : localCustom?.images && localCustom.images.length > 0
+        ? localCustom.images
+        : seedFallback?.images && seedFallback.images.length > 0
+          ? seedFallback.images
+          : [primaryImage];
+
+  const sellerBlocked =
+    isSellerStoreBlocked(item.owner_id ?? item.seller_user_id, item.seller_name) ||
+    Boolean(item.seller_blocked);
 
   return {
     id: item.id,
@@ -157,20 +290,20 @@ export const normalizeStoreProduct = (item: ApiStoreProduct): StoreProduct => {
     condition: item.condition || "Nuevo",
     description: item.description || "",
     sellerName: item.seller_name || "Usuario",
-    sellerEmail: item.seller_email || "",
-    sellerUsername: item.seller_username || "",
-    sellerRole: item.seller_role || "Cliente",
-    sellerBlocked: Boolean(item.seller_blocked),
-    phone: item.phone || "",
+    sellerEmail: item.seller_email || localCustom?.sellerEmail || "",
+    sellerUsername: item.seller_username || localCustom?.sellerUsername || "",
+    sellerRole: item.seller_role || localCustom?.sellerRole || "Cliente",
+    sellerBlocked,
+    phone: item.phone || localCustom?.phone || "",
     city: item.city || "Bogotá",
-    image: resolvedImage,
-    images: images.length > 0 ? images : seedFallback?.images || (resolvedImage !== PLACEHOLDER_PRODUCT_IMAGE ? [resolvedImage] : []),
+    image: primaryImage,
+    images,
     date: item.created_at ? new Date(item.created_at).toLocaleDateString("es-CO") : "Hoy",
     createdAt: item.created_at,
     updatedAt: item.updated_at || item.created_at,
     isOwner: Boolean(item.is_owner),
-    isActive: item.is_active !== false,
-    reviewStatus: item.review_status || "aprobado",
+    isActive: sellerBlocked ? false : item.is_active !== false,
+    reviewStatus: item.review_status || (sellerBlocked ? "observado" : "aprobado"),
     reviewNotes: item.review_notes || "",
     reviewedBy: item.reviewed_by || "",
     reportsCount: Number(item.reports_count || 0),
@@ -240,6 +373,17 @@ function buildProductFormData(input: SaveStoreProductInput, dataUrls: string[]):
   (input.imageFiles || []).forEach((file) => {
     form.append("image", file, file.name);
   });
+  if ((!input.imageFiles || input.imageFiles.length === 0) && dataUrls.length > 0) {
+    for (let i = 0; i < dataUrls.length; i++) {
+      if (dataUrls[i].startsWith("data:image/")) {
+        const f = dataUrlToFile(dataUrls[i], `product_${i + 1}.jpg`);
+        if (f) {
+          form.append("image", f, f.name);
+          break;
+        }
+      }
+    }
+  }
   return form;
 }
 
@@ -554,6 +698,35 @@ export const storeService = {
 
     const mode = getConnectionMode(getApiBaseUrl());
 
+    // Guardar el reporte en el módulo de reportes de publicaciones de Meko Shop
+    saveProductReport({
+      productId: product.id,
+      productTitle: product.title,
+      productPrice: product.price,
+      productCategory: product.category,
+      productImage: product.image,
+      sellerId: product.ownerId,
+      sellerName: product.sellerName,
+      sellerEmail: product.sellerEmail,
+      sellerPhone: product.phone,
+      sellerRole: product.sellerRole,
+      reporterName: input.reporterName || "Cliente de Meko Shop",
+      reason: input.reason,
+      description: input.description,
+      priority: input.priority || "Media",
+      actionTaken: input.blockPublisher ? "tienda_bloqueada" : input.hideProduct ? "producto_oculto" : "ninguna",
+    });
+
+    // Si se indicó bloquear al publicador, se bloquea SOLO la tienda (el usuario sigue con cuenta normal activa)
+    if (input.blockPublisher) {
+      blockSellerStore(
+        product.ownerId || product.sellerName,
+        product.sellerName,
+        `Bloqueo exclusivo de tienda por reporte: ${input.reason}`,
+        input.reporterName || "Administrador"
+      );
+    }
+
     try {
       const resp = await api.post<{
         ok: boolean;
@@ -624,3 +797,15 @@ export const storeService = {
     };
   },
 };
+
+export {
+  getProductReports,
+  saveProductReport,
+  updateProductReport,
+  respondToProductReport,
+  isSellerStoreBlocked,
+  blockSellerStore,
+  unblockSellerStore,
+  getStoreBlockedSellers,
+  type ProductReportItem,
+} from "../data/productReportsStorage";

@@ -38,7 +38,7 @@ export const OverviewTab: React.FC<{ onNavigate: (tab: string) => void }> = ({ o
     );
   }
 
-  const maxCollected = Math.max(1, ...data.series.map((item) => item.collected));
+  const maxCollected = Math.max(1, ...(data.series || []).map((item) => item.collected));
   const alerts: Array<[string, string, string]> = [];
   if (data.eligible_settlement_orders > 0)
     alerts.push(["payouts", `${data.eligible_settlement_orders} orden(es) listas para liquidar`, "💼"]);
@@ -125,7 +125,7 @@ export const OverviewTab: React.FC<{ onNavigate: (tab: string) => void }> = ({ o
         <div className="ad-card" style={{ padding: "16px 20px" }}>
           <h3 style={{ margin: "0 0 16px" }}>Recaudo y comisiones (últimos 6 meses)</h3>
           <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", height: "160px" }}>
-            {data.series.map((item) => (
+            {(data.series || []).map((item) => (
               <div key={item.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
                 <div
                   title={`${item.month}: recaudo ${money(item.collected)} · comisión ${money(item.commissions)}`}
@@ -150,7 +150,7 @@ export const OverviewTab: React.FC<{ onNavigate: (tab: string) => void }> = ({ o
             {STATUS_LABELS.map(([status, label, color]) => (
               <div key={status} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ color: "#475569" }}>{label}</span>
-                <strong style={{ color }}>{data.payments_by_status[status] ?? 0}</strong>
+                <strong style={{ color }}>{(data.payments_by_status || {})[status] ?? 0}</strong>
               </div>
             ))}
           </div>

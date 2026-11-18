@@ -173,6 +173,39 @@ export interface PaymentHold {
   orders: Array<{ order_id: number; service: string; amount: number }>;
 }
 
+const DEFAULT_FINANCE_SUMMARY: FinanceSummary = {
+  commission_rate: 10,
+  discounts_total: 0,
+  payments_total: 0,
+  collected: 0,
+  pending_collection: 0,
+  commissions: 0,
+  professionals_share: 0,
+  pending_settlement: 0,
+  eligible_settlement_orders: 0,
+  settled: 0,
+  withdrawals_open_count: 0,
+  withdrawals_open_amount: 0,
+  withdrawals_paid: 0,
+  refunds_open_count: 0,
+  refunds_total: 0,
+  payments_by_status: {
+    approved: 0,
+    pending: 0,
+    declined: 0,
+    voided: 0,
+    refunded: 0,
+  },
+  series: [
+    { month: "Ene", commissions: 0, collected: 0 },
+    { month: "Feb", commissions: 0, collected: 0 },
+    { month: "Mar", commissions: 0, collected: 0 },
+    { month: "Abr", commissions: 0, collected: 0 },
+    { month: "May", commissions: 0, collected: 0 },
+    { month: "Jun", commissions: 0, collected: 0 },
+  ],
+};
+
 export const financeService = {
   paymentHold: () => api.get<PaymentHold>("payments/hold/"),
   clientHistory: () => api.get<ClientPaymentRow[]>("payments/history/"),
@@ -183,25 +216,72 @@ export const financeService = {
     api.post<WithdrawalRow>("professional/withdrawals/", { amount, destination }),
 
   admin: {
-    summary: () => api.get<FinanceSummary>("admin/finance/summary/"),
-    payments: () => api.get<PaymentRow[]>("admin/payments/"),
+    summary: async (): Promise<FinanceSummary> => {
+      try {
+        return await api.get<FinanceSummary>("admin/finance/summary/");
+      } catch (err: any) {
+        if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+          return DEFAULT_FINANCE_SUMMARY;
+        }
+        throw err;
+      }
+    },
+    payments: async (): Promise<PaymentRow[]> => {
+      try {
+        return await api.get<PaymentRow[]>("admin/payments/");
+      } catch (err: any) {
+        if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+          return [];
+        }
+        throw err;
+      }
+    },
     paymentDetail: (id: number) => api.get<AdminPaymentDetail>(`admin/payments/${id}/`),
     verifyPayment: (id: number) => api.post<{ detail: string }>(`admin/payments/${id}/verify/`),
-    payouts: () => api.get<PayoutRow[]>("admin/payouts/"),
+    payouts: async (): Promise<PayoutRow[]> => {
+      try {
+        return await api.get<PayoutRow[]>("admin/payouts/");
+      } catch (err: any) {
+        if (err?.status === 404 || err?.status === 403) return [];
+        throw err;
+      }
+    },
     settle: (body: { order_ids: number[] } | { all: true }) =>
       api.post<{ settled: number; detail: string }>("admin/payouts/settle/", body),
-    withdrawals: () => api.get<WithdrawalRow[]>("admin/withdrawals/"),
+    withdrawals: async (): Promise<WithdrawalRow[]> => {
+      try {
+        return await api.get<WithdrawalRow[]>("admin/withdrawals/");
+      } catch (err: any) {
+        if (err?.status === 404 || err?.status === 403) return [];
+        throw err;
+      }
+    },
     resolveWithdrawal: (
       id: number,
       body: { action: "approve" | "reject" | "pay"; reference?: string; note?: string }
     ) => api.post<WithdrawalRow>(`admin/withdrawals/${id}/resolve/`, body),
-    refunds: () => api.get<RefundRow[]>("admin/refunds/"),
+    refunds: async (): Promise<RefundRow[]> => {
+      try {
+        return await api.get<RefundRow[]>("admin/refunds/");
+      } catch (err: any) {
+        if (err?.status === 404 || err?.status === 403) return [];
+        throw err;
+      }
+    },
     createRefund: (orderId: number, reason: string) =>
       api.post<RefundRow>("admin/refunds/", { order_id: orderId, reason }),
     resolveRefund: (id: number, body: { action: "approve" | "reject"; note?: string }) =>
       api.post<RefundRow>(`admin/refunds/${id}/resolve/`, body),
-    report: (from: string, to: string) =>
-      api.get<FinanceReport>(`admin/finance/report/${reportQuery(from, to)}`),
+    report: async (from: string, to: string): Promise<FinanceReport> => {
+      try {
+        return await api.get<FinanceReport>(`admin/finance/report/${reportQuery(from, to)}`);
+      } catch (err: any) {
+        if (err?.status === 404 || err?.status === 403) {
+          return { totals: { orders: 0, gross: 0, commissions: 0, professionals: 0 }, rows: [] };
+        }
+        throw err;
+      }
+    },
     reportCsv: (from: string, to: string) =>
       api.blob(`admin/finance/report/${reportQuery(from, to, "csv")}`),
   },

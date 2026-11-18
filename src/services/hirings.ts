@@ -119,17 +119,77 @@ const query = (params: Record<string, string | number | undefined>) => {
   return text ? `?${text}` : "";
 };
 
+const DEFAULT_HIRING_SUMMARY: HiringSummary = {
+  total: 0,
+  by_status: {
+    requested: 0,
+    accepted: 0,
+    scheduled: 0,
+    in_progress: 0,
+    completed: 0,
+    cancelled: 0,
+  },
+  active: 0,
+  completed: 0,
+  cancelled: 0,
+  value_total: 0,
+  avg_ticket: 0,
+  daily: [],
+  monthly: [],
+  top_services: [],
+  top_professionals: [],
+  alerts: [],
+  requests: { no_professional: 0, awaiting: 0, awaiting_stale: 0 },
+  generated_at: new Date().toISOString(),
+};
+
 export const hiringService = {
-  summary: () => api.get<HiringSummary>("admin/hirings/summary/"),
-  list: (filters: HiringFilters) => api.get<HiringPage<HiringRow>>(`admin/hirings/${query(filters)}`),
+  summary: async (): Promise<HiringSummary> => {
+    try {
+      return await api.get<HiringSummary>("admin/hirings/summary/");
+    } catch (err: any) {
+      if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+        return DEFAULT_HIRING_SUMMARY;
+      }
+      throw err;
+    }
+  },
+  list: async (filters: HiringFilters): Promise<HiringPage<HiringRow>> => {
+    try {
+      return await api.get<HiringPage<HiringRow>>(`admin/hirings/${query(filters)}`);
+    } catch (err: any) {
+      if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+        return {
+          count: 0,
+          page: filters.page || 1,
+          page_size: filters.page_size || 12,
+          results: [],
+        };
+      }
+      throw err;
+    }
+  },
   detail: (id: number) => api.get<HiringDetail>(`admin/hirings/${id}/`),
   cancel: (id: number, reason: string) => api.post<{ detail: string }>(`admin/hirings/${id}/cancel/`, { reason }),
   addNote: (id: number, text: string) =>
     api.post<{ id: number; text: string; author: string; created_at: string }>(`admin/hirings/${id}/notes/`, { text }),
   openPqr: (id: number, type: "queja" | "reclamo" | "peticion", description: string) =>
     api.post<{ id: number; radicado_number: string }>(`admin/hirings/${id}/pqr/`, { type, description }),
-  requests: (params: { kind?: string; page?: number; page_size?: number }) =>
-    api.get<HiringPage<OpenRequest>>(`admin/hirings/requests/${query(params)}`),
+  requests: async (params: { kind?: string; page?: number; page_size?: number }): Promise<HiringPage<OpenRequest>> => {
+    try {
+      return await api.get<HiringPage<OpenRequest>>(`admin/hirings/requests/${query(params)}`);
+    } catch (err: any) {
+      if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+        return {
+          count: 0,
+          page: params.page || 1,
+          page_size: params.page_size || 10,
+          results: [],
+        };
+      }
+      throw err;
+    }
+  },
   professionalsFor: (requestId: number) =>
     api.get<AssignableProfessional[]>(`admin/hirings/requests/${requestId}/professionals/`),
   assign: (requestId: number, professionalId: number) =>

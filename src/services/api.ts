@@ -61,7 +61,7 @@ const getConfiguredVmUrl = (): string => {
   if (raw) {
     return normalizeApiUrl(raw);
   }
-  if (!Capacitor.isNativePlatform() && !isVitestEnv()) {
+  if (!isVitestEnv()) {
     return DEFAULT_WEB_VM_API_URL;
   }
   return "";
@@ -133,6 +133,7 @@ const getPriorityCandidateBaseUrls = (): string[] => {
 
   // 4. Candidatos de respaldo para entornos nativos Capacitor
   if (Capacitor.isNativePlatform()) {
+    candidates.push(DEFAULT_WEB_VM_API_URL);
     candidates.push("http://192.168.0.6:8000/api/v1");
     candidates.push("http://10.0.2.2:8000/api/v1");
     candidates.push("http://127.0.0.1:8000/api/v1");
@@ -220,7 +221,7 @@ const resolveApiBaseUrl = (): string => {
   }
 
   if (Capacitor.isNativePlatform()) {
-    return "http://192.168.0.6:8000/api/v1";
+    return DEFAULT_WEB_VM_API_URL;
   }
 
   if (typeof window !== "undefined" && window.location?.origin) {
@@ -483,6 +484,17 @@ async function fetchWithResilience(
             continue;
           }
 
+          // Si el candidato actual responde con 404 (recurso no encontrado, ej. endpoints nuevos aún no desplegados en la MV)
+          // o 403 en rutas de admin (permisos o sesión de usuario desincronizados entre VM y local),
+          // guardamos la respuesta y permitimos intentar con el siguiente candidato antes de fallar.
+          if (
+            (response.status === 404 || (response.status === 403 && path.includes("admin/"))) &&
+            candidates.length > 1
+          ) {
+            lastResponse = response;
+            continue;
+          }
+
           if (base !== activeBaseUrl) {
             setWorkingBaseUrl(base);
           }
@@ -721,7 +733,7 @@ export const checkBackendHealth = async (
     try {
       const url = `${base.replace(/\/$/, "")}/health/`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7500);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
       const headers = new Headers({ Accept: "application/json" });
       if (candidate.targetOverride && base.includes("/api/vm/v1")) {
         headers.set("X-Serviprox-Target-Base", candidate.targetOverride);

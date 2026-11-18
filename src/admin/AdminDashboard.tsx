@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { adminService } from "../services/adminService";
-import { api, getConnectionMode, tokenStorage, type ConnectionMode } from "../services/api";
+import { api, getConnectionMode, tokenStorage, checkBackendHealth, type ConnectionMode } from "../services/api";
 import { authService } from "../services/auth";
 import { platformSettingsService, usePlatformSettings } from "../services/platformSettings";
 import AdminSettings from "./AdminSettings";
@@ -18,6 +18,12 @@ import {
   fileToDataUrl,
   PLACEHOLDER_PRODUCT_IMAGE,
   type StoreProduct as AdminStoreProduct,
+  type ProductReportItem,
+  getProductReports,
+  respondToProductReport,
+  isSellerStoreBlocked,
+  blockSellerStore,
+  unblockSellerStore,
 } from "../services/storeService";
 import "./AdminDashboard.css";
 
@@ -1745,6 +1751,22 @@ export const AdminDashboard: React.FC = () => {
   const [reportBlockDays, setReportBlockDays] = useState(7);
   const [submittingProductReport, setSubmittingProductReport] = useState(false);
 
+  // Estados para Modal de Reportes de Clientes de Publicaciones (Meko Shop)
+  const [productReportsModalOpen, setProductReportsModalOpen] = useState(false);
+  const [productReportsFilterStatus, setProductReportsFilterStatus] = useState<
+    "Todos" | "pendiente" | "en_revision" | "resuelto" | "desestimado"
+  >("Todos");
+  const [productReportsList, setProductReportsList] = useState<ProductReportItem[]>(() =>
+    getProductReports()
+  );
+  const [activeReportToRespond, setActiveReportToRespond] = useState<ProductReportItem | null>(null);
+  const [adminResponseText, setAdminResponseText] = useState("");
+  const [adminResponseStatus, setAdminResponseStatus] =
+    useState<ProductReportItem["status"]>("resuelto");
+  const [adminResponseAction, setAdminResponseAction] =
+    useState<ProductReportItem["actionTaken"]>("ninguna");
+  const [savingReportResponse, setSavingReportResponse] = useState(false);
+
   const productModerationActor =
     `${user?.first_name || ""} ${user?.last_name || ""}`.trim() ||
     user?.email ||
@@ -2051,6 +2073,72 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleSaveReportResponse = (report: ProductReportItem) => {
+    if (!adminResponseText.trim()) {
+      showNotification("Por favor ingresa una respuesta al reporte.", "error");
+      return;
+    }
+    setSavingReportResponse(true);
+    try {
+      respondToProductReport(
+        report.id,
+        adminResponseText.trim(),
+        productModerationActor,
+        adminResponseStatus,
+        adminResponseAction
+      );
+      if (adminResponseAction === "tienda_bloqueada") {
+        blockSellerStore(
+          report.sellerId || report.sellerName,
+          report.sellerName,
+          `Bloqueo exclusivo de tienda por reporte #${report.id}: ${report.reason}`,
+          productModerationActor
+        );
+        showNotification(
+          `Tienda de ${report.sellerName} suspendida. Solo se bloqueó la tienda; su cuenta general sigue activa.`,
+          "success"
+        );
+      } else if (adminResponseAction === "producto_oculto") {
+        void storeService.updateProduct(report.productId, {
+          isActive: false,
+          reviewStatus: "observado",
+          reviewNotes: `Oculto por reporte #${report.id}: ${adminResponseText.trim()}`,
+        });
+        showNotification("Publicación pausada y ocultada de la tienda.", "success");
+      }
+      setProductReportsList(getProductReports());
+      void loadServerProducts();
+      setActiveReportToRespond(null);
+      setAdminResponseText("");
+      showNotification("Respuesta guardada y reporte de publicación actualizado.", "success");
+    } catch {
+      showNotification("No se pudo guardar la respuesta al reporte.", "error");
+    } finally {
+      setSavingReportResponse(false);
+    }
+  };
+
+  const handleToggleStoreBlock = (sellerId: string | number | undefined, sellerName: string) => {
+    const isBlocked = isSellerStoreBlocked(sellerId, sellerName);
+    if (isBlocked) {
+      unblockSellerStore(sellerId || sellerName, sellerName);
+      showNotification(`Tienda de ${sellerName} reactivada correctamente.`, "success");
+    } else {
+      blockSellerStore(
+        sellerId || sellerName,
+        sellerName,
+        "Suspensión de tienda aplicada por el administrador",
+        productModerationActor
+      );
+      showNotification(
+        `Tienda de ${sellerName} suspendida. Solo se bloqueó la tienda; el usuario puede seguir usando sus servicios normales en Serviprox.`,
+        "success"
+      );
+    }
+    setProductReportsList(getProductReports());
+    void loadServerProducts();
+  };
+
   const [requestsList, setRequestsList] = useState<RequestItem[]>([]);
   const [prosList, setProsList] = useState<TopProfessional[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
@@ -2143,6 +2231,7 @@ export const AdminDashboard: React.FC = () => {
     try {
       if (!tokenStorage.getAccessToken()) {
         try {
+          await checkBackendHealth();
           await authService.login({ username: "admin", password: "serviprox2026" });
         } catch {
           // Si no responde, continúa con la consulta
@@ -2151,6 +2240,19 @@ export const AdminDashboard: React.FC = () => {
 
       const data = await adminService.getOverview();
       if (!data.database?.connected) {
+        try {
+          const health = await checkBackendHealth();
+          if (health.ok && health.database === "connected") {
+            setDbInfo({
+              connected: true,
+              engine: health.engine || "PostgreSQL (MV)",
+              database_name: "Serviprox DB (MV)",
+              loading: false,
+              mode: health.mode || getConnectionMode(),
+            });
+            return;
+          }
+        } catch {}
         setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
         clearOverviewData();
         return;
@@ -2171,8 +2273,9 @@ export const AdminDashboard: React.FC = () => {
       setPqrDistribution(data.charts.pqr_chart);
       setOverviewReports(data.reports);
     } catch (err) {
-      // Reintento resiliente con autenticación automática de administrador
+      // Reintento resiliente con autodetección de host backend (MV/emulador/red local) + login admin
       try {
+        await checkBackendHealth();
         await authService.login({ username: "admin", password: "serviprox2026" });
         const retryData = await adminService.getOverview();
         if (retryData.database?.connected) {
@@ -2194,6 +2297,23 @@ export const AdminDashboard: React.FC = () => {
         }
       } catch {
         // Fallo final
+      }
+
+      // Si la consulta detallada de overview falló pero el health check confirma que la base de datos está conectada en la MV
+      try {
+        const health = await checkBackendHealth();
+        if (health.ok && health.database === "connected") {
+          setDbInfo({
+            connected: true,
+            engine: health.engine || "PostgreSQL (MV)",
+            database_name: "Serviprox DB (MV)",
+            loading: false,
+            mode: health.mode || getConnectionMode(),
+          });
+          return;
+        }
+      } catch {
+        // Fallo de health
       }
 
       setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
@@ -2276,11 +2396,19 @@ export const AdminDashboard: React.FC = () => {
     const handleSyncEvent = () => {
       fetchDbPqrsAndProblems();
     };
+    const handleProductReportsSync = () => {
+      setProductReportsList(getProductReports());
+      void loadServerProducts();
+    };
     window.addEventListener("serviprox:pqr-updated", handleSyncEvent);
     window.addEventListener("serviprox:problem-updated", handleSyncEvent);
+    window.addEventListener("serviprox:product-reports-updated", handleProductReportsSync);
+    window.addEventListener("serviprox:store-block-changed", handleProductReportsSync);
     return () => {
       window.removeEventListener("serviprox:pqr-updated", handleSyncEvent);
       window.removeEventListener("serviprox:problem-updated", handleSyncEvent);
+      window.removeEventListener("serviprox:product-reports-updated", handleProductReportsSync);
+      window.removeEventListener("serviprox:store-block-changed", handleProductReportsSync);
     };
   }, []);
 
@@ -7505,6 +7633,29 @@ export const AdminDashboard: React.FC = () => {
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                   <button
                     type="button"
+                    onClick={() => {
+                      setProductReportsList(getProductReports());
+                      setProductReportsModalOpen(true);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      background: "#dc2626",
+                      color: "#ffffff",
+                      padding: "11px 20px",
+                      borderRadius: "12px",
+                      border: "none",
+                      fontWeight: 700,
+                      fontSize: "0.92rem",
+                      cursor: "pointer",
+                      boxShadow: "0 4px 14px rgba(220, 38, 38, 0.28)",
+                    }}
+                  >
+                    <span>📢</span> Reportes de Clientes ({productReportsList.filter((r) => r.status === "pendiente").length > 0 ? `${productReportsList.filter((r) => r.status === "pendiente").length} pendientes` : `${productReportsList.length}`})
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setAdminPublishModalOpen(true)}
                     style={{
                       display: "inline-flex",
@@ -8035,6 +8186,11 @@ export const AdminDashboard: React.FC = () => {
                                     Cuenta publicador bloqueada
                                   </div>
                                 )}
+                                {isSellerStoreBlocked(p.ownerId, p.sellerName) && (
+                                  <div style={{ color: "#b91c1c", fontWeight: 800, fontSize: "0.72rem", marginTop: "4px", background: "#fef2f2", padding: "2px 6px", borderRadius: "4px", display: "inline-block", border: "1px solid #fecaca" }}>
+                                    🚫 Tienda Suspendida (Solo Tienda)
+                                  </div>
+                                )}
                               </div>
                               <span style={{ color: "#64748b", fontSize: "0.74rem", whiteSpace: "nowrap" }}>{p.date}</span>
                             </div>
@@ -8104,6 +8260,27 @@ export const AdminDashboard: React.FC = () => {
                                 }}
                               >
                                 Eliminar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStoreBlock(p.ownerId || p.sellerName, p.sellerName)}
+                                style={{
+                                  gridColumn: "span 2",
+                                  padding: "8px 10px",
+                                  borderRadius: "8px",
+                                  background: isSellerStoreBlocked(p.ownerId, p.sellerName) ? "#ecfdf5" : "#fff1f2",
+                                  color: isSellerStoreBlocked(p.ownerId, p.sellerName) ? "#047857" : "#be123c",
+                                  border: isSellerStoreBlocked(p.ownerId, p.sellerName) ? "1px solid #a7f3d0" : "1px solid #fecdd3",
+                                  fontWeight: 700,
+                                  fontSize: "0.78rem",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "6px"
+                                }}
+                              >
+                                {isSellerStoreBlocked(p.ownerId, p.sellerName) ? "✅ Reactivar Tienda del Vendedor" : "🚫 Bloquear solo Tienda"}
                               </button>
                             </div>
                           </div>
@@ -8968,6 +9145,566 @@ export const AdminDashboard: React.FC = () => {
                         </button>
                       </div>
                     </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal de Gestión de Reportes de Clientes en Meko Shop */}
+              {productReportsModalOpen && (
+                <div
+                  style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: "rgba(15, 23, 42, 0.65)",
+                    backdropFilter: "blur(6px)",
+                    zIndex: 100000,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "16px",
+                  }}
+                  onClick={() => setProductReportsModalOpen(false)}
+                >
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: "20px",
+                      width: "100%",
+                      maxWidth: "960px",
+                      maxHeight: "90vh",
+                      display: "flex",
+                      flexDirection: "column",
+                      boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                      overflow: "hidden",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header del Modal */}
+                    <div
+                      style={{
+                        padding: "20px 24px",
+                        borderBottom: "1px solid #e2e8f0",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+                        color: "#ffffff",
+                      }}
+                    >
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "8px" }}>
+                          📢 Reportes de Clientes sobre Publicaciones
+                          <span
+                            style={{
+                              background: "#dc2626",
+                              color: "#fff",
+                              fontSize: "0.75rem",
+                              fontWeight: 800,
+                              padding: "2px 8px",
+                              borderRadius: "999px",
+                            }}
+                          >
+                            {productReportsList.length}
+                          </span>
+                        </h3>
+                        <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "#94a3b8" }}>
+                          Registro de denuncias de clientes, historial de respuestas administrativas y bloqueo exclusivo de tienda.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setProductReportsModalOpen(false)}
+                        style={{
+                          background: "rgba(255, 255, 255, 0.1)",
+                          border: "none",
+                          color: "#ffffff",
+                          fontSize: "1.2rem",
+                          borderRadius: "8px",
+                          width: "36px",
+                          height: "36px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Filtros de Estado */}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        padding: "12px 24px",
+                        background: "#f8fafc",
+                        borderBottom: "1px solid #e2e8f0",
+                        overflowX: "auto",
+                      }}
+                    >
+                      {(
+                        [
+                          { key: "Todos", label: `Todos (${productReportsList.length})` },
+                          { key: "pendiente", label: `Pendientes (${productReportsList.filter((r) => r.status === "pendiente").length})` },
+                          { key: "en_revision", label: `En Revisión (${productReportsList.filter((r) => r.status === "en_revision").length})` },
+                          { key: "resuelto", label: `Resueltos (${productReportsList.filter((r) => r.status === "resuelto").length})` },
+                          { key: "desestimado", label: `Desestimados (${productReportsList.filter((r) => r.status === "desestimado").length})` },
+                        ] as const
+                      ).map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setProductReportsFilterStatus(tab.key)}
+                          style={{
+                            padding: "6px 14px",
+                            borderRadius: "999px",
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            border: productReportsFilterStatus === tab.key ? "1px solid #0284c7" : "1px solid #cbd5e1",
+                            background: productReportsFilterStatus === tab.key ? "#0284c7" : "#ffffff",
+                            color: productReportsFilterStatus === tab.key ? "#ffffff" : "#475569",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            transition: "all 0.2s ease",
+                          }}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Lista de Reportes */}
+                    <div
+                      style={{
+                        padding: "20px 24px",
+                        overflowY: "auto",
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "16px",
+                      }}
+                    >
+                      {productReportsList.filter((r) =>
+                        productReportsFilterStatus === "Todos" ? true : r.status === productReportsFilterStatus
+                      ).length === 0 ? (
+                        <div
+                          style={{
+                            textAlign: "center",
+                            padding: "40px 20px",
+                            color: "#64748b",
+                          }}
+                        >
+                          <div style={{ fontSize: "2.5rem", marginBottom: "8px" }}>📭</div>
+                          <div style={{ fontWeight: 700, fontSize: "1rem", color: "#1e293b" }}>
+                            No hay reportes en esta categoría
+                          </div>
+                          <p style={{ fontSize: "0.84rem", margin: "4px 0 0" }}>
+                            Los reportes que hagan los clientes desde las publicaciones de la tienda aparecerán aquí.
+                          </p>
+                        </div>
+                      ) : (
+                        productReportsList
+                          .filter((r) =>
+                            productReportsFilterStatus === "Todos" ? true : r.status === productReportsFilterStatus
+                          )
+                          .map((rep) => {
+                            const isStoreBlocked = isSellerStoreBlocked(rep.sellerId, rep.sellerName);
+                            const isSelected = activeReportToRespond?.id === rep.id;
+                            const statusColor =
+                              rep.status === "resuelto"
+                                ? "#059669"
+                                : rep.status === "en_revision"
+                                  ? "#0284c7"
+                                  : rep.status === "desestimado"
+                                    ? "#64748b"
+                                    : "#dc2626";
+                            const statusBg =
+                              rep.status === "resuelto"
+                                ? "#ecfdf5"
+                                : rep.status === "en_revision"
+                                  ? "#f0f9ff"
+                                  : rep.status === "desestimado"
+                                    ? "#f1f5f9"
+                                    : "#fef2f2";
+                            const statusLabel =
+                              rep.status === "resuelto"
+                                ? "Resuelto"
+                                : rep.status === "en_revision"
+                                  ? "En Revisión"
+                                  : rep.status === "desestimado"
+                                    ? "Desestimado"
+                                    : "Pendiente";
+
+                            return (
+                              <div
+                                key={rep.id}
+                                style={{
+                                  border: isSelected ? "2px solid #0284c7" : "1px solid #e2e8f0",
+                                  borderRadius: "14px",
+                                  padding: "16px",
+                                  background: "#ffffff",
+                                  boxShadow: "0 2px 4px rgba(0,0,0,0.04)",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "12px",
+                                }}
+                              >
+                                {/* Barra Superior del Reporte */}
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    flexWrap: "wrap",
+                                    gap: "8px",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <span style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.86rem" }}>
+                                      Reporte #{rep.id}
+                                    </span>
+                                    <span
+                                      style={{
+                                        background: statusBg,
+                                        color: statusColor,
+                                        fontWeight: 800,
+                                        fontSize: "0.72rem",
+                                        padding: "2px 8px",
+                                        borderRadius: "999px",
+                                        border: `1px solid ${statusColor}33`,
+                                      }}
+                                    >
+                                      {statusLabel}
+                                    </span>
+                                    <span
+                                      style={{
+                                        background:
+                                          rep.priority === "Alta"
+                                            ? "#fee2e2"
+                                            : rep.priority === "Media"
+                                              ? "#fffbeb"
+                                              : "#f1f5f9",
+                                        color:
+                                          rep.priority === "Alta"
+                                            ? "#b91c1c"
+                                            : rep.priority === "Media"
+                                              ? "#b45309"
+                                              : "#475569",
+                                        fontWeight: 700,
+                                        fontSize: "0.7rem",
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                      }}
+                                    >
+                                      Prioridad {rep.priority}
+                                    </span>
+                                  </div>
+                                  <span style={{ color: "#64748b", fontSize: "0.75rem" }}>
+                                    {formatAdminDate(rep.createdAt)}
+                                  </span>
+                                </div>
+
+                                {/* Contenido del Reporte: Producto + Vendedor + Datos del Reportante */}
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "auto 1fr 1fr",
+                                    gap: "14px",
+                                    background: "#f8fafc",
+                                    padding: "12px",
+                                    borderRadius: "10px",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  {/* Imagen del Producto */}
+                                  <img
+                                    src={rep.productImage || "/assets/products/laptop-pro.jpg"}
+                                    alt={rep.productTitle}
+                                    style={{
+                                      width: "72px",
+                                      height: "72px",
+                                      objectFit: "cover",
+                                      borderRadius: "8px",
+                                      border: "1px solid #cbd5e1",
+                                    }}
+                                    onError={(e) => {
+                                      e.currentTarget.src = "/assets/products/laptop-pro.jpg";
+                                    }}
+                                  />
+
+                                  {/* Info del Producto */}
+                                  <div>
+                                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
+                                      {rep.productCategory || "Producto"}
+                                    </div>
+                                    <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.92rem", lineHeight: 1.3 }}>
+                                      {rep.productTitle}
+                                    </div>
+                                    <div style={{ color: "#059669", fontWeight: 800, fontSize: "0.84rem", marginTop: "2px" }}>
+                                      ${Number(rep.productPrice || 0).toLocaleString()} COP
+                                    </div>
+                                    <div style={{ color: "#64748b", fontSize: "0.74rem", marginTop: "2px" }}>
+                                      ID Producto: {rep.productId}
+                                    </div>
+                                  </div>
+
+                                  {/* Info del Vendedor / Publicador */}
+                                  <div>
+                                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 700 }}>
+                                      Vendedor / Publicador:
+                                    </div>
+                                    <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.85rem" }}>
+                                      {rep.sellerName}
+                                      {rep.sellerRole && (
+                                        <span style={{ color: "#64748b", fontSize: "0.74rem", fontWeight: 600 }}>
+                                          {" "}
+                                          ({rep.sellerRole})
+                                        </span>
+                                      )}
+                                    </div>
+                                    {rep.sellerEmail && (
+                                      <div style={{ color: "#475569", fontSize: "0.74rem" }}>
+                                        ✉️ {rep.sellerEmail}
+                                      </div>
+                                    )}
+                                    {rep.sellerPhone && (
+                                      <div style={{ color: "#475569", fontSize: "0.74rem" }}>
+                                        📞 {rep.sellerPhone}
+                                      </div>
+                                    )}
+                                    {isStoreBlocked && (
+                                      <div
+                                        style={{
+                                          color: "#b91c1c",
+                                          fontWeight: 800,
+                                          fontSize: "0.72rem",
+                                          marginTop: "3px",
+                                          background: "#fee2e2",
+                                          padding: "2px 6px",
+                                          borderRadius: "4px",
+                                          display: "inline-block",
+                                        }}
+                                      >
+                                        🚫 Tienda Suspendida (Solo Tienda)
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Motivo y Detalle del Reporte */}
+                                <div
+                                  style={{
+                                    background: "#fff1f2",
+                                    border: "1px solid #fecdd3",
+                                    borderRadius: "8px",
+                                    padding: "10px 12px",
+                                    fontSize: "0.82rem",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <span style={{ fontWeight: 800, color: "#9f1239" }}>
+                                      ⚠️ Motivo: {rep.reason}
+                                    </span>
+                                    <span style={{ color: "#64748b", fontSize: "0.74rem" }}>
+                                      Reportado por: <strong>{rep.reporterName}</strong>
+                                      {rep.reporterEmail ? ` (${rep.reporterEmail})` : ""}
+                                    </span>
+                                  </div>
+                                  <div style={{ color: "#334155", marginTop: "4px", whiteSpace: "pre-wrap" }}>
+                                    {rep.description}
+                                  </div>
+                                </div>
+
+                                {/* Respuesta Administrativa previa (si existe) */}
+                                {rep.adminResponse && (
+                                  <div
+                                    style={{
+                                      background: "#f0fdf4",
+                                      border: "1px solid #bbf7d0",
+                                      borderRadius: "8px",
+                                      padding: "10px 12px",
+                                      fontSize: "0.82rem",
+                                    }}
+                                  >
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                      <span style={{ fontWeight: 800, color: "#166534", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        ✅ Respuesta Oficial de Administración
+                                        <span style={{ fontSize: "0.74rem", color: "#15803d", fontWeight: 600 }}>
+                                          ({rep.adminName || "Admin"} · {formatAdminDate(rep.adminRespondedAt)})
+                                        </span>
+                                      </span>
+                                      {rep.actionTaken && (
+                                        <span
+                                          style={{
+                                            background: "#dcfce7",
+                                            color: "#166534",
+                                            fontWeight: 700,
+                                            fontSize: "0.72rem",
+                                            padding: "2px 6px",
+                                            borderRadius: "4px",
+                                          }}
+                                        >
+                                          Acción: {rep.actionTaken.replace("_", " ")}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ color: "#14532d", marginTop: "4px", whiteSpace: "pre-wrap" }}>
+                                      {rep.adminResponse}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Formulario para responder al reporte si está activo */}
+                                {isSelected ? (
+                                  <div
+                                    style={{
+                                      background: "#f8fafc",
+                                      border: "1px solid #cbd5e1",
+                                      borderRadius: "10px",
+                                      padding: "14px",
+                                      marginTop: "4px",
+                                    }}
+                                  >
+                                    <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.88rem", marginBottom: "8px" }}>
+                                      ✍️ Redactar Respuesta y Moderar Publicación
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                                      <div>
+                                        <label style={{ fontSize: "0.76rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                                          Estado del Reporte:
+                                        </label>
+                                        <select
+                                          value={adminResponseStatus}
+                                          onChange={(e) => setAdminResponseStatus(e.target.value as any)}
+                                          style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                                        >
+                                          <option value="resuelto">Resuelto</option>
+                                          <option value="en_revision">En Revisión</option>
+                                          <option value="desestimado">Desestimado (Sin infracción)</option>
+                                          <option value="pendiente">Pendiente</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label style={{ fontSize: "0.76rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                                          Acción Administrativa:
+                                        </label>
+                                        <select
+                                          value={adminResponseAction}
+                                          onChange={(e) => setAdminResponseAction(e.target.value as any)}
+                                          style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                                        >
+                                          <option value="ninguna">Ninguna acción adicional</option>
+                                          <option value="advertencia_enviada">Advertencia formal al vendedor</option>
+                                          <option value="producto_oculto">Ocultar y pausar publicación</option>
+                                          <option value="tienda_bloqueada">🚫 Suspender SOLO Tienda (mantiene cuenta general)</option>
+                                          <option value="desestimado">Desestimar reporte</option>
+                                        </select>
+                                      </div>
+                                    </div>
+
+                                    <div style={{ marginBottom: "10px" }}>
+                                      <label style={{ fontSize: "0.76rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "4px" }}>
+                                        Texto de Respuesta del Administrador:
+                                      </label>
+                                      <textarea
+                                        rows={3}
+                                        value={adminResponseText}
+                                        onChange={(e) => setAdminResponseText(e.target.value)}
+                                        placeholder="Escribe la respuesta formal y la resolución adoptada para el reporte..."
+                                        style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.82rem", resize: "vertical" }}
+                                      />
+                                    </div>
+
+                                    <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveReportToRespond(null);
+                                          setAdminResponseText("");
+                                        }}
+                                        style={{
+                                          padding: "8px 14px",
+                                          borderRadius: "8px",
+                                          border: "1px solid #cbd5e1",
+                                          background: "#ffffff",
+                                          color: "#475569",
+                                          fontWeight: 700,
+                                          fontSize: "0.8rem",
+                                          cursor: "pointer",
+                                        }}
+                                      >
+                                        Cancelar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={savingReportResponse}
+                                        onClick={() => handleSaveReportResponse(rep)}
+                                        style={{
+                                          padding: "8px 16px",
+                                          borderRadius: "8px",
+                                          border: "none",
+                                          background: "#0284c7",
+                                          color: "#ffffff",
+                                          fontWeight: 700,
+                                          fontSize: "0.8rem",
+                                          cursor: savingReportResponse ? "wait" : "pointer",
+                                        }}
+                                      >
+                                        {savingReportResponse ? "Guardando..." : "Guardar Respuesta Oficial"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  /* Botones de acción del reporte */
+                                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleStoreBlock(rep.sellerId, rep.sellerName)}
+                                      style={{
+                                        padding: "6px 12px",
+                                        borderRadius: "6px",
+                                        border: isStoreBlocked ? "1px solid #a7f3d0" : "1px solid #fecdd3",
+                                        background: isStoreBlocked ? "#ecfdf5" : "#fff1f2",
+                                        color: isStoreBlocked ? "#047857" : "#be123c",
+                                        fontWeight: 700,
+                                        fontSize: "0.76rem",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      {isStoreBlocked ? "✅ Reactivar Tienda" : "🚫 Suspender solo Tienda"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActiveReportToRespond(rep);
+                                        setAdminResponseText(rep.adminResponse || "");
+                                        setAdminResponseStatus(rep.status === "pendiente" ? "resuelto" : rep.status);
+                                        setAdminResponseAction(rep.actionTaken || "ninguna");
+                                      }}
+                                      style={{
+                                        padding: "6px 14px",
+                                        borderRadius: "6px",
+                                        border: "1px solid #0284c7",
+                                        background: "#eff6ff",
+                                        color: "#0284c7",
+                                        fontWeight: 700,
+                                        fontSize: "0.76rem",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      {rep.adminResponse ? "✏️ Editar Respuesta" : "💬 Responder Reporte"}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

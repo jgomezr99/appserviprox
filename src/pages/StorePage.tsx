@@ -73,6 +73,7 @@ import {
   compressProductImage,
   fileToDataUrl,
   PLACEHOLDER_PRODUCT_IMAGE,
+  isSellerStoreBlocked,
   type StoreProduct,
 } from "../services/storeService";
 import "./RolePages.css";
@@ -87,6 +88,15 @@ export const StorePage: React.FC = () => {
   useEffect(() => {
     document.title = "Meko Shop | Compra y vende productos nuevos y de segunda en Colombia";
   }, []);
+
+  // Comprobar si la tienda del usuario actual está suspendida por moderación administrativa
+  const isUserStoreBlocked = Boolean(
+    user && (
+      isSellerStoreBlocked(user.id, `${user.first_name || ""} ${user.last_name || ""}`.trim()) ||
+      isSellerStoreBlocked(user.email) ||
+      isSellerStoreBlocked(user.username)
+    )
+  );
 
   // Estado de publicaciones
   const [serverProducts, setServerProducts] = useState<StoreProduct[]>([]);
@@ -283,9 +293,14 @@ export const StorePage: React.FC = () => {
   const [newPhone, setNewPhone] = useState("+57 310 123 4567");
   const [newCity, setNewCity] = useState("Bogotá");
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState("");
 
   const openNewPublishModal = () => {
+    if (isUserStoreBlocked) {
+      setToastMessage("Tu tienda en Meko Shop se encuentra suspendida por reportes de publicaciones. Solo tu tienda está bloqueada; tu cuenta general y servicios de Serviprox siguen activos.");
+      return;
+    }
     setEditingProduct(null);
     setNewTitle("");
     setNewCategory("Tecnología");
@@ -296,6 +311,7 @@ export const StorePage: React.FC = () => {
     setNewPhone(user?.phone || "+57 310 123 4567");
     setNewCity(selectedCity === ALL_COLOMBIA_OPTION ? "Bogotá" : selectedCity);
     setGalleryPreviews([]);
+    setGalleryFiles([]);
     setImageUrlInput("");
     setPublishModalOpen(true);
   };
@@ -318,6 +334,7 @@ export const StorePage: React.FC = () => {
           ? [product.image]
           : [];
     setGalleryPreviews(imgs);
+    setGalleryFiles([]);
     setImageUrlInput("");
     setPublishModalOpen(true);
   };
@@ -334,11 +351,13 @@ export const StorePage: React.FC = () => {
     }
 
     const addedUrls: string[] = [];
+    const validFiles: File[] = [];
     for (const file of files.slice(0, remaining)) {
       if (!file.type.startsWith("image/")) {
         setToastMessage("Selecciona archivos de imagen válidos (JPG, PNG o WEBP).");
         continue;
       }
+      validFiles.push(file);
       try {
         const compressed = await compressProductImage(file);
         const dataUrl = await fileToDataUrl(compressed);
@@ -350,6 +369,7 @@ export const StorePage: React.FC = () => {
 
     if (addedUrls.length > 0) {
       setGalleryPreviews((prev) => Array.from(new Set([...prev, ...addedUrls])).slice(0, 4));
+      setGalleryFiles((prev) => [...prev, ...validFiles].slice(0, 4));
     }
   };
 
@@ -372,12 +392,17 @@ export const StorePage: React.FC = () => {
     setPublishModalOpen(false);
     setEditingProduct(null);
     setGalleryPreviews([]);
+    setGalleryFiles([]);
     setImageUrlInput("");
   };
 
   const handleCreateOrUpdateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (publishing) return;
+    if (isUserStoreBlocked) {
+      setToastMessage("Tu tienda en Meko Shop se encuentra suspendida por reportes de publicaciones. Solo tu tienda está bloqueada; tu cuenta general sigue activa.");
+      return;
+    }
     if (!newTitle.trim()) {
       setToastMessage("Por favor ingresa el título del producto.");
       return;
@@ -411,6 +436,7 @@ export const StorePage: React.FC = () => {
           phone: newPhone.trim(),
           city: newCity.trim() || selectedCity,
           imageUrls: galleryPreviews,
+          imageFiles: galleryFiles,
         });
         setServerProducts((current) =>
           current.map((item) => (String(item.id) === String(updated.id) ? updated : item))
@@ -434,6 +460,7 @@ export const StorePage: React.FC = () => {
           sellerRole,
           ownerId: user.id,
           imageUrls: galleryPreviews,
+          imageFiles: galleryFiles,
         });
         setServerProducts((current) => [
           created,
@@ -487,6 +514,7 @@ export const StorePage: React.FC = () => {
         hideProduct: false,
         blockPublisher: false,
         reporterName,
+        reporterEmail: user?.email || "",
       });
       setReportOpen(false);
       setReportDetails("");
@@ -1465,6 +1493,50 @@ export const StorePage: React.FC = () => {
                           >
                             ${p.price.toLocaleString("es-CO")} COP
                           </div>
+
+                          {/* Perfil del cliente/vendedor publicador */}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              marginBottom: "8px",
+                              fontSize: "0.75rem",
+                              color: "#334155",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "18px",
+                                height: "18px",
+                                borderRadius: "50%",
+                                background: "#eff6ff",
+                                color: "#2563eb",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "0.65rem",
+                                fontWeight: 800,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {(p.sellerName || "U").charAt(0).toUpperCase()}
+                            </div>
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                              title={`${p.sellerName || "Usuario"} · ${p.sellerRole || "Cliente"}`}
+                            >
+                              {p.sellerName || "Usuario Serviprox"}
+                              <span style={{ color: "#64748b", fontWeight: 500, fontSize: "0.7rem", marginLeft: "4px" }}>
+                                ({p.sellerRole === "Contratista" ? "Profesional" : p.sellerRole || "Cliente"})
+                              </span>
+                            </span>
+                          </div>
                         </div>
 
                         <div
@@ -1738,12 +1810,23 @@ export const StorePage: React.FC = () => {
                             color:
                               selectedProductDetail.sellerRole === "Administrador" ? "#2563eb" : "#64748b",
                             fontWeight: selectedProductDetail.sellerRole === "Administrador" ? 700 : 500,
+                            display: "block",
                           }}
                         >
                           {selectedProductDetail.sellerRole === "Administrador"
                             ? "Tienda Oficial Meko Shop"
-                            : selectedProductDetail.sellerRole}
+                            : selectedProductDetail.sellerRole || "Cliente"}
                         </span>
+                        {selectedProductDetail.sellerEmail && (
+                          <span style={{ fontSize: "0.76rem", color: "#475569", display: "block", marginTop: "2px" }}>
+                            ✉️ {selectedProductDetail.sellerEmail}
+                          </span>
+                        )}
+                        {selectedProductDetail.phone && (
+                          <span style={{ fontSize: "0.76rem", color: "#475569", display: "block", marginTop: "1px" }}>
+                            📞 {selectedProductDetail.phone}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2134,6 +2217,26 @@ export const StorePage: React.FC = () => {
                 <IonIcon icon={closeOutline} style={{ fontSize: "1.3rem" }} />
               </button>
             </div>
+
+            {isUserStoreBlocked && (
+              <div
+                style={{
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  borderRadius: "12px",
+                  padding: "14px 16px",
+                  marginBottom: "18px",
+                  color: "#991b1b",
+                }}
+              >
+                <div style={{ fontWeight: 800, fontSize: "0.92rem", marginBottom: "4px" }}>
+                  🚫 Tu tienda en Meko Shop se encuentra suspendida
+                </div>
+                <div style={{ fontSize: "0.82rem", lineHeight: 1.5 }}>
+                  Un administrador ha pausado tu tienda debido a reportes en tus publicaciones. Solo tu tienda está bloqueada; tu cuenta general para contratar servicios, solicitar soporte y tus reservas en Serviprox continúan 100% activas.
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleCreateOrUpdateProduct}>
               {/* Título */}
