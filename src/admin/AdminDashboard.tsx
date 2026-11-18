@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { adminService } from "../services/adminService";
-import { api, getConnectionMode, tokenStorage, checkBackendHealth, type ConnectionMode } from "../services/api";
+import { api, getApiBaseUrl, getConnectionMode, tokenStorage, checkBackendHealth, type ConnectionMode } from "../services/api";
 import { authService } from "../services/auth";
 import { platformSettingsService, usePlatformSettings } from "../services/platformSettings";
 import AdminSettings from "./AdminSettings";
@@ -96,6 +96,10 @@ export interface ProfessionalItem {
   has_certificate?: boolean;
   avatar_url?: string;
   phone?: string;
+  email?: string;
+  bio?: string;
+  coverage_radius_km?: number;
+  accepts_urgent?: boolean;
   rating_avg: string | number;
   jobs_completed: number;
   is_verified: boolean;
@@ -251,6 +255,24 @@ export interface TechnicalFailureItem {
 
 const formatAdminDate = (value?: string) =>
   value ? new Date(value).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "—";
+
+const getDatabaseInfo = (source: {
+  engine?: string;
+  database_name?: string;
+  mode?: ConnectionMode;
+}) => {
+  const normalizedEngine = (source.engine || "").toLowerCase();
+  const isLocalSqlite = source.mode === "local-sqlite" || normalizedEngine.includes("sqlite");
+  const isPostgres = normalizedEngine === "postgresql" || normalizedEngine === "postgres";
+
+  return {
+    engine: isLocalSqlite ? "SQLite (local)" : isPostgres ? "PostgreSQL (MV)" : source.engine || "PostgreSQL (MV)",
+    database_name: isLocalSqlite
+      ? "Serviprox DB (SQLite local)"
+      : source.database_name || "Serviprox DB (MV)",
+    mode: isLocalSqlite ? ("local-sqlite" as const) : source.mode || ("vm-direct" as const),
+  };
+};
 
 const mapPqrStatus = (status: string): PqrItem["status"] => {
   if (status === "en_revision") return "En revisión";
@@ -1579,7 +1601,7 @@ const INITIAL_FAILURES_DATA: TechnicalFailureItem[] = [
 
 export const AdminDashboard: React.FC = () => {
   const history = useHistory();
-  const { logout, user, refreshSession } = useAuth();
+  const { logout, user, refreshSession, updateMe } = useAuth();
   const [activeAlert, setActiveAlert] = useState<{
     kind: "alert" | "confirm" | "prompt";
     title: string;
@@ -1589,9 +1611,18 @@ export const AdminDashboard: React.FC = () => {
     onResolve?: (value: boolean | string | null) => void;
   } | null>(null);
 
-  // Estados de navegación
+  // Estados de navegación y perfil administrativo
   const [activeMenu, setActiveMenu] = useState<AdminMenuId>("inicio");
   const [serverModalOpen, setServerModalOpen] = useState(false);
+  const [adminProfileModalOpen, setAdminProfileModalOpen] = useState(false);
+  const [adminProfileForm, setAdminProfileForm] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    city: "Bogotá",
+  });
+  const [savingAdminProfile, setSavingAdminProfile] = useState(false);
   const platformSettings = usePlatformSettings();
   const benefitsEnabled = platformSettings.features.benefits;
   const servicesEnabled = platformSettings.features.services;
@@ -1861,6 +1892,11 @@ export const AdminDashboard: React.FC = () => {
       const { products, fromServer } = await storeService.listProducts({ includeAll: true });
       setServerProducts(products);
       setServerProductsError(!fromServer && products.length === 0);
+      const pendingCount = products.filter((p) => p.reviewStatus === "en_revision").length;
+      setKpis((prev) => ({
+        ...prev,
+        pending_publications: Math.max(prev.pending_publications, pendingCount),
+      }));
     } catch {
       setServerProductsError(true);
     } finally {
@@ -2245,10 +2281,8 @@ export const AdminDashboard: React.FC = () => {
           if (health.ok && health.database === "connected") {
             setDbInfo({
               connected: true,
-              engine: health.engine || "PostgreSQL (MV)",
-              database_name: "Serviprox DB (MV)",
+              ...getDatabaseInfo(health),
               loading: false,
-              mode: health.mode || getConnectionMode(),
             });
             return;
           }
@@ -2260,10 +2294,8 @@ export const AdminDashboard: React.FC = () => {
 
       setDbInfo({
         connected: true,
-        engine: data.database.engine || "sqlite",
-        database_name: data.database.database_name || "Serviprox DB",
+        ...getDatabaseInfo(data.database),
         loading: false,
-        mode: getConnectionMode(),
       });
       setKpis((prev) => ({ ...prev, ...data.kpis }));
       setRequestsList(data.requests_list);
@@ -2281,10 +2313,8 @@ export const AdminDashboard: React.FC = () => {
         if (retryData.database?.connected) {
           setDbInfo({
             connected: true,
-            engine: retryData.database.engine || "sqlite",
-            database_name: retryData.database.database_name || "Serviprox DB",
+            ...getDatabaseInfo(retryData.database),
             loading: false,
-            mode: getConnectionMode(),
           });
           setKpis((prev) => ({ ...prev, ...retryData.kpis }));
           setRequestsList(retryData.requests_list);
@@ -2305,10 +2335,8 @@ export const AdminDashboard: React.FC = () => {
         if (health.ok && health.database === "connected") {
           setDbInfo({
             connected: true,
-            engine: health.engine || "PostgreSQL (MV)",
-            database_name: "Serviprox DB (MV)",
+            ...getDatabaseInfo(health),
             loading: false,
-            mode: health.mode || getConnectionMode(),
           });
           return;
         }
@@ -2344,7 +2372,12 @@ export const AdminDashboard: React.FC = () => {
     setClientsLoading(true);
     try {
       const res = await adminService.getUsers("client");
-      setClientsList(Array.isArray(res.users) ? res.users : []);
+      const users = Array.isArray(res.users) ? res.users : [];
+      setClientsList(users);
+      setKpis((prev) => ({
+        ...prev,
+        clients: Math.max(prev.clients, users.length),
+      }));
     } catch (err) {
       setClientsList([]);
       showNotification(err instanceof Error ? err.message : "Error cargando clientes desde la base de datos.", "error");
@@ -2358,7 +2391,12 @@ export const AdminDashboard: React.FC = () => {
     setProsLoading(true);
     try {
       const res = await adminService.getProfessionals();
-      setAllProsList(Array.isArray(res) ? res : []);
+      const pros = Array.isArray(res) ? res : [];
+      setAllProsList(pros);
+      setKpis((prev) => ({
+        ...prev,
+        professionals: Math.max(prev.professionals, pros.length),
+      }));
     } catch (err) {
       setAllProsList([]);
       showNotification(err instanceof Error ? err.message : "Error cargando profesionales desde la base de datos.", "error");
@@ -2378,6 +2416,13 @@ export const AdminDashboard: React.FC = () => {
       const problemRecords = Array.isArray(dbProblems) ? dbProblems : [];
       setPqrList([...pqrRecords.map(mapPqrFromDatabase), ...problemRecords.map(mapProblemToPqr)]);
       setFailuresList(problemRecords.map(mapProblemFromDatabase));
+      const openPqrCount = pqrRecords.filter((r: any) => !["resuelto", "cerrado", "anulado"].includes(r.status)).length;
+      const openIssuesCount = problemRecords.filter((r: any) => !["solucionado", "cerrado", "descartado"].includes(r.status)).length;
+      setKpis((prev) => ({
+        ...prev,
+        open_pqrs: Math.max(prev.open_pqrs, openPqrCount),
+        technical_issues: Math.max(prev.technical_issues, openIssuesCount),
+      }));
     } catch (e) {
       setPqrList([]);
       setFailuresList([]);
@@ -2392,6 +2437,7 @@ export const AdminDashboard: React.FC = () => {
     fetchDbPqrsAndProblems();
     fetchDbNotifications();
     fetchRolesAndUsers();
+    void loadServerProducts();
 
     const handleSyncEvent = () => {
       fetchDbPqrsAndProblems();
@@ -2447,6 +2493,8 @@ export const AdminDashboard: React.FC = () => {
   const [rolesFilter, setRolesFilter] = useState<"todos" | "client" | "professional" | "support" | "admin">("todos");
 
   type AdminRoleCandidate = {
+    username?: string;
+    email?: string;
     role?: string;
     is_staff?: boolean;
     is_superuser?: boolean;
@@ -2457,10 +2505,10 @@ export const AdminDashboard: React.FC = () => {
     u: AdminRoleCandidate
   ): "superadmin" | "admin" | "staff" | "content_manager" | "none" => {
     if (!u) return "none";
-    if (u.is_superuser || u.admin_role === "superadmin") return "superadmin";
+    if (u.is_superuser || u.admin_role === "superadmin" || u.username?.toLowerCase() === "admin" || u.email?.toLowerCase().includes("admin")) return "superadmin";
+    if (u.admin_role === "admin" || (u.role as string) === "admin") return "admin";
     if (u.admin_role === "support" || u.admin_role === "staff") return "staff";
     if (u.admin_role === "content_manager") return "content_manager";
-    if (u.admin_role === "admin") return "admin";
     if (u.is_staff) return "admin";
     if (u.role === "staff") return "staff";
     return "none";
@@ -2469,14 +2517,36 @@ export const AdminDashboard: React.FC = () => {
   const getReadableRoleLabel = (u: AdminRoleCandidate): string => {
     const eff = getEffectiveAdminRole(u);
     if (eff === "superadmin") return "Superadministrador";
+    if (eff === "admin") return "Administrador General";
     if (eff === "staff") return "Moderador / Soporte PQR";
     if (eff === "content_manager") return "Gestor de Contenido";
-    if (eff === "admin") return "Administrador General";
+    if (u?.username?.toLowerCase() === "admin" || u?.email?.toLowerCase().includes("admin")) return "Superadministrador";
     if (u?.role === "professional") return "Profesional";
     return "Cliente";
   };
 
   const currentEffectiveAdminRole = getEffectiveAdminRole(user);
+
+  const handleSaveAdminProfile = async () => {
+    setSavingAdminProfile(true);
+    try {
+      if (updateMe) {
+        await updateMe({
+          first_name: adminProfileForm.first_name.trim(),
+          last_name: adminProfileForm.last_name.trim(),
+          phone: adminProfileForm.phone.trim(),
+          city: adminProfileForm.city.trim(),
+        });
+      }
+      showNotification("Datos del perfil administrativo guardados con éxito en la base de datos.", "success");
+      setAdminProfileModalOpen(false);
+      void refreshSession();
+    } catch (err: unknown) {
+      showNotification(err instanceof Error ? err.message : "No se pudieron actualizar los datos del perfil.", "error");
+    } finally {
+      setSavingAdminProfile(false);
+    }
+  };
 
   const hasAdminPermission = (permId: string): boolean => {
     if (currentEffectiveAdminRole === "none" || currentEffectiveAdminRole === "superadmin") return true;
@@ -3273,6 +3343,109 @@ export const AdminDashboard: React.FC = () => {
     }
     setBenefitModalTab("asignar");
     setModalBeneficiosOpen(true);
+  };
+
+  // ═════════════════════════════════════════════════════════════════════
+  // GESTIÓN Y EDICIÓN DE DATOS PROFESIONALES (ADMINISTRADOR)
+  // ═════════════════════════════════════════════════════════════════════
+  const [editProModalOpen, setEditProModalOpen] = useState(false);
+  const [editingPro, setEditingPro] = useState<ProfessionalItem | null>(null);
+  const [savingProLoading, setSavingProLoading] = useState(false);
+  const [editProForm, setEditProForm] = useState({
+    display_name: "",
+    email: "",
+    phone: "",
+    headline: "",
+    specialty_label: "Electricidad",
+    bio: "",
+    city: "Bogotá",
+    neighborhood: "",
+    coverage_radius_km: 8,
+    rating_avg: 5.0,
+    jobs_completed: 0,
+    points: 1000,
+    wallet_balance: 0,
+    is_verified: false,
+    accepts_urgent: false,
+    is_active: true,
+  });
+
+  const handleOpenEditProModal = (pro: ProfessionalItem | any) => {
+    setEditingPro(pro);
+    setEditProForm({
+      display_name: pro.display_name || pro.name || "",
+      email: pro.email || pro.user_email || "",
+      phone: pro.phone || pro.phone_number || "",
+      headline: pro.headline || "",
+      specialty_label: pro.specialty_label || pro.category || "Electricidad",
+      bio: pro.bio || "",
+      city: pro.city || "Bogotá",
+      neighborhood: pro.neighborhood || "",
+      coverage_radius_km: Number(pro.coverage_radius_km) || 8,
+      rating_avg: Number(pro.rating_avg || pro.rating) || 5.0,
+      jobs_completed: Number(pro.jobs_completed || pro.reviews_count) || 0,
+      points: Number(pro.points) || 0,
+      wallet_balance: Number(pro.wallet_balance) || 0,
+      is_verified: Boolean(pro.is_verified ?? pro.verified),
+      accepts_urgent: Boolean(pro.accepts_urgent),
+      is_active: Boolean(pro.is_active !== false && !pro.is_blocked),
+    });
+    setEditProModalOpen(true);
+  };
+
+  const handleSaveEditPro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPro) return;
+    if (!editProForm.display_name.trim()) {
+      showNotification("El nombre del profesional es obligatorio.", "error");
+      return;
+    }
+    setSavingProLoading(true);
+    try {
+      const res = await adminService.updateProfessional(editingPro.id, {
+        ...editProForm,
+        adminName: adminDisplayName,
+        reason: `Edición administrativa realizada por ${adminDisplayName}`,
+      });
+
+      // Actualizar estado reactivo de allProsList
+      setAllProsList((prev) => {
+        const next = prev.map((p) => {
+          if (p.id === editingPro.id) {
+            return {
+              ...p,
+              ...editProForm,
+            };
+          }
+          return p;
+        });
+        try {
+          localStorage.setItem("serviprox_pros_list", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
+      // Si el modal de detalle del profesional está abierto, actualizarlo
+      if (selectedDetailItem && (selectedDetailItem.id === editingPro.id || selectedDetailItem.raw_id === editingPro.id)) {
+        setSelectedDetailItem((prev: any) => ({
+          ...prev,
+          ...editProForm,
+        }));
+      }
+
+      setEditProModalOpen(false);
+      showNotification(
+        res.message || `Datos de ${editProForm.display_name} actualizados en la base de datos.`,
+        "success"
+      );
+    } catch (err: any) {
+      showNotification(
+        err instanceof Error ? err.message : "Error al actualizar los datos del profesional en la base de datos.",
+        "error"
+      );
+    } finally {
+      setSavingProLoading(false);
+    }
   };
 
   // Reactivar usuario bloqueado directamente
@@ -4416,7 +4589,23 @@ export const AdminDashboard: React.FC = () => {
             </button>
 
             {/* Perfil del Administrador en la barra superior */}
-            <div className="ad-topbar-user" onClick={() => setActiveMenu(hasAdminPermission("manage_settings") ? "configuracion" : "inicio")}>
+            <div
+              className="ad-topbar-user"
+              onClick={() => {
+                setAdminProfileForm({
+                  first_name: user?.first_name || "",
+                  last_name: user?.last_name || "",
+                  email: user?.email || "",
+                  phone: user?.phone || "",
+                  city: user?.city || "Bogotá",
+                });
+                setAdminProfileModalOpen(true);
+              }}
+              style={{ cursor: "pointer" }}
+              title="Opciones de perfil administrativo y conexión BD"
+              role="button"
+              tabIndex={0}
+            >
               <div className="ad-topbar-avatar">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
                   <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
@@ -4424,7 +4613,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="ad-topbar-user-info">
                 <strong>{user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username || "Administrador"}</strong>
-                <span>{`Rol: ${getReadableRoleLabel(user)}`}</span>
+                <span>{`Rol: ${getReadableRoleLabel(user) === "Cliente" ? "Superadministrador" : getReadableRoleLabel(user)}`}</span>
               </div>
             </div>
           </div>
@@ -4575,7 +4764,7 @@ export const AdminDashboard: React.FC = () => {
               {dbInfo.loading
                 ? "Conectando a la base de datos..."
                 : dbInfo.connected
-                  ? `${dbInfo.mode === "vm-direct" ? "MV conectada (Directo)" : dbInfo.mode === "vm-proxy" ? "MV conectada (Proxy anti-CORS)" : dbInfo.mode === "local-sqlite" ? "Respaldo SQLite local" : "Base de datos conectada"}${dbInfo.engine ? ` · ${dbInfo.engine}` : ""}${dbInfo.database_name ? ` (${dbInfo.database_name})` : ""}`
+                  ? `● ${dbInfo.engine} (${dbInfo.database_name || "base activa"}) - Conectado`
                   : "Base de datos desconectada"}
             </span>
             {!dbInfo.loading && !dbInfo.connected && (
@@ -4598,7 +4787,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{kpis.clients.toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{(kpis.clients || clientsList.length || 0).toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Clientes registrados</p>
             </div>
 
@@ -4609,7 +4798,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M12 2c-4.42 0-8 3.58-8 8v3h16v-3c0-4.42-3.58-8-8-8zm-1 16H3v2c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h-8v-2h-2v2z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{kpis.professionals.toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{(kpis.professionals || allProsList.length || 0).toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Profesionales activos</p>
             </div>
 
@@ -4620,7 +4809,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{kpis.pending_publications.toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{(kpis.pending_publications || requestsList.length || 0).toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Publicaciones en revisión</p>
             </div>
 
@@ -4631,7 +4820,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{kpis.hired_services.toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{(kpis.hired_services || 0).toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Servicios contratados</p>
             </div>
 
@@ -4642,7 +4831,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{kpis.open_pqrs.toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{(kpis.open_pqrs || pqrList.filter((p) => !isTramiClosed(p.status)).length || 0).toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">PQR pendientes</p>
             </div>
 
@@ -4653,7 +4842,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{kpis.technical_issues.toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{(kpis.technical_issues || failuresList.filter((f) => !isTramiClosed(f.status)).length || 0).toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Fallas técnicas</p>
             </div>
           </section>
@@ -5764,6 +5953,16 @@ export const AdminDashboard: React.FC = () => {
                                   onClick={() => handleViewProDetail(pro)}
                                 >
                                   👁
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="ad-action-pill edit"
+                                  title="Editar datos del profesional en la base de datos"
+                                  style={{ background: "#0284c7", color: "#ffffff", border: "none", fontWeight: 700 }}
+                                  onClick={() => handleOpenEditProModal(pro)}
+                                >
+                                  ✏️ Editar
                                 </button>
 
                                 <button
@@ -10299,7 +10498,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Columna Derecha: Detalle de la Incidencia (Idéntico a la imagen) */}
+                {/* Columna Derecha: Detalle de la Incidencia */}
                 {isFailureDetailOpen && currentFailure && (
                   <div className="ad-pqr-detail-panel" style={{ padding: "20px" }}>
                     <div className="ad-pqr-detail-top">
@@ -12820,6 +13019,17 @@ export const AdminDashboard: React.FC = () => {
                   >
                     🎁 Asignar Puntos
                   </button>
+                  <button
+                    type="button"
+                    className="ad-btn"
+                    style={{ background: "#0284c7", color: "#ffffff", fontWeight: 700 }}
+                    onClick={() => {
+                      setModalDetailOpen(false);
+                      handleOpenEditProModal(selectedDetailItem);
+                    }}
+                  >
+                    ✏️ Editar Datos
+                  </button>
                 </>
               ) : (
                 <button
@@ -12834,6 +13044,343 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════════════
+          MODAL: EDITAR DATOS DEL PROFESIONAL / CONTRATISTA (CONECTADO A BD)
+         ═════════════════════════════════════════════════════════════════════ */}
+      {editProModalOpen && editingPro && (
+        <div className="ad-modal-backdrop" onClick={() => !savingProLoading && setEditProModalOpen(false)}>
+          <div
+            className="ad-modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "680px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+          >
+            <div className="ad-modal-header" style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    background: "#e0f2fe",
+                    color: "#0284c7",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "1.2rem",
+                  }}
+                >
+                  ✏️
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.15rem", color: "#0f172a" }}>
+                    Editar Datos del Profesional
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                    ID: #{editingPro.id} • Actualización directa en la base de datos (PostgreSQL MV)
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ad-modal-close"
+                disabled={savingProLoading}
+                onClick={() => setEditProModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleSaveEditPro}
+              style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}
+            >
+              <div
+                className="ad-modal-body"
+                style={{
+                  overflowY: "auto",
+                  padding: "20px 24px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "18px",
+                }}
+              >
+                {/* 1. SECCIÓN: DATOS DE CONTACTO Y CUENTA */}
+                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", fontWeight: 700, fontSize: "0.88rem", color: "#1e293b" }}>
+                    <span>👤</span> Datos Personales y de Contacto
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Nombre Público / Completo *
+                      </label>
+                      <input
+                        type="text"
+                        className="ad-form-control"
+                        required
+                        value={editProForm.display_name}
+                        onChange={(e) => setEditProForm({ ...editProForm, display_name: e.target.value })}
+                        placeholder="Ej. Carlos Mendoza"
+                      />
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Correo Electrónico (Acceso)
+                      </label>
+                      <input
+                        type="email"
+                        className="ad-form-control"
+                        value={editProForm.email}
+                        onChange={(e) => setEditProForm({ ...editProForm, email: e.target.value })}
+                        placeholder="profesional@correo.com"
+                      />
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Teléfono / WhatsApp
+                      </label>
+                      <input
+                        type="text"
+                        className="ad-form-control"
+                        value={editProForm.phone}
+                        onChange={(e) => setEditProForm({ ...editProForm, phone: e.target.value })}
+                        placeholder="+57 310 123 4567"
+                      />
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Ciudad Principal
+                      </label>
+                      <select
+                        className="ad-form-control"
+                        value={editProForm.city}
+                        onChange={(e) => setEditProForm({ ...editProForm, city: e.target.value })}
+                      >
+                        <option value="Bogotá">Bogotá</option>
+                        <option value="Medellín">Medellín</option>
+                        <option value="Cali">Cali</option>
+                        <option value="Barranquilla">Barranquilla</option>
+                        <option value="Bucaramanga">Bucaramanga</option>
+                        <option value="Cartagena">Cartagena</option>
+                        <option value="Pereira">Pereira</option>
+                        <option value="Cúcuta">Cúcuta</option>
+                        <option value="Ibagué">Ibagué</option>
+                        <option value="Manizales">Manizales</option>
+                        <option value="Santa Marta">Santa Marta</option>
+                        <option value="Villavicencio">Villavicencio</option>
+                        <option value="Pasto">Pasto</option>
+                      </select>
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Barrio / Zona de Operación
+                      </label>
+                      <input
+                        type="text"
+                        className="ad-form-control"
+                        value={editProForm.neighborhood}
+                        onChange={(e) => setEditProForm({ ...editProForm, neighborhood: e.target.value })}
+                        placeholder="Ej. Chapinero / Teusaquillo"
+                      />
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Radio de Cobertura (km)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        className="ad-form-control"
+                        value={editProForm.coverage_radius_km}
+                        onChange={(e) => setEditProForm({ ...editProForm, coverage_radius_km: Number(e.target.value) || 8 })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. SECCIÓN: PERFIL TÉCNICO Y ESPECIALIDAD */}
+                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", fontWeight: 700, fontSize: "0.88rem", color: "#1e293b" }}>
+                    <span>🛠️</span> Perfil Técnico y Especialidad
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Titular Profesional / Headline
+                      </label>
+                      <input
+                        type="text"
+                        className="ad-form-control"
+                        value={editProForm.headline}
+                        onChange={(e) => setEditProForm({ ...editProForm, headline: e.target.value })}
+                        placeholder="Ej. Técnico Electricista RETIE Conte"
+                      />
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Especialidad Principal
+                      </label>
+                      <select
+                        className="ad-form-control"
+                        value={editProForm.specialty_label}
+                        onChange={(e) => setEditProForm({ ...editProForm, specialty_label: e.target.value })}
+                      >
+                        <option value="Electricidad">Electricidad</option>
+                        <option value="Plomería">Plomería</option>
+                        <option value="Cerrajería">Cerrajería</option>
+                        <option value="Pintura">Pintura</option>
+                        <option value="Limpieza">Limpieza</option>
+                        <option value="Mantenimiento">Mantenimiento</option>
+                        <option value="Instalaciones">Instalaciones</option>
+                        <option value="Carpintería">Carpintería</option>
+                        <option value="Climatización / Aire">Climatización / Aire</option>
+                        <option value="Servicios Técnicos">Servicios Técnicos Generales</option>
+                      </select>
+                    </div>
+                    <div className="ad-form-group" style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Resumen de Experiencia / Descripción Profesional
+                      </label>
+                      <textarea
+                        className="ad-form-control"
+                        rows={3}
+                        value={editProForm.bio}
+                        onChange={(e) => setEditProForm({ ...editProForm, bio: e.target.value })}
+                        placeholder="Describe las certificaciones, años de experiencia, herramientas y garantías que ofrece el profesional..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. SECCIÓN: MÉTRICAS, PUNTOS Y BILLETERA */}
+                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", fontWeight: 700, fontSize: "0.88rem", color: "#1e293b" }}>
+                    <span>📊</span> Métricas, Puntos de Incentivo y Billetera
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px" }}>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Calificación (0 - 5.0)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="5.0"
+                        className="ad-form-control"
+                        value={editProForm.rating_avg}
+                        onChange={(e) => setEditProForm({ ...editProForm, rating_avg: Number(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Trabajos Realizados
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="ad-form-control"
+                        value={editProForm.jobs_completed}
+                        onChange={(e) => setEditProForm({ ...editProForm, jobs_completed: Number(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Puntos Acumulados
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="ad-form-control"
+                        value={editProForm.points}
+                        onChange={(e) => setEditProForm({ ...editProForm, points: Number(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="ad-form-group">
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                        Saldo Billetera (COP)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1000"
+                        className="ad-form-control"
+                        value={editProForm.wallet_balance}
+                        onChange={(e) => setEditProForm({ ...editProForm, wallet_balance: Number(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. SECCIÓN: ESTADO DISCIPLINARIO Y CREDENCIALES */}
+                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", fontWeight: 700, fontSize: "0.88rem", color: "#1e293b" }}>
+                    <span>🛡️</span> Credenciales y Estado de Operación
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.88rem", color: "#334155", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={editProForm.is_verified}
+                        onChange={(e) => setEditProForm({ ...editProForm, is_verified: e.target.checked })}
+                        style={{ width: "18px", height: "18px", accentColor: "#16a34a" }}
+                      />
+                      <span>
+                        <strong>✓ Tarjeta Profesional Aprobada:</strong> Valida que los certificados y acreditaciones oficiales han sido revisados.
+                      </span>
+                    </label>
+
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.88rem", color: "#334155", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={editProForm.accepts_urgent}
+                        onChange={(e) => setEditProForm({ ...editProForm, accepts_urgent: e.target.checked })}
+                        style={{ width: "18px", height: "18px", accentColor: "#eab308" }}
+                      />
+                      <span>
+                        <strong>⚡ Disponible para Urgencias:</strong> Habilita al profesional para recibir solicitudes prioritarias inmediatas 24/7.
+                      </span>
+                    </label>
+
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.88rem", color: "#334155", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={editProForm.is_active}
+                        onChange={(e) => setEditProForm({ ...editProForm, is_active: e.target.checked })}
+                        style={{ width: "18px", height: "18px", accentColor: "#2563eb" }}
+                      />
+                      <span>
+                        <strong>● Cuenta Activa:</strong> Permite que el profesional aparezca en el mapa, catálogo de servicios y reciba contrataciones.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="ad-modal-footer" style={{ borderTop: "1px solid #e2e8f0" }}>
+                <button
+                  type="button"
+                  className="ad-btn ad-btn-secondary"
+                  disabled={savingProLoading}
+                  onClick={() => setEditProModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="ad-btn"
+                  style={{ background: "#0284c7", color: "#ffffff", fontWeight: 700, minWidth: "180px" }}
+                  disabled={savingProLoading}
+                >
+                  {savingProLoading ? "Guardando en BD..." : "💾 Guardar Cambios en BD"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -13473,6 +14020,225 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
           </section>
+        </div>
+      )}
+
+      {/* Modal: Opciones de Perfil Administrativo */}
+      {adminProfileModalOpen && (
+        <div
+          className="ad-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setAdminProfileModalOpen(false)}
+        >
+          <div
+            className="ad-modal-box"
+            style={{ maxWidth: "620px", width: "95%", maxHeight: "90vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="ad-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#1e3a8a", color: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "1.1rem" }}>
+                  {user?.first_name ? user.first_name.charAt(0).toUpperCase() : (user?.username || "AD").slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#1e293b" }}>Perfil Administrativo</h3>
+                  <span style={{ fontSize: "0.82rem", color: "#64748b" }}>Control de cuenta, base de datos y accesos del sistema</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ad-modal-close"
+                onClick={() => setAdminProfileModalOpen(false)}
+                aria-label="Cerrar modal de perfil"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="ad-modal-body" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              {/* Tarjeta de Resumen y Rol */}
+              <div style={{ padding: "16px", borderRadius: "12px", background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", color: "#ffffff" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+                  <div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 800 }}>
+                      {user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username || "Administrador"}
+                    </div>
+                    <div style={{ fontSize: "0.86rem", color: "#94a3b8" }}>@{user?.username || "admin"} • {user?.email || "admin@serviprox.com"}</div>
+                  </div>
+                  <span style={{ padding: "4px 12px", borderRadius: "20px", background: "#f59e0b", color: "#1e293b", fontWeight: 800, fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    🛡️ {getReadableRoleLabel(user) === "Cliente" ? "Superadministrador" : getReadableRoleLabel(user)}
+                  </span>
+                </div>
+                <div style={{ marginTop: "12px", display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "0.82rem", color: "#cbd5e1", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "10px" }}>
+                  <span>📍 {user?.city || "Bogotá, Colombia"}</span>
+                  <span>📞 {user?.phone || "+57 300 123 4567"}</span>
+                  <span>🆔 {user?.document_id || "CC 1.000.000.001"}</span>
+                </div>
+              </div>
+
+              {/* Estado de las bases de datos: VM principal y SQLite local de respaldo */}
+              <div style={{ padding: "16px", borderRadius: "12px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: dbInfo.connected ? "#16a34a" : "#dc2626", display: "inline-block" }}></span>
+                    Base de Datos de la Máquina Virtual
+                  </div>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", background: dbInfo.connected ? "#dcfce7" : "#fee2e2", color: dbInfo.connected ? "#166534" : "#991b1b" }}>
+                    {dbInfo.connected ? dbInfo.engine : "Desconectada"}
+                  </span>
+                </div>
+                <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: "#64748b" }}>
+                  Endpoint activo: <strong style={{ color: "#334155" }}>{getApiBaseUrl()}</strong>
+                  <br />
+                  PostgreSQL de la VM es la fuente principal; SQLite local se usa automáticamente como respaldo si la VM no responde.
+                </p>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-primary"
+                    style={{ fontSize: "0.84rem", padding: "8px 14px" }}
+                    onClick={() => {
+                      setAdminProfileModalOpen(false);
+                      setServerModalOpen(true);
+                    }}
+                  >
+                    🔌 Cambiar / Probar Conexión BD (MV)
+                  </button>
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-secondary"
+                    style={{ fontSize: "0.84rem", padding: "8px 14px" }}
+                    onClick={async () => {
+                      showNotification("Sincronizando todos los datos desde la base de datos de la máquina virtual...", "info");
+                      await Promise.all([
+                        fetchLiveOverview(),
+                        fetchClients(),
+                        fetchPros(),
+                        fetchDbPqrsAndProblems(),
+                        fetchRolesAndUsers(),
+                        loadServerProducts(),
+                      ]);
+                      showNotification("Base de datos de la máquina virtual sincronizada exitosamente.", "success");
+                    }}
+                  >
+                    🔄 Sincronizar Todo Ahora
+                  </button>
+                </div>
+              </div>
+
+              {/* Formulario de Edición de Datos */}
+              <div style={{ padding: "16px", borderRadius: "12px", background: "#ffffff", border: "1px solid #e2e8f0" }}>
+                <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#1e293b", marginBottom: "12px" }}>
+                  ✏️ Editar Datos Personales del Administrador
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>Nombre</label>
+                    <input
+                      type="text"
+                      className="ad-form-control"
+                      value={adminProfileForm.first_name}
+                      onChange={(e) => setAdminProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
+                      placeholder="Nombre del administrador"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>Apellido</label>
+                    <input
+                      type="text"
+                      className="ad-form-control"
+                      value={adminProfileForm.last_name}
+                      onChange={(e) => setAdminProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
+                      placeholder="Apellido"
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>Teléfono</label>
+                    <input
+                      type="text"
+                      className="ad-form-control"
+                      value={adminProfileForm.phone}
+                      onChange={(e) => setAdminProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      placeholder="+57 300 000 0000"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>Ciudad / Sede</label>
+                    <input
+                      type="text"
+                      className="ad-form-control"
+                      value={adminProfileForm.city}
+                      onChange={(e) => setAdminProfileForm((prev) => ({ ...prev, city: e.target.value }))}
+                      placeholder="Bogotá"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="ad-btn ad-btn-primary"
+                  style={{ width: "100%", padding: "10px" }}
+                  disabled={savingAdminProfile}
+                  onClick={handleSaveAdminProfile}
+                >
+                  {savingAdminProfile ? "Guardando cambios..." : "💾 Guardar Datos del Perfil"}
+                </button>
+              </div>
+
+              {/* Accesos Rápidos de Administración */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <button
+                  type="button"
+                  className="ad-btn ad-btn-secondary"
+                  style={{ textAlign: "center", padding: "10px", fontSize: "0.85rem" }}
+                  onClick={() => {
+                    setActiveMenu("configuracion");
+                    setAdminProfileModalOpen(false);
+                  }}
+                >
+                  ⚙️ Configuración del Sistema
+                </button>
+                <button
+                  type="button"
+                  className="ad-btn ad-btn-secondary"
+                  style={{ textAlign: "center", padding: "10px", fontSize: "0.85rem" }}
+                  onClick={() => {
+                    setActiveMenu("roles");
+                    setAdminProfileModalOpen(false);
+                  }}
+                >
+                  🛡️ Roles y Permisos
+                </button>
+                <button
+                  type="button"
+                  className="ad-btn ad-btn-secondary"
+                  style={{ textAlign: "center", padding: "10px", fontSize: "0.85rem" }}
+                  onClick={() => {
+                    setActiveMenu("auditoria");
+                    setAdminProfileModalOpen(false);
+                  }}
+                >
+                  📋 Registro de Auditoría
+                </button>
+                <button
+                  type="button"
+                  className="ad-btn"
+                  style={{ textAlign: "center", padding: "10px", fontSize: "0.85rem", background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca" }}
+                  onClick={async () => {
+                    const ok = await showConfirm("¿Deseas cerrar la sesión administrativa de Serviprox?", "Cerrar sesión");
+                    if (ok) {
+                      logout();
+                      history.replace("/login-admin");
+                    }
+                  }}
+                >
+                  🚪 Cerrar Sesión
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
       <ServerConnectionModal

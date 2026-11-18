@@ -86,7 +86,7 @@ export interface ReportStoreProductInput {
 export const PLACEHOLDER_PRODUCT_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' width='400' height='260'><rect width='100%' height='100%' fill='#f1f5f9'/><text x='50%' y='50%' fill='#64748b' font-family='sans-serif' font-size='16' font-weight='600' text-anchor='middle' dominant-baseline='middle'>Sin imagen disponible</text></svg>"
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 260' width='100%' height='100%'><defs><linearGradient id='mekoGrad' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' stop-color='#1e293b'/><stop offset='100%' stop-color='#0f172a'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#mekoGrad)'/><circle cx='200' cy='105' r='45' fill='#2563eb' fill-opacity='0.25'/><g transform='translate(178, 83)' fill='none' stroke='#38bdf8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z'/><path d='M3 6h18'/><path d='M16 10a4 4 0 0 1-8 0'/></g><text x='50%' y='172' fill='#ffffff' font-family='sans-serif' font-size='16' font-weight='800' text-anchor='middle'>Meko Shop</text><text x='50%' y='196' fill='#94a3b8' font-family='sans-serif' font-size='12' font-weight='600' text-anchor='middle'>Serviprox Tienda Oficial</text></svg>"
   );
 
 const MAX_IMAGE_SIDE = 1280;
@@ -223,12 +223,17 @@ export const getCuratedProductImage = (title = "", category = ""): string => {
     return "/assets/products/bicicleta-mtb.jpg";
   }
 
-  // Fallbacks curados por categoría para evitar "Sin imagen disponible"
+  // Fallbacks curados por categoría para evitar que quede sin imagen
   if (c.includes("tecnolog")) return "/assets/products/laptop-pro.jpg";
   if (c.includes("mueble")) return "/assets/products/sofa-nordico.jpg";
-  if (c.includes("herramient")) return "/assets/products/taladro-percutor.jpg";
-  if (c.includes("multimedia")) return "/assets/products/control-gamer.jpg";
+  if (c.includes("herramient") || c.includes("equipo") || c.includes("repuesto") || c.includes("material") || c.includes("seguridad")) {
+    return "/assets/products/taladro-percutor.jpg";
+  }
+  if (c.includes("multimedia") || c.includes("juguete")) return "/assets/products/control-gamer.jpg";
   if (c.includes("deporte")) return "/assets/products/bicicleta-mtb.jpg";
+  if (c.includes("hogar") || c.includes("electrodom")) return "/assets/products/sofa-nordico.jpg";
+  if (c.includes("libro")) return "/assets/products/laptop-pro.jpg";
+  if (c.includes("ropa")) return "/assets/products/herramientas.jpg";
 
   return "/assets/products/herramientas.jpg";
 };
@@ -450,22 +455,29 @@ export const storeService = {
           ]
         : localRows;
 
-    if (mergedApiRows.length > 0 || primaryOk || localOk) {
-      const normalized = mergedApiRows.map(normalizeStoreProduct);
-      const customLocal = getCustomStoredProducts() as StoreProduct[];
-      const extraCustom = customLocal.filter(
-        (cp) => !normalized.some((np) => String(np.id) === String(cp.id))
-      );
-      return {
-        products: [...extraCustom, ...normalized],
-        fromServer: true,
-      };
-    }
+    const normalized = mergedApiRows.map(normalizeStoreProduct);
+    const customLocal = getCustomStoredProducts() as StoreProduct[];
+    const extraCustom = customLocal.filter(
+      (cp) => !normalized.some((np) => String(np.id) === String(cp.id))
+    );
 
-    const custom = getCustomStoredProducts() as StoreProduct[];
+    const userProducts = [...extraCustom, ...normalized];
+
+    // Combinar con los productos del catálogo de Meko Shop asegurando que no haya duplicados
+    const nonDuplicateMocks = DEFAULT_MOCK_PRODUCTS.filter(
+      (mp) =>
+        !userProducts.some(
+          (up) =>
+            String(up.id) === String(mp.id) ||
+            up.title.trim().toLowerCase() === mp.title.trim().toLowerCase()
+        )
+    );
+
+    const allProducts = [...userProducts, ...nonDuplicateMocks];
+
     return {
-      products: [...custom, ...DEFAULT_MOCK_PRODUCTS],
-      fromServer: false,
+      products: allProducts,
+      fromServer: Boolean(primaryOk || localOk),
     };
   },
 

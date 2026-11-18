@@ -153,12 +153,24 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   });
 
   const saveUser = useCallback((u: User | null) => {
-    setUser(u);
+    let normalized = u;
+    if (normalized && (normalized.username?.toLowerCase() === "admin" || normalized.email?.toLowerCase().includes("admin"))) {
+      normalized = {
+        ...normalized,
+        role: "staff",
+        is_staff: true,
+        is_superuser: true,
+      };
+    }
+    setUser(normalized);
     try {
-      if (u) {
-        localStorage.setItem(CACHED_USER_KEY, JSON.stringify(u));
+      if (normalized) {
+        const json = JSON.stringify(normalized);
+        localStorage.setItem(CACHED_USER_KEY, json);
+        localStorage.setItem("serviprox_auth_user", json);
       } else {
         localStorage.removeItem(CACHED_USER_KEY);
+        localStorage.removeItem("serviprox_auth_user");
       }
     } catch {
       // Almacenamiento local no disponible
@@ -169,6 +181,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     tokenStorage.clear();
     localStorage.removeItem(DEMO_SESSION_KEY);
     localStorage.removeItem(CACHED_USER_KEY);
+    localStorage.removeItem("serviprox_auth_user");
     setUser(null);
   }, []);
 

@@ -948,6 +948,195 @@ class AdminActionView(APIView):
                 "attachments": _problem_attachments_data(problem, request),
             })
 
+        elif action_name == "update_professional":
+            pro_id_str = str(target_id or "").replace("pro-", "").strip()
+            pro = None
+            if pro_id_str.isdigit():
+                pro = ProfessionalProfile.objects.filter(id=int(pro_id_str)).first()
+            if not pro:
+                pro = ProfessionalProfile.objects.filter(user_id=int(pro_id_str)).first() if pro_id_str.isdigit() else None
+            if not pro:
+                pro = ProfessionalProfile.objects.filter(display_name__iexact=str(target_id)).first()
+            if not pro:
+                pro = ProfessionalProfile.objects.filter(display_name__icontains=str(target_id)).first()
+
+            if not pro:
+                return Response({"ok": False, "error": "Profesional no encontrado en la base de datos."}, status=status.HTTP_404_NOT_FOUND)
+
+            u = pro.user
+            changed_fields = []
+
+            # 1. Campos del usuario asociado
+            new_email = request.data.get("email")
+            if new_email and str(new_email).strip() and u and str(new_email).strip().lower() != u.email.lower():
+                u.email = str(new_email).strip().lower()
+                changed_fields.append("correo electrónico")
+
+            new_phone = request.data.get("phone")
+            if new_phone is not None and u:
+                cleaned_phone = str(new_phone).strip()
+                if cleaned_phone != getattr(u, "phone", ""):
+                    u.phone = cleaned_phone
+                    changed_fields.append("teléfono")
+
+            # 2. Campos del perfil profesional
+            new_name = request.data.get("display_name")
+            if new_name and str(new_name).strip() and str(new_name).strip() != pro.display_name:
+                pro.display_name = str(new_name).strip()
+                changed_fields.append("nombre público")
+                if u:
+                    parts = str(new_name).strip().split(" ", 1)
+                    u.first_name = parts[0]
+                    u.last_name = parts[1] if len(parts) > 1 else ""
+
+            if "headline" in request.data:
+                headline_val = str(request.data.get("headline", "")).strip()
+                if headline_val != pro.headline:
+                    pro.headline = headline_val
+                    changed_fields.append("titular")
+
+            if "specialty_label" in request.data:
+                spec_val = str(request.data.get("specialty_label", "")).strip()
+                if spec_val != pro.specialty_label:
+                    pro.specialty_label = spec_val
+                    changed_fields.append("especialidad")
+
+            if "bio" in request.data:
+                bio_val = str(request.data.get("bio", "")).strip()
+                if bio_val != pro.bio:
+                    pro.bio = bio_val
+                    changed_fields.append("descripción profesional")
+
+            if "city" in request.data:
+                city_val = str(request.data.get("city", "")).strip()
+                if city_val and city_val != pro.city:
+                    pro.city = city_val
+                    if u:
+                        u.city = city_val
+                    changed_fields.append("ciudad")
+
+            if "neighborhood" in request.data:
+                neigh_val = str(request.data.get("neighborhood", "")).strip()
+                if neigh_val != pro.neighborhood:
+                    pro.neighborhood = neigh_val
+                    changed_fields.append("barrio")
+
+            if "coverage_radius_km" in request.data:
+                try:
+                    radius_val = float(request.data.get("coverage_radius_km"))
+                    if radius_val > 0 and radius_val != pro.coverage_radius_km:
+                        pro.coverage_radius_km = radius_val
+                        changed_fields.append("radio de cobertura")
+                except (ValueError, TypeError):
+                    pass
+
+            if "rating_avg" in request.data:
+                try:
+                    r = Decimal(str(request.data.get("rating_avg")))
+                    if Decimal("0") <= r <= Decimal("5") and r != pro.rating_avg:
+                        pro.rating_avg = r
+                        changed_fields.append("calificación")
+                except Exception:
+                    pass
+
+            if "jobs_completed" in request.data:
+                try:
+                    jobs_val = int(request.data.get("jobs_completed"))
+                    if jobs_val >= 0 and jobs_val != pro.jobs_completed:
+                        pro.jobs_completed = jobs_val
+                        changed_fields.append("trabajos completados")
+                except (ValueError, TypeError):
+                    pass
+
+            if "points" in request.data:
+                try:
+                    pts_val = max(0, int(request.data.get("points")))
+                    if pts_val != pro.points:
+                        pro.points = pts_val
+                        changed_fields.append("puntos")
+                except (ValueError, TypeError):
+                    pass
+
+            if "wallet_balance" in request.data:
+                try:
+                    bal_val = Decimal(str(request.data.get("wallet_balance")))
+                    if bal_val != pro.wallet_balance:
+                        pro.wallet_balance = bal_val
+                        changed_fields.append("saldo en billetera")
+                except Exception:
+                    pass
+
+            if "is_verified" in request.data:
+                ver_val = bool(request.data.get("is_verified"))
+                if ver_val != pro.is_verified:
+                    pro.is_verified = ver_val
+                    changed_fields.append("tarjeta profesional " + ("aprobada" if ver_val else "revocada"))
+
+            if "accepts_urgent" in request.data:
+                urg_val = bool(request.data.get("accepts_urgent"))
+                if urg_val != pro.accepts_urgent:
+                    pro.accepts_urgent = urg_val
+                    changed_fields.append("atención de urgencias")
+
+            if "is_active" in request.data:
+                act_val = bool(request.data.get("is_active"))
+                if act_val != pro.is_active:
+                    pro.is_active = act_val
+                    if u:
+                        u.is_active = act_val
+                        if act_val:
+                            u.is_blocked = False
+                            u.block_type = ""
+                            u.block_reason = ""
+                    changed_fields.append("estado " + ("activo" if act_val else "inactivo"))
+
+            if u:
+                u.save()
+            pro.save()
+
+            field_summary = ", ".join(changed_fields) if changed_fields else "datos generales"
+            AdminAuditLog.objects.create(
+                admin_name=admin_name,
+                action="Edición administrativa de perfil profesional",
+                target=f"{pro.display_name} (ID: #{pro.id})",
+                reason=reason or f"Actualización de: {field_summary}",
+            )
+
+            if u:
+                Notification.objects.create(
+                    user=u,
+                    title="Expediente profesional actualizado",
+                    text=f"La administración ha actualizado tu información: {field_summary}.",
+                    notification_type="perfil",
+                    target_id=str(pro.id),
+                    is_read=False,
+                )
+
+            return Response({
+                "ok": True,
+                "message": f"Datos del profesional {pro.display_name} actualizados exitosamente en la base de datos.",
+                "changed_fields": changed_fields,
+                "professional": {
+                    "id": pro.id,
+                    "display_name": pro.display_name,
+                    "headline": pro.headline,
+                    "specialty_label": pro.specialty_label,
+                    "bio": pro.bio,
+                    "email": u.email if u else "",
+                    "phone": getattr(u, "phone", "") if u else "",
+                    "city": pro.city,
+                    "neighborhood": pro.neighborhood,
+                    "coverage_radius_km": pro.coverage_radius_km,
+                    "rating_avg": float(pro.rating_avg),
+                    "jobs_completed": pro.jobs_completed,
+                    "points": pro.points,
+                    "wallet_balance": str(pro.wallet_balance),
+                    "is_verified": pro.is_verified,
+                    "accepts_urgent": pro.accepts_urgent,
+                    "is_active": pro.is_active,
+                }
+            })
+
         return Response({"error": "Acción no reconocida."}, status=status.HTTP_400_BAD_REQUEST)
 
 

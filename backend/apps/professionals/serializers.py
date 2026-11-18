@@ -89,6 +89,7 @@ class ProfessionalListSerializer(serializers.ModelSerializer):
     matching_service = serializers.SerializerMethodField()
     availability_label = serializers.SerializerMethodField()
     phone = serializers.CharField(source="user.phone", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
     company_name = serializers.CharField(source="headline", read_only=True)
     has_certificate = serializers.SerializerMethodField()
     location_approximate = serializers.SerializerMethodField()
@@ -114,6 +115,8 @@ class ProfessionalListSerializer(serializers.ModelSerializer):
             "has_certificate",
             "avatar_url",
             "phone",
+            "email",
+            "bio",
             "rating_avg",
             "jobs_completed",
             "is_verified",

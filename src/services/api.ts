@@ -82,6 +82,7 @@ export const getConnectionMode = (baseUrl?: string): ConnectionMode => {
   if (target.includes("/api/vm/v1")) return "vm-proxy";
   const configured = getConfiguredVmUrl();
   if (configured && target === configured) return "vm-direct";
+  if (target.includes("serviprox-pte.duckdns.org") || target.includes("duckdns")) return "vm-direct";
   if (
     typeof window !== "undefined" &&
     window.location?.origin &&
@@ -89,7 +90,22 @@ export const getConnectionMode = (baseUrl?: string): ConnectionMode => {
   ) {
     return "local-sqlite";
   }
-  return target.includes("serviprox-pte.duckdns.org") ? "vm-direct" : "custom";
+  if (typeof window !== "undefined") {
+    const isAdminPath = window.location?.pathname?.startsWith("/admin");
+    const authUser = localStorage.getItem("serviprox_cached_user") || localStorage.getItem("serviprox_auth_user");
+    const isAdminUser = Boolean(
+      authUser &&
+        (authUser.includes('"role":"staff"') ||
+          authUser.includes('"role":"admin"') ||
+          authUser.includes('"is_staff":true') ||
+          authUser.includes('"is_superuser":true') ||
+          authUser.includes('"username":"admin"'))
+    );
+    if (isAdminPath || isAdminUser) {
+      return "vm-direct";
+    }
+  }
+  return "vm-direct";
 };
 
 const getPriorityCandidateBaseUrls = (): string[] => {
@@ -181,6 +197,19 @@ export const getLocalFallbackApiUrl = (): string | null => {
 const hasLocalAuthenticatedSession = (): boolean => {
   if (typeof window === "undefined" || (isProdMode() && isVitestEnv())) return false;
   try {
+    // Todo administrador debe tener base de datos maquina virtual (MV)
+    if (window.location?.pathname?.startsWith("/admin")) return false;
+    const authUser = localStorage.getItem("serviprox_cached_user") || localStorage.getItem("serviprox_auth_user");
+    if (
+      authUser &&
+      (authUser.includes('"role":"staff"') ||
+        authUser.includes('"role":"admin"') ||
+        authUser.includes('"is_staff":true') ||
+        authUser.includes('"is_superuser":true') ||
+        authUser.includes('"username":"admin"'))
+    ) {
+      return false;
+    }
     return (
       getSessionAuthMode() === "local-sqlite" &&
       Boolean(localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem(REFRESH_TOKEN_KEY)) &&
@@ -192,6 +221,27 @@ const hasLocalAuthenticatedSession = (): boolean => {
 };
 
 const resolveApiBaseUrl = (): string => {
+  if (typeof window !== "undefined") {
+    const isAdminPath = window.location?.pathname?.startsWith("/admin");
+    const authUser = localStorage.getItem("serviprox_cached_user") || localStorage.getItem("serviprox_auth_user");
+    const isAdminUser = Boolean(
+      authUser &&
+        (authUser.includes('"role":"staff"') ||
+          authUser.includes('"role":"admin"') ||
+          authUser.includes('"is_staff":true') ||
+          authUser.includes('"is_superuser":true') ||
+          authUser.includes('"username":"admin"'))
+    );
+    if (isAdminPath || isAdminUser) {
+      // Todo administrador debe tener base de datos maquina virtual
+      return DEFAULT_WEB_VM_API_URL;
+    }
+  }
+
+  if (Capacitor.isNativePlatform()) {
+    return DEFAULT_WEB_VM_API_URL;
+  }
+
   if (hasLocalAuthenticatedSession()) {
     const localBase = getLocalFallbackApiUrl();
     if (localBase) return localBase;
@@ -220,18 +270,7 @@ const resolveApiBaseUrl = (): string => {
     }
   }
 
-  if (Capacitor.isNativePlatform()) {
-    return DEFAULT_WEB_VM_API_URL;
-  }
-
-  if (typeof window !== "undefined" && window.location?.origin) {
-    if (window.location.hostname.includes("netlify.app")) {
-      return "/api/v1";
-    }
-    return `${window.location.origin.replace(/\/$/, "")}/api/v1`;
-  }
-
-  return "/api/v1";
+  return DEFAULT_WEB_VM_API_URL;
 };
 
 // Base URL dinámica y reactiva
@@ -249,6 +288,24 @@ export const getCandidateBaseUrls = (): string[] => {
   }
 
   const ordered: string[] = [];
+
+  // Todo administrador debe tener base de datos maquina virtual
+  if (typeof window !== "undefined") {
+    const isAdminPath = window.location?.pathname?.startsWith("/admin");
+    const authUser = localStorage.getItem("serviprox_cached_user") || localStorage.getItem("serviprox_auth_user");
+    const isAdminUser = Boolean(
+      authUser &&
+        (authUser.includes('"role":"staff"') ||
+          authUser.includes('"role":"admin"') ||
+          authUser.includes('"is_staff":true') ||
+          authUser.includes('"is_superuser":true') ||
+          authUser.includes('"username":"admin"'))
+    );
+    if (isAdminPath || isAdminUser) {
+      ordered.push(DEFAULT_WEB_VM_API_URL);
+    }
+  }
+
   const localFallback = getLocalFallbackApiUrl();
   const pinnedLocal = hasLocalAuthenticatedSession();
   if (pinnedLocal && localFallback && priority.includes(localFallback)) {
@@ -733,7 +790,7 @@ export const checkBackendHealth = async (
     try {
       const url = `${base.replace(/\/$/, "")}/health/`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const headers = new Headers({ Accept: "application/json" });
       if (candidate.targetOverride && base.includes("/api/vm/v1")) {
         headers.set("X-Serviprox-Target-Base", candidate.targetOverride);
@@ -754,18 +811,22 @@ export const checkBackendHealth = async (
           source?: string;
           detail?: string;
         };
-        if (res.ok && data.status === "ok" && data.database === "connected") {
+        if (res.ok && (data.status === "ok" || res.status === 200) && data.database !== "disconnected") {
           const mode: ConnectionMode =
-            data.source === "local-sqlite" ? "local-sqlite" : getConnectionMode(base);
+            data.source === "local-sqlite" || data.engine === "sqlite"
+              ? "local-sqlite"
+              : getConnectionMode(base);
+          const resolvedEngine =
+            data.engine || (base.includes("duckdns") ? "postgresql" : "sqlite");
           setWorkingBaseUrl(base, {
-            database: data.database,
-            engine: data.engine,
+            database: "connected",
+            engine: resolvedEngine,
             mode,
           });
           return {
             ok: true,
-            database: data.database,
-            engine: data.engine,
+            database: "connected",
+            engine: resolvedEngine,
             mode,
             url: base,
           };

@@ -180,6 +180,13 @@ const AdministrativeLoginPage: React.FC = () => {
 		setSubmitting(true);
 		setError("");
 		try {
+			// Todo administrador debe tener base de datos maquina virtual
+			try {
+				localStorage.setItem("serviprox_api_host", "https://serviprox-pte.duckdns.org/api/v1");
+				localStorage.setItem("serviprox_custom_host_explicit", "1");
+				localStorage.setItem("serviprox_auth_mode", "vm");
+			} catch {}
+
 			const currentUser = await login(
 				{
 					username: trimmedUser,

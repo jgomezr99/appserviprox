@@ -586,16 +586,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                   "--color": serverConnected === false ? "#b91c1c" : "#0369a1",
                 }}
               >
-                🌐 Base de datos:{" "}
-                {serverConnected === false
-                  ? "Desconectada · Configurar MV"
-                  : connectionMode === "vm-direct"
-                    ? "Máquina Virtual (Directo)"
-                    : connectionMode === "vm-proxy"
-                      ? "Máquina Virtual (Proxy)"
-                      : connectionMode === "local-sqlite"
-                        ? "Respaldo SQLite local"
-                        : "Configurar MV"}
+                
               </IonButton>
             </div>
 
@@ -606,13 +597,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
               </IonButton>
             </div>}
 
-            {!administrative && (
-              <div style={{ display: "flex", justifyContent: "center", marginTop: "4px" }}>
-                <IonButton routerLink="/login/administrativo" fill="clear" size="small" className={styles.adminLoginButton}>
-                  Acceso administrador
-                </IonButton>
-              </div>
-            )}
+            
 
           </section>}
         </main>
