@@ -51,7 +51,17 @@ export const ConnectionBanner: React.FC = () => {
         setConnectionMode(customEvent.detail.mode);
       }
       if (customEvent.detail?.connected === false) {
-        setIsDisconnected(true);
+        // En modo local-sqlite o desarrollo, revalidar salud en vez de desconectar de inmediato
+        checkBackendHealth().then((health) => {
+          if (health.ok) {
+            setConnectionMode(health.mode || null);
+            setIsDisconnected(false);
+          } else {
+            setIsDisconnected(true);
+          }
+        }).catch(() => {
+          setIsDisconnected(true);
+        });
       } else if (customEvent.detail?.connected === true) {
         setIsDisconnected((prev) => {
           if (prev) {
@@ -141,29 +151,46 @@ export const ConnectionBanner: React.FC = () => {
       </span>
 
       {isDisconnected && !justReconnected && (
-        <IonButton
-          fill="clear"
-          size="small"
-          onClick={testConnection}
-          disabled={isReconnecting}
-          style={{
-            "--color": "#ffffff",
-            margin: 0,
-            textDecoration: "underline",
-            textTransform: "none",
-            fontWeight: 800,
-            fontSize: "0.82rem",
-          }}
-        >
-          {isReconnecting ? (
-            <>
-              <IonSpinner name="crescent" style={{ width: "14px", height: "14px", marginRight: "4px" }} />
-              Conectando...
-            </>
-          ) : (
-            "Reintentar ahora"
-          )}
-        </IonButton>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <IonButton
+            fill="clear"
+            size="small"
+            onClick={testConnection}
+            disabled={isReconnecting}
+            style={{
+              "--color": "#ffffff",
+              margin: 0,
+              textDecoration: "underline",
+              textTransform: "none",
+              fontWeight: 800,
+              fontSize: "0.82rem",
+            }}
+          >
+            {isReconnecting ? (
+              <>
+                <IonSpinner name="crescent" style={{ width: "14px", height: "14px", marginRight: "4px" }} />
+                Conectando...
+              </>
+            ) : (
+              "Reintentar ahora"
+            )}
+          </IonButton>
+          <IonButton
+            fill="clear"
+            size="small"
+            onClick={() => window.dispatchEvent(new CustomEvent("serviprox:open-server-modal"))}
+            style={{
+              "--color": "#ffd54f",
+              margin: 0,
+              textDecoration: "underline",
+              textTransform: "none",
+              fontWeight: 800,
+              fontSize: "0.82rem",
+            }}
+          >
+            🔌 Cambiar BD
+          </IonButton>
+        </div>
       )}
     </div>
   );

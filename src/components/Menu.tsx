@@ -209,7 +209,9 @@ const Menu: React.FC = () => {
   const isPublicPage =
     location.pathname.startsWith('/login') ||
     location.pathname.startsWith('/ingresar') ||
-    location.pathname.startsWith('/register');
+    location.pathname.startsWith('/register') ||
+    location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/staff');
   const isOnboardingPage = location.pathname.startsWith('/onboarding/');
   const platform = usePlatformSettings();
   const clientFlags = homeFlags(platform, 'client');

@@ -65,16 +65,54 @@ export default defineConfig(({ mode }) => {
         target: apiTarget,
         changeOrigin: true,
         secure: apiTargetSecure,
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, res) => {
+            if (res && !('headersSent' in res && res.headersSent) && 'writeHead' in res) {
+              try {
+                (res as any).writeHead(503, { 'Content-Type': 'application/json' });
+                (res as any).end(
+                  JSON.stringify({
+                    status: 'offline',
+                    database: 'autonomous-sqlite',
+                    detail: 'Servidor Django local no disponible. La aplicación opera con Base de Datos Autónoma (SQLite).',
+                  })
+                );
+              } catch {
+                // ignore
+              }
+            }
+          });
+        },
       },
       '/media': {
         target: apiTarget,
         changeOrigin: true,
         secure: apiTargetSecure,
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, res) => {
+            if (res && !('headersSent' in res && res.headersSent) && 'writeHead' in res) {
+              try {
+                (res as any).writeHead(404, { 'Content-Type': 'application/json' });
+                (res as any).end(JSON.stringify({ detail: 'Media not found on local proxy' }));
+              } catch {}
+            }
+          });
+        },
       },
       '/static': {
         target: apiTarget,
         changeOrigin: true,
         secure: apiTargetSecure,
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, res) => {
+            if (res && !('headersSent' in res && res.headersSent) && 'writeHead' in res) {
+              try {
+                (res as any).writeHead(404, { 'Content-Type': 'application/json' });
+                (res as any).end(JSON.stringify({ detail: 'Static not found on local proxy' }));
+              } catch {}
+            }
+          });
+        },
       },
     },
   },

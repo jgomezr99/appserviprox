@@ -5,8 +5,20 @@
 }
 
 .authContent {
-  --background: linear-gradient(180deg, #be5454 0, 3%, #dc2626 10%, #dc2626 9%, #ffffff 84%, #ffffff 100%) !important;
-  background: linear-gradient(180deg, #ffffff 0%, #ffffff 16%, #dc2626 40%, #b91024 60%, #ffffff 84%, #ffffff 100%) !important;
+  --background:
+    linear-gradient(180deg, #d7192f 0%, #d7192f 50%, #fff1f2 76%, #ffffff 100%) !important;
+  background:
+    linear-gradient(180deg, #d7192f 0%, #d7192f 50%, #fff1f2 76%, #ffffff 100%) !important;
+}
+
+/* El tema administrativo global también se aplica mientras se resuelve la sesión. */
+.authPage .authContent {
+  --background: linear-gradient(180deg, #d7192f 0%, #d7192f 50%, #fff1f2 76%, #ffffff 100%) !important;
+  background: linear-gradient(180deg, #d7192f 0%, #d7192f 50%, #fff1f2 76%, #ffffff 100%) !important;
+}
+
+.authPage .authContent::part(background) {
+  background: linear-gradient(180deg, #d7192f 0%, #d7192f 50%, #fff1f2 76%, #ffffff 100%) !important;
 }
 
 .authShell {
@@ -47,38 +59,42 @@
 
 .loginShell .brandPanel h1 {
   max-width: 390px;
-  color: #ffffff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  color: #0b2f6b;
+  text-shadow: none;
   font-size: clamp(2rem, 8vw, 3.1rem);
-  line-height: 1.02;
+  line-height: 1.05;
+  font-weight: 850;
 }
 
 .loginShell .brandCopy {
   max-width: 380px;
-  color: #ffffff;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  color: #475569;
+  text-shadow: none;
   font-size: .98rem;
   line-height: 1.6;
 }
 
 .loginShell .kicker {
-  color: #ffffff;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  color: #dc2626;
+  text-shadow: none;
   font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
 }
 
 .loginShell .authCard {
   position: relative;
   z-index: 1;
-  margin: -36px 18px 0;
+  margin: -24px 18px 0;
   width: auto;
   max-width: none;
   padding: 28px 22px;
   border-radius: 28px;
   background: #ffffff !important;
   color: #1e293b !important;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(11, 47, 107, 0.08);
+  box-shadow: 0 20px 48px rgba(7, 30, 69, 0.10);
 }
 
 .loginShell .authCard h2 {
@@ -778,8 +794,9 @@
 
   .loginShell .authCard {
     margin: 0;
-    background: #fffdf2;
-    border-color: rgba(255, 255, 255, .85);
+    background: #ffffff !important;
+    border: 1px solid rgba(11, 47, 107, 0.08);
+    box-shadow: 0 24px 60px rgba(7, 30, 69, 0.12);
   }
 
   .twoColumn {

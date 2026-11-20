@@ -113,8 +113,6 @@ logger = logging.getLogger(__name__)
 
 api_v1 = [
     path("health/", health_check, name="api-health"),
-    path("admin/overview/", admin_overview, name="api-admin-overview"),
-    path("admin/overview", admin_overview),
     path("auth/token/", CustomTokenObtainPairView.as_view(), name="token-obtain"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("auth/admin/register-worker/", RegisterAdminWorkerView.as_view(), name="api-auth-admin-register-worker"),

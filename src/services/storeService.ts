@@ -464,14 +464,16 @@ export const storeService = {
     const userProducts = [...extraCustom, ...normalized];
 
     // Combinar con los productos del catálogo de Meko Shop asegurando que no haya duplicados
-    const nonDuplicateMocks = DEFAULT_MOCK_PRODUCTS.filter(
-      (mp) =>
-        !userProducts.some(
-          (up) =>
-            String(up.id) === String(mp.id) ||
-            up.title.trim().toLowerCase() === mp.title.trim().toLowerCase()
-        )
-    );
+    const nonDuplicateMocks = includeAll
+      ? []
+      : DEFAULT_MOCK_PRODUCTS.filter(
+          (mp) =>
+            !userProducts.some(
+              (up) =>
+                String(up.id) === String(mp.id) ||
+                up.title.trim().toLowerCase() === mp.title.trim().toLowerCase()
+            )
+        );
 
     const allProducts = [...userProducts, ...nonDuplicateMocks];
 
@@ -704,6 +706,7 @@ export const storeService = {
       hide_product: Boolean(input.hideProduct),
       block_publisher: Boolean(input.blockPublisher),
       reporter_name: input.reporterName || "Administrador",
+      reporter_email: input.reporterEmail || "",
       admin_name: input.reporterName || "Administrador",
       block_duration: input.blockDurationDays || 7,
     };
@@ -711,41 +714,26 @@ export const storeService = {
     const mode = getConnectionMode(getApiBaseUrl());
 
     // Guardar el reporte en el módulo de reportes de publicaciones de Meko Shop
-    saveProductReport({
-      productId: product.id,
-      productTitle: product.title,
-      productPrice: product.price,
-      productCategory: product.category,
-      productImage: product.image,
-      sellerId: product.ownerId,
-      sellerName: product.sellerName,
-      sellerEmail: product.sellerEmail,
-      sellerPhone: product.phone,
-      sellerRole: product.sellerRole,
-      reporterName: input.reporterName || "Cliente de Meko Shop",
-      reason: input.reason,
-      description: input.description,
-      priority: input.priority || "Media",
-      actionTaken: input.blockPublisher ? "tienda_bloqueada" : input.hideProduct ? "producto_oculto" : "ninguna",
-    });
-
     // Si se indicó bloquear al publicador, se bloquea SOLO la tienda (el usuario sigue con cuenta normal activa)
-    if (input.blockPublisher) {
-      blockSellerStore(
-        product.ownerId || product.sellerName,
-        product.sellerName,
-        `Bloqueo exclusivo de tienda por reporte: ${input.reason}`,
-        input.reporterName || "Administrador"
-      );
-    }
-
     try {
       const resp = await api.post<{
         ok: boolean;
         message: string;
         product?: ApiStoreProduct;
         publisher_blocked?: boolean;
+        report?: ProductReportItem;
       }>(`store/products/${product.id}/report/`, bodyPayload);
+      if (resp.report) {
+        saveProductReport({ ...resp.report, id: String(resp.report.id) });
+      }
+      if (input.blockPublisher) {
+        blockSellerStore(
+          product.ownerId || product.sellerName,
+          product.sellerName,
+          `Bloqueo exclusivo de tienda por reporte: ${input.reason}`,
+          input.reporterName || "Administrador"
+        );
+      }
       return {
         ok: Boolean(resp?.ok ?? true),
         message: resp?.message || `Reporte registrado contra ${product.sellerName}.`,

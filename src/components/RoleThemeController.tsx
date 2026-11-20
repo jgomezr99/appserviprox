@@ -19,7 +19,30 @@ export const RoleThemeController: React.FC = () => {
     const bodyEl = document.body;
     const appEl = document.querySelector('ion-app');
 
-    // 0. Si está en Login normal o administrativo, usar tema auth neutro
+    // 0. Si está en el panel administrativo (/admin o /staff), tema administrativo neutro/claro
+    if (
+      path.startsWith('/admin') ||
+      path.startsWith('/staff')
+    ) {
+      docEl.classList.remove('theme-client', 'theme-professional');
+      bodyEl.classList.remove('theme-client', 'theme-professional');
+      if (appEl) {
+        appEl.classList.remove('theme-client', 'theme-professional');
+      }
+      docEl.classList.add('theme-admin');
+      bodyEl.classList.add('theme-admin');
+      if (appEl) {
+        appEl.classList.add('theme-admin');
+      }
+      docEl.setAttribute('data-theme', 'admin');
+      bodyEl.setAttribute('data-theme', 'admin');
+      if (appEl) {
+        appEl.setAttribute('data-theme', 'admin');
+      }
+      return;
+    }
+
+    // 0.1 Si está en Login normal o administrativo, usar tema auth neutro
     if (
       path.startsWith('/login') ||
       path.startsWith('/ingresar')

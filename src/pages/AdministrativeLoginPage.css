@@ -7,8 +7,14 @@
 }
 
 .admin-login-page .admin-login-content {
-  --background: linear-gradient(180deg, #870909 0%, #eb5959 40%, #df949d 60% 50%, #ffffff 94%, #ffffff 100%) !important;
-  
+  --background:
+    linear-gradient(180deg, #d7192f 0%, #d7192f 50%, #fff1f2 76%, #ffffff 100%) !important;
+  background:
+    linear-gradient(180deg, #d7192f 0%, #d7192f 50%, #fff1f2 76%, #ffffff 100%) !important;
+}
+
+.admin-login-page .admin-login-content::part(background) {
+  background: linear-gradient(180deg, #d7192f 0%, #d7192f 50%, #fff1f2 76%, #ffffff 100%) !important;
 }
 
 .admin-login-page .admin-login-layout {

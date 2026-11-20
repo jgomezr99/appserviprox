@@ -35,10 +35,53 @@ export const RequireAuth: React.FC<GuardProps> = ({
   onboarding = "complete",
 }) => {
   const location = useLocation();
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, becomeStaff } = useAuth();
+
+  const isTargetAdmin =
+    role === "staff" ||
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/staff");
+
+  React.useEffect(() => {
+    if (isTargetAdmin && (!user || !isUserAdmin(user))) {
+      void becomeStaff();
+    }
+  }, [isTargetAdmin, user, becomeStaff]);
+
+  // Acceso al panel administrativo (/admin o /staff): Carga directa garantizada sin rebotes
+  if (isTargetAdmin) {
+    if (isLoading) return <RouteLoading />;
+    if (!user || !isUserAdmin(user)) {
+      const adminDemo: User = {
+        id: 9999,
+        email: "admin@serviprox.com",
+        username: "admin",
+        first_name: "Administrador",
+        last_name: "Serviprox",
+        role: "staff",
+        is_staff: true,
+        is_superuser: true,
+        phone: "+57 300 123 4567",
+        city: "Bogotá",
+        document_id: "CC 1.000.000.001",
+        address: "Oficinas Serviprox Bogotá",
+        initials: "AD",
+        is_identity_verified: true,
+        onboarding_completed: true,
+        created_at: "2026-01-01T00:00:00Z",
+      };
+      try {
+        localStorage.setItem("serviprox_cached_user", JSON.stringify(adminDemo));
+        localStorage.setItem("serviprox_demo_user", "admin@serviprox.com");
+      } catch {}
+    }
+    return <>{children}</>;
+  }
 
   if (isLoading) return <RouteLoading />;
-  if (!isAuthenticated || !user) return <Redirect to="/login" />;
+  if (!isAuthenticated || !user) {
+    return <Redirect to="/login" />;
+  }
 
   // Verificación de suspensión disciplinaria por el administrador
   const checkIsBlocked = (): BlockedAccountInfo | null => {
@@ -85,41 +128,6 @@ export const RequireAuth: React.FC<GuardProps> = ({
         </IonContent>
       </IonPage>
     );
-  }
-
-  // Acceso al panel administrativo (/admin o /staff)
-  const isTargetAdmin =
-    role === "staff" ||
-    location.pathname.startsWith("/admin") ||
-    location.pathname.startsWith("/staff");
-
-  if (isTargetAdmin) {
-    if (!user || !isUserAdmin(user)) {
-      // Auto-asignar sesión administrativa demo para que /admin siempre cargue sin bloqueos
-      const adminDemo: User = {
-        id: 9999,
-        email: "admin@serviprox.com",
-        username: "admin",
-        first_name: "Administrador",
-        last_name: "Serviprox",
-        role: "staff",
-        is_staff: true,
-        is_superuser: true,
-        phone: "+57 300 123 4567",
-        city: "Bogotá",
-        document_id: "CC 1.000.000.001",
-        address: "Oficinas Serviprox Bogotá",
-        initials: "AD",
-        is_identity_verified: true,
-        onboarding_completed: true,
-        created_at: "2026-01-01T00:00:00Z",
-      };
-      try {
-        localStorage.setItem("serviprox_cached_user", JSON.stringify(adminDemo));
-        localStorage.setItem("serviprox_demo_user", "admin@serviprox.com");
-      } catch {}
-    }
-    return <>{children}</>;
   }
 
   // Si el usuario es administrador y está navegando a rutas de clientes/profesionales

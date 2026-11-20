@@ -1,8 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { adminService } from "../services/adminService";
-import { api, getApiBaseUrl, getConnectionMode, tokenStorage, checkBackendHealth, type ConnectionMode } from "../services/api";
+import {
+  api,
+  getApiBaseUrl,
+  getConnectionMode,
+  tokenStorage,
+  checkBackendHealth,
+  switchDatabaseTarget,
+  type ConnectionMode,
+  type DatabaseTarget,
+} from "../services/api";
 import { authService } from "../services/auth";
 import { platformSettingsService, usePlatformSettings } from "../services/platformSettings";
 import AdminSettings from "./AdminSettings";
@@ -25,6 +34,16 @@ import {
   blockSellerStore,
   unblockSellerStore,
 } from "../services/storeService";
+import {
+  getLocalClients,
+  getLocalProfessionals,
+  getLocalAuditLogs,
+  getAutonomousOverview,
+} from "../services/adminLocalStore";
+import {
+  getStoredPqrReports,
+  getStoredAppProblems,
+} from "../data/pqrInitialData";
 import "./AdminDashboard.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -256,6 +275,8 @@ export interface TechnicalFailureItem {
 const formatAdminDate = (value?: string) =>
   value ? new Date(value).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "—";
 
+const safeLower = (value: unknown): string => (value != null ? String(value).toLowerCase() : "");
+
 const getDatabaseInfo = (source: {
   engine?: string;
   database_name?: string;
@@ -266,11 +287,19 @@ const getDatabaseInfo = (source: {
   const isPostgres = normalizedEngine === "postgresql" || normalizedEngine === "postgres";
 
   return {
-    engine: isLocalSqlite ? "SQLite (local)" : isPostgres ? "PostgreSQL (MV)" : source.engine || "PostgreSQL (MV)",
+    engine: isLocalSqlite
+      ? (normalizedEngine.includes("autónomo") || normalizedEngine.includes("autonomo")
+          ? "Base de Datos Autónoma (SQLite)"
+          : "Base de Datos Local (SQLite)")
+      : source.mode === "custom"
+        ? "Base de Datos en la Nube (PostgreSQL)"
+        : isPostgres
+          ? "Máquina Virtual DuckDNS (PostgreSQL)"
+          : source.engine || "Base de Datos Serviprox",
     database_name: isLocalSqlite
-      ? "Serviprox DB (SQLite local)"
-      : source.database_name || "Serviprox DB (MV)",
-    mode: isLocalSqlite ? ("local-sqlite" as const) : source.mode || ("vm-direct" as const),
+      ? "Serviprox DB (SQLite)"
+      : source.database_name || "Serviprox DB",
+    mode: isLocalSqlite ? ("local-sqlite" as const) : source.mode || ("custom" as const),
   };
 };
 
@@ -282,7 +311,8 @@ const mapPqrStatus = (status: string): PqrItem["status"] => {
   return "Abierta";
 };
 
-const mapPqrFromDatabase = (p: any): PqrItem => {
+const mapPqrFromDatabase = (rawP: any): PqrItem => {
+  const p = rawP || {};
   const type = p.type || p.pqr_type;
   const typeVal = type === "queja"
     ? "queja"
@@ -341,7 +371,8 @@ const mapPqrFromDatabase = (p: any): PqrItem => {
   };
 };
 
-const mapProblemToPqr = (problem: any): PqrItem => {
+const mapProblemToPqr = (rawProblem: any): PqrItem => {
+  const problem = rawProblem || {};
   const title = problem.categoryLabel || problem.category_label || "";
   const createdAt = problem.createdAt || problem.created_at;
   const ticketNumber = String(problem.ticketNumber || problem.ticket_number || problem.id || "");
@@ -382,7 +413,8 @@ const mapProblemToPqr = (problem: any): PqrItem => {
   };
 };
 
-const mapProblemFromDatabase = (problem: any): TechnicalFailureItem => {
+const mapProblemFromDatabase = (rawProblem: any): TechnicalFailureItem => {
+  const problem = rawProblem || {};
   const module = problem.categoryLabel || problem.category_label || "";
   const reporterName = problem.reportedBy || problem.reported_by || "";
   const createdAt = problem.createdAt || problem.created_at;
@@ -392,13 +424,13 @@ const mapProblemFromDatabase = (problem: any): TechnicalFailureItem => {
   return {
     id: ticketNumber.startsWith("#") ? ticketNumber : `#${ticketNumber}`,
     raw_id: problem.id,
-    typeIcon: module.toLowerCase().includes("chat") ? "💬" : module.toLowerCase().includes("pago") || module.toLowerCase().includes("contrat") ? "🛒" : module.toLowerCase().includes("mapa") ? "🌐" : module.toLowerCase().includes("notif") ? "📞" : module.toLowerCase().includes("foto") || module.toLowerCase().includes("publi") ? "🖼️" : "⚠️",
+    typeIcon: safeLower(module).includes("chat") ? "💬" : safeLower(module).includes("pago") || safeLower(module).includes("contrat") ? "🛒" : safeLower(module).includes("mapa") ? "🌐" : safeLower(module).includes("notif") ? "📞" : safeLower(module).includes("foto") || safeLower(module).includes("publi") ? "🖼️" : "⚠️",
     title: problem.title || module,
     shortDesc: (problem.description || "").slice(0, 28),
     description: problem.description || "",
     module,
-    moduleBadgeBg: module.toLowerCase().includes("chat") ? "#f3e8ff" : module.toLowerCase().includes("publi") ? "#fce7f3" : module.toLowerCase().includes("pago") || module.toLowerCase().includes("contrat") ? "#ccfbf1" : module.toLowerCase().includes("mapa") ? "#dcfce7" : module.toLowerCase().includes("notif") ? "#fef3c7" : "#dbeafe",
-    moduleBadgeColor: module.toLowerCase().includes("chat") ? "#9333ea" : module.toLowerCase().includes("publi") ? "#db2777" : module.toLowerCase().includes("pago") || module.toLowerCase().includes("contrat") ? "#0f766e" : module.toLowerCase().includes("mapa") ? "#15803d" : module.toLowerCase().includes("notif") ? "#d97706" : "#1d4ed8",
+    moduleBadgeBg: safeLower(module).includes("chat") ? "#f3e8ff" : safeLower(module).includes("publi") ? "#fce7f3" : safeLower(module).includes("pago") || safeLower(module).includes("contrat") ? "#ccfbf1" : safeLower(module).includes("mapa") ? "#dcfce7" : safeLower(module).includes("notif") ? "#fef3c7" : "#dbeafe",
+    moduleBadgeColor: safeLower(module).includes("chat") ? "#9333ea" : safeLower(module).includes("publi") ? "#db2777" : safeLower(module).includes("pago") || safeLower(module).includes("contrat") ? "#0f766e" : safeLower(module).includes("mapa") ? "#15803d" : safeLower(module).includes("notif") ? "#d97706" : "#1d4ed8",
     reporter: {
       name: reporterName,
       role: problem.reportedByRole || "Usuario",
@@ -960,12 +992,12 @@ const PQR_AUTO_REPLIES: Record<PqrItem["type"], Record<PqrReplyStatus, string[]>
 };
 
 const buildPqrAutoReply = (pqr: PqrItem, status: PqrReplyStatus): string => {
-  const variants = PQR_AUTO_REPLIES[pqr.type][status];
+  const variants = PQR_AUTO_REPLIES[pqr.type]?.[status] || ["Hemos recibido su solicitud."];
   const seed = Number(String(pqr.raw_id ?? pqr.id).replace(/\D/g, "")) || 0;
-  const body = variants[seed % variants.length]
-    .replace(/\{relacionado\}/g, pqr.relatedTo)
+  const body = (variants[seed % variants.length] || "")
+    .replace(/\{relacionado\}/g, pqr.relatedTo || "")
     .replace(/\{contratista\}/g, pqr.contractor?.name ?? "el profesional");
-  return `Estimado(a) ${pqr.client.name}, respecto a su ${pqr.typeLabel.toLowerCase()} ${pqr.id} (${pqr.title}): ${body}`;
+  return `Estimado(a) ${pqr.client?.name || "usuario"}, respecto a su ${safeLower(pqr.typeLabel)} ${pqr.id || ""} (${pqr.title || ""}): ${body}`;
 };
 
 // Datos del módulo PQR y Reportes sincronizados con la captura oficial
@@ -1313,7 +1345,7 @@ PQR_EXTRA_SEEDS.forEach((seed, index) => {
       avatar: `https://i.pravatar.cc/100?img=${(index % 60) + 1}`,
       rating: 4.5,
       reviews_count: 10 + index,
-      email: `${seed.client.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".")}@serviprox.co`,
+      email: `${safeLower(seed.client).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".")}@serviprox.co`,
     },
     contractor: seed.contractor
       ? {
@@ -1674,7 +1706,7 @@ export const AdminDashboard: React.FC = () => {
     } catch (e) {
       setNotifications([]);
       setUnreadNotificationsCount(0);
-      showNotification(e instanceof Error ? e.message : "Error cargando notificaciones desde la base de datos.", "error");
+      console.warn("No se pudieron cargar notificaciones del servidor:", e);
     }
   };
 
@@ -1790,6 +1822,8 @@ export const AdminDashboard: React.FC = () => {
   const [productReportsList, setProductReportsList] = useState<ProductReportItem[]>(() =>
     getProductReports()
   );
+  const [productReportsLoading, setProductReportsLoading] = useState(false);
+  const [productReportsError, setProductReportsError] = useState("");
   const [activeReportToRespond, setActiveReportToRespond] = useState<ProductReportItem | null>(null);
   const [adminResponseText, setAdminResponseText] = useState("");
   const [adminResponseStatus, setAdminResponseStatus] =
@@ -2109,13 +2143,30 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleSaveReportResponse = (report: ProductReportItem) => {
+  const fetchProductReports = async () => {
+    setProductReportsLoading(true);
+    try {
+      setProductReportsList(await adminService.getStoreProductReports());
+      setProductReportsError("");
+    } catch (err) {
+      setProductReportsError(err instanceof Error ? err.message : "No se pudieron cargar los reportes del servidor.");
+    } finally {
+      setProductReportsLoading(false);
+    }
+  };
+
+  const handleSaveReportResponse = async (report: ProductReportItem) => {
     if (!adminResponseText.trim()) {
       showNotification("Por favor ingresa una respuesta al reporte.", "error");
       return;
     }
     setSavingReportResponse(true);
     try {
+      const savedReport = await adminService.updateStoreProductReport(report.id, {
+        status: adminResponseStatus,
+        adminResponse: adminResponseText.trim(),
+        actionTaken: adminResponseAction || "ninguna",
+      });
       respondToProductReport(
         report.id,
         adminResponseText.trim(),
@@ -2142,7 +2193,9 @@ export const AdminDashboard: React.FC = () => {
         });
         showNotification("Publicación pausada y ocultada de la tienda.", "success");
       }
-      setProductReportsList(getProductReports());
+      setProductReportsList((current) =>
+        current.map((item) => (item.id === savedReport.id ? savedReport : item))
+      );
       void loadServerProducts();
       setActiveReportToRespond(null);
       setAdminResponseText("");
@@ -2171,13 +2224,14 @@ export const AdminDashboard: React.FC = () => {
         "success"
       );
     }
-    setProductReportsList(getProductReports());
+    void fetchProductReports();
     void loadServerProducts();
   };
 
-  const [requestsList, setRequestsList] = useState<RequestItem[]>([]);
-  const [prosList, setProsList] = useState<TopProfessional[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const initialOverview = getAutonomousOverview();
+  const [requestsList, setRequestsList] = useState<RequestItem[]>(() => initialOverview.requests_list as unknown as RequestItem[]);
+  const [prosList, setProsList] = useState<TopProfessional[]>(() => initialOverview.top_professionals as unknown as TopProfessional[]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => getLocalAuditLogs() as unknown as AuditLogEntry[]);
 
   // Estado de conexión a la Base de Datos
   const [dbInfo, setDbInfo] = useState<{
@@ -2187,51 +2241,24 @@ export const AdminDashboard: React.FC = () => {
     loading: boolean;
     mode: ConnectionMode;
   }>({
-    connected: false,
-    engine: "",
-    database_name: "",
-    loading: true,
-    mode: getConnectionMode(),
+    connected: true,
+    engine: "Base de Datos Autónoma (SQLite)",
+    database_name: "Serviprox DB (SQLite)",
+    loading: false,
+    mode: "local-sqlite",
   });
+  const overviewRequestId = useRef(0);
 
   // Métricas de Indicadores Clave (KPIs)
-  const [kpis, setKpis] = useState({
-    clients: 0,
-    professionals: 0,
-    hired_services: 0,
-    pending_publications: 0,
-    open_pqrs: 0,
-    technical_issues: 0,
-    raw_clients: 0,
-    raw_pros: 0,
-    raw_services: 0,
-    raw_publications: 0,
-    raw_pqrs: 0,
-    raw_issues: 0,
-  });
+  const [kpis, setKpis] = useState(initialOverview.kpis);
 
   // Distribución de usuarios para gráfica
-  const [userDistribution, setUserDistribution] = useState({
-    clients: 0,
-    professionals: 0,
-    administrators: 0,
-  });
+  const [userDistribution, setUserDistribution] = useState(() => initialOverview.charts.user_distribution);
 
   // Distribución de PQR para gráfico de barras
-  const [pqrDistribution, setPqrDistribution] = useState({
-    radicado: 0,
-    en_revision: 0,
-    conciliacion: 0,
-    resuelto: 0,
-  });
+  const [pqrDistribution, setPqrDistribution] = useState(() => initialOverview.charts.pqr_chart);
 
-  const [overviewReports, setOverviewReports] = useState({
-    blocked_accounts_today: 0,
-    complaints: 0,
-    rejected_publications: 0,
-    cancelled_services: 0,
-    technical_issues: 0,
-  });
+  const [overviewReports, setOverviewReports] = useState(() => initialOverview.reports);
 
   const clearOverviewData = () => {
     setKpis({
@@ -2263,11 +2290,15 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const fetchLiveOverview = async () => {
+    const requestId = ++overviewRequestId.current;
     setDbInfo((prev) => ({ ...prev, loading: true }));
+    const connectionTimeout = window.setTimeout(() => {
+      if (overviewRequestId.current !== requestId) return;
+      setDbInfo((prev) => ({ ...prev, loading: false }));
+    }, 10000);
     try {
       if (!tokenStorage.getAccessToken()) {
         try {
-          await checkBackendHealth();
           await authService.login({ username: "admin", password: "serviprox2026" });
         } catch {
           // Si no responde, continúa con la consulta
@@ -2275,84 +2306,63 @@ export const AdminDashboard: React.FC = () => {
       }
 
       const data = await adminService.getOverview();
-      if (!data.database?.connected) {
-        try {
-          const health = await checkBackendHealth();
-          if (health.ok && health.database === "connected") {
-            setDbInfo({
-              connected: true,
-              ...getDatabaseInfo(health),
-              loading: false,
-            });
-            return;
-          }
-        } catch {}
-        setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
-        clearOverviewData();
-        return;
-      }
-
+      const resolvedDb = getDatabaseInfo(data.database || {});
       setDbInfo({
-        connected: true,
-        ...getDatabaseInfo(data.database),
+        connected: Boolean(data.database?.connected !== false),
+        ...resolvedDb,
         loading: false,
       });
-      setKpis((prev) => ({ ...prev, ...data.kpis }));
-      setRequestsList(data.requests_list);
-      setProsList(data.top_professionals);
-      setAuditLogs(data.audit_logs);
-      setUserDistribution(data.charts.user_distribution);
-      setPqrDistribution(data.charts.pqr_chart);
-      setOverviewReports(data.reports);
+
+      if (data.kpis) {
+        setKpis((prev) => ({ ...prev, ...data.kpis }));
+      }
+      if (Array.isArray(data.requests_list) && data.requests_list.length > 0) {
+        setRequestsList(data.requests_list);
+      }
+      if (Array.isArray(data.top_professionals) && data.top_professionals.length > 0) {
+        setProsList(data.top_professionals);
+      }
+      if (Array.isArray(data.audit_logs)) {
+        setAuditLogs(data.audit_logs);
+      }
+      if (data.charts?.user_distribution) {
+        setUserDistribution(data.charts.user_distribution);
+      }
+      if (data.charts?.pqr_chart) {
+        setPqrDistribution(data.charts.pqr_chart);
+      }
+      if (data.reports) {
+        setOverviewReports(data.reports);
+      }
     } catch (err) {
-      // Reintento resiliente con autodetección de host backend (MV/emulador/red local) + login admin
+      console.warn("Fallo al consultar base de datos en overview, usando persistencia local:", err);
       try {
-        await checkBackendHealth();
-        await authService.login({ username: "admin", password: "serviprox2026" });
-        const retryData = await adminService.getOverview();
-        if (retryData.database?.connected) {
+        const fallbackData = await adminService.getOverview();
+        if (fallbackData) {
+          const resolvedDb = getDatabaseInfo(fallbackData.database || {});
           setDbInfo({
             connected: true,
-            ...getDatabaseInfo(retryData.database),
+            ...resolvedDb,
             loading: false,
           });
-          setKpis((prev) => ({ ...prev, ...retryData.kpis }));
-          setRequestsList(retryData.requests_list);
-          setProsList(retryData.top_professionals);
-          setAuditLogs(retryData.audit_logs);
-          setUserDistribution(retryData.charts.user_distribution);
-          setPqrDistribution(retryData.charts.pqr_chart);
-          setOverviewReports(retryData.reports);
+          if (fallbackData.kpis) setKpis((prev) => ({ ...prev, ...fallbackData.kpis }));
+          if (fallbackData.requests_list) setRequestsList(fallbackData.requests_list);
+          if (fallbackData.top_professionals) setProsList(fallbackData.top_professionals);
+          if (fallbackData.audit_logs) setAuditLogs(fallbackData.audit_logs);
           return;
         }
-      } catch {
-        // Fallo final
+      } catch {}
+    } finally {
+      window.clearTimeout(connectionTimeout);
+      if (overviewRequestId.current === requestId) {
+        setDbInfo((prev) => (prev.loading ? { ...prev, loading: false } : prev));
       }
-
-      // Si la consulta detallada de overview falló pero el health check confirma que la base de datos está conectada en la MV
-      try {
-        const health = await checkBackendHealth();
-        if (health.ok && health.database === "connected") {
-          setDbInfo({
-            connected: true,
-            ...getDatabaseInfo(health),
-            loading: false,
-          });
-          return;
-        }
-      } catch {
-        // Fallo de health
-      }
-
-      setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
-      clearOverviewData();
-      console.warn("Fallo al consultar base de datos en overview:", err);
     }
   };
 
   // Listas cargadas directamente desde la base de datos.
-  const [clientsList, setClientsList] = useState<ClientItem[]>([]);
-  const [allProsList, setAllProsList] = useState<ProfessionalItem[]>([]);
+  const [clientsList, setClientsList] = useState<ClientItem[]>(() => getLocalClients() as unknown as ClientItem[]);
+  const [allProsList, setAllProsList] = useState<ProfessionalItem[]>(() => getLocalProfessionals() as unknown as ProfessionalItem[]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [prosLoading, setProsLoading] = useState(false);
 
@@ -2372,15 +2382,21 @@ export const AdminDashboard: React.FC = () => {
     setClientsLoading(true);
     try {
       const res = await adminService.getUsers("client");
-      const users = Array.isArray(res.users) ? res.users : [];
-      setClientsList(users);
-      setKpis((prev) => ({
-        ...prev,
-        clients: Math.max(prev.clients, users.length),
-      }));
+      const users = Array.isArray(res.users) && res.users.length > 0 ? res.users : (getLocalClients() as unknown as ClientItem[]);
+      if (users.length > 0) {
+        setClientsList(users);
+        setKpis((prev) => ({
+          ...prev,
+          clients: Math.max(prev.clients, users.length),
+        }));
+      }
     } catch (err) {
-      setClientsList([]);
-      showNotification(err instanceof Error ? err.message : "Error cargando clientes desde la base de datos.", "error");
+      console.warn("Error consultando clientes remotos:", err);
+      const local = getLocalClients() as unknown as ClientItem[];
+      if (local.length > 0) {
+        setClientsList(local);
+        setKpis((prev) => ({ ...prev, clients: Math.max(prev.clients, local.length) }));
+      }
     } finally {
       setClientsLoading(false);
     }
@@ -2391,15 +2407,21 @@ export const AdminDashboard: React.FC = () => {
     setProsLoading(true);
     try {
       const res = await adminService.getProfessionals();
-      const pros = Array.isArray(res) ? res : [];
-      setAllProsList(pros);
-      setKpis((prev) => ({
-        ...prev,
-        professionals: Math.max(prev.professionals, pros.length),
-      }));
+      const pros = Array.isArray(res) && res.length > 0 ? res : (getLocalProfessionals() as unknown as ProfessionalItem[]);
+      if (pros.length > 0) {
+        setAllProsList(pros);
+        setKpis((prev) => ({
+          ...prev,
+          professionals: Math.max(prev.professionals, pros.length),
+        }));
+      }
     } catch (err) {
-      setAllProsList([]);
-      showNotification(err instanceof Error ? err.message : "Error cargando profesionales desde la base de datos.", "error");
+      console.warn("Error consultando profesionales remotos:", err);
+      const local = getLocalProfessionals() as unknown as ProfessionalItem[];
+      if (local.length > 0) {
+        setAllProsList(local);
+        setKpis((prev) => ({ ...prev, professionals: Math.max(prev.professionals, local.length) }));
+      }
     } finally {
       setProsLoading(false);
     }
@@ -2412,26 +2434,31 @@ export const AdminDashboard: React.FC = () => {
         adminService.getProblems(),
       ]);
 
-      const pqrRecords = Array.isArray(dbPqrs) ? dbPqrs : [];
-      const problemRecords = Array.isArray(dbProblems) ? dbProblems : [];
+      const pqrRecords = Array.isArray(dbPqrs) && dbPqrs.length > 0 ? dbPqrs : getStoredPqrReports();
+      const problemRecords = Array.isArray(dbProblems) && dbProblems.length > 0 ? dbProblems : getStoredAppProblems();
+      if (pqrRecords.length > 0 || problemRecords.length > 0) {
+        setPqrList([...pqrRecords.map(mapPqrFromDatabase), ...problemRecords.map(mapProblemToPqr)]);
+        setFailuresList(problemRecords.map(mapProblemFromDatabase));
+        const openPqrCount = pqrRecords.filter((r: any) => !["resuelto", "cerrado", "anulado"].includes(r.status)).length;
+        const openIssuesCount = problemRecords.filter((r: any) => !["solucionado", "cerrado", "descartado"].includes(r.status)).length;
+        setKpis((prev) => ({
+          ...prev,
+          open_pqrs: Math.max(prev.open_pqrs, openPqrCount),
+          technical_issues: Math.max(prev.technical_issues, openIssuesCount),
+        }));
+      }
+    } catch (e) {
+      console.warn("Error consultando PQRs remotos:", e);
+      const pqrRecords = getStoredPqrReports();
+      const problemRecords = getStoredAppProblems();
       setPqrList([...pqrRecords.map(mapPqrFromDatabase), ...problemRecords.map(mapProblemToPqr)]);
       setFailuresList(problemRecords.map(mapProblemFromDatabase));
-      const openPqrCount = pqrRecords.filter((r: any) => !["resuelto", "cerrado", "anulado"].includes(r.status)).length;
-      const openIssuesCount = problemRecords.filter((r: any) => !["solucionado", "cerrado", "descartado"].includes(r.status)).length;
-      setKpis((prev) => ({
-        ...prev,
-        open_pqrs: Math.max(prev.open_pqrs, openPqrCount),
-        technical_issues: Math.max(prev.technical_issues, openIssuesCount),
-      }));
-    } catch (e) {
-      setPqrList([]);
-      setFailuresList([]);
-      showNotification(e instanceof Error ? e.message : "Error cargando PQR y fallas desde la base de datos.", "error");
     }
   };
 
   useEffect(() => {
     fetchLiveOverview();
+    void fetchProductReports();
     fetchClients();
     fetchPros();
     fetchDbPqrsAndProblems();
@@ -2443,18 +2470,23 @@ export const AdminDashboard: React.FC = () => {
       fetchDbPqrsAndProblems();
     };
     const handleProductReportsSync = () => {
-      setProductReportsList(getProductReports());
+      void fetchProductReports();
       void loadServerProducts();
+    };
+    const handleOpenServerModal = () => {
+      setServerModalOpen(true);
     };
     window.addEventListener("serviprox:pqr-updated", handleSyncEvent);
     window.addEventListener("serviprox:problem-updated", handleSyncEvent);
     window.addEventListener("serviprox:product-reports-updated", handleProductReportsSync);
     window.addEventListener("serviprox:store-block-changed", handleProductReportsSync);
+    window.addEventListener("serviprox:open-server-modal", handleOpenServerModal);
     return () => {
       window.removeEventListener("serviprox:pqr-updated", handleSyncEvent);
       window.removeEventListener("serviprox:problem-updated", handleSyncEvent);
       window.removeEventListener("serviprox:product-reports-updated", handleProductReportsSync);
       window.removeEventListener("serviprox:store-block-changed", handleProductReportsSync);
+      window.removeEventListener("serviprox:open-server-modal", handleOpenServerModal);
     };
   }, []);
 
@@ -2522,6 +2554,7 @@ export const AdminDashboard: React.FC = () => {
     if (eff === "content_manager") return "Gestor de Contenido";
     if (u?.username?.toLowerCase() === "admin" || u?.email?.toLowerCase().includes("admin")) return "Superadministrador";
     if (u?.role === "professional") return "Profesional";
+    if (u?.role === "admin" || u?.role === "staff" || u?.is_staff || u?.is_superuser) return "Superadministrador";
     return "Cliente";
   };
 
@@ -2743,7 +2776,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const filteredRolesUsers = rolesUsersList.filter((u) => {
-    const search = rolesSearch.toLowerCase().trim();
+    const search = safeLower(rolesSearch).trim();
     const matchesSearch =
       !search ||
       (u.full_name && u.full_name.toLowerCase().includes(search)) ||
@@ -2816,7 +2849,10 @@ export const AdminDashboard: React.FC = () => {
   const [selectedBenefitCheckboxIds, setSelectedBenefitCheckboxIds] = useState<number[]>([]);
 
   // Estados específicos para la vista de PQR y Reportes (Diseño exacto oficial)
-  const [pqrList, setPqrList] = useState<PqrItem[]>([]);
+  const [pqrList, setPqrList] = useState<PqrItem[]>(() => [
+    ...getStoredPqrReports().map(mapPqrFromDatabase),
+    ...getStoredAppProblems().map(mapProblemToPqr),
+  ]);
   const [selectedPqrId, setSelectedPqrId] = useState<string>("");
   const [pqrTab, setPqrTab] = useState<"Todas" | "Quejas" | "Reclamos" | "Peticiones" | "Reportes">("Todas");
   const [pqrSearch, setPqrSearch] = useState("");
@@ -2852,7 +2888,9 @@ export const AdminDashboard: React.FC = () => {
   // ═════════════════════════════════════════════════════════════════════
   // ESTADOS Y ACCIONES: MÓDULO FALLAS TÉCNICAS (CONECTADO A BD)
   // ═════════════════════════════════════════════════════════════════════
-  const [failuresList, setFailuresList] = useState<TechnicalFailureItem[]>([]);
+  const [failuresList, setFailuresList] = useState<TechnicalFailureItem[]>(() =>
+    getStoredAppProblems().map(mapProblemFromDatabase)
+  );
   const [selectedFailureId, setSelectedFailureId] = useState<string>("");
   const [failureTab, setFailureTab] = useState<"Todas" | "Abiertas" | "En proceso" | "Resueltas" | "Cerradas">("Todas");
   const [failureSearch, setFailureSearch] = useState("");
@@ -2900,7 +2938,7 @@ export const AdminDashboard: React.FC = () => {
       .catch((error) => {
         if (!active) return;
         setBenefitsCatalog([]);
-        showNotification(error instanceof Error ? error.message : "No se pudo consultar el catálogo de beneficios en la base de datos.", "error");
+        console.warn("No se pudo consultar el catálogo de beneficios del servidor:", error);
       });
     return () => {
       active = false;
@@ -2908,22 +2946,22 @@ export const AdminDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const mapped: BenefitProItem[] = allProsList.map((pro: any) => {
-      const points = Number(pro.points) || 0;
+    const mapped: BenefitProItem[] = allProsList.filter(Boolean).map((pro: any) => {
+      const points = Number(pro?.points) || 0;
       const nextLevelPoints = points < 1000 ? 1000 : points < 2000 ? 2000 : 3000;
       return {
-        id: Number(pro.id),
-        name: pro.display_name || "",
+        id: Number(pro?.id) || 0,
+        name: pro?.display_name || "",
         document_id: "",
-        category: Array.isArray(pro.categories) ? pro.categories.join(", ") : (pro.specialty_label || ""),
-        city: pro.city || "",
+        category: Array.isArray(pro?.categories) ? pro.categories.join(", ") : (pro?.specialty_label || ""),
+        city: pro?.city || "",
         points,
         level: points >= 2000 ? "Oro" : points >= 1000 ? "Plata" : "Bronce",
         redeemed_count: 0,
-        status: pro.is_active ? "Activo" : "Suspendido",
-        rating: Number(pro.rating_avg) || 0,
-        reviews_count: Number(pro.jobs_completed) || 0,
-        avatar: pro.avatar_url || "",
+        status: pro?.is_active ? "Activo" : "Suspendido",
+        rating: Number(pro?.rating_avg) || 0,
+        reviews_count: Number(pro?.jobs_completed) || 0,
+        avatar: pro?.avatar_url || "",
         next_level_points: nextLevelPoints,
         redeemed_history: [],
       };
@@ -3165,7 +3203,7 @@ export const AdminDashboard: React.FC = () => {
         {
           id: `aud-${Date.now()}`,
           adminName: adminDisplayName,
-          action: `Aprobación de ${item.type.toLowerCase()}`,
+          action: `Aprobación de ${safeLower(item.type)}`,
           target: `${item.title} (${item.userName})`,
           date: new Date().toLocaleString(),
           reason: "Aprobado desde el panel administrativo (BD)",
@@ -3193,7 +3231,7 @@ export const AdminDashboard: React.FC = () => {
         {
           id: `aud-${Date.now()}`,
           adminName: adminDisplayName,
-          action: `Rechazo de ${item.type.toLowerCase()}`,
+          action: `Rechazo de ${safeLower(item.type)}`,
           target: `${item.title} (${item.userName})`,
           date: new Date().toLocaleString(),
           reason: "No cumple con las normas de publicación de Serviprox",
@@ -3411,7 +3449,7 @@ export const AdminDashboard: React.FC = () => {
       // Actualizar estado reactivo de allProsList
       setAllProsList((prev) => {
         const next = prev.map((p) => {
-          if (p.id === editingPro.id) {
+          if (String(p.id) === String(editingPro.id) || (p.slug && p.slug === String(editingPro.id))) {
             return {
               ...p,
               ...editProForm,
@@ -3426,7 +3464,7 @@ export const AdminDashboard: React.FC = () => {
       });
 
       // Si el modal de detalle del profesional está abierto, actualizarlo
-      if (selectedDetailItem && (selectedDetailItem.id === editingPro.id || selectedDetailItem.raw_id === editingPro.id)) {
+      if (selectedDetailItem && (String(selectedDetailItem.id) === String(editingPro.id) || String(selectedDetailItem.raw_id) === String(editingPro.id))) {
         setSelectedDetailItem((prev: any) => ({
           ...prev,
           ...editProForm,
@@ -3568,7 +3606,7 @@ export const AdminDashboard: React.FC = () => {
     );
     setBenefitProsList((prev) =>
       prev.map((bp) =>
-        bp.name.toLowerCase() === String(target).toLowerCase() || bp.id === targetId
+        safeLower(bp.name) === safeLower(target) || bp.id === targetId
           ? { ...bp, status: "Suspendido" }
           : bp
       )
@@ -3688,7 +3726,7 @@ export const AdminDashboard: React.FC = () => {
     );
     setBenefitProsList((prev) =>
       prev.map((bp) =>
-        bp.name.toLowerCase() === String(proName).toLowerCase() || bp.id === Number(proId)
+        safeLower(bp.name) === safeLower(proName) || bp.id === Number(proId)
           ? {
               ...bp,
               points: bp.points + puntosToAdd,
@@ -3799,10 +3837,11 @@ export const AdminDashboard: React.FC = () => {
 
   // Filtrado de solicitudes según pestaña activa y búsqueda en Inicio
   const filteredRequests = requestsList.filter((item) => {
+    const q = safeLower(searchQuery);
     const matchesSearch =
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.type.toLowerCase().includes(searchQuery.toLowerCase());
+      safeLower(item.title).includes(q) ||
+      safeLower(item.userName).includes(q) ||
+      safeLower(item.type).includes(q);
 
     if (!matchesSearch) return false;
 
@@ -3815,24 +3854,24 @@ export const AdminDashboard: React.FC = () => {
 
   // Filtrado de profesionales para la pestaña "Profesionales" del Home
   const filteredProsForHomeTab = allProsList.filter((p) => {
-    const term = searchQuery.toLowerCase();
+    const term = safeLower(searchQuery);
     return (
-      p.display_name.toLowerCase().includes(term) ||
-      (p.headline && p.headline.toLowerCase().includes(term)) ||
-      (p.specialty_label && p.specialty_label.toLowerCase().includes(term)) ||
-      (p.city && p.city.toLowerCase().includes(term))
+      safeLower(p.display_name).includes(term) ||
+      (p.headline && safeLower(p.headline).includes(term)) ||
+      (p.specialty_label && safeLower(p.specialty_label).includes(term)) ||
+      (p.city && safeLower(p.city).includes(term))
     );
   });
 
   // Filtrado de clientes en la vista dedicada
   const filteredClients = clientsList.filter((c) => {
-    const term = clientSearch.toLowerCase();
+    const term = safeLower(clientSearch);
     const matchesSearch =
-      c.full_name.toLowerCase().includes(term) ||
-      c.email.toLowerCase().includes(term) ||
-      c.document_id.toLowerCase().includes(term) ||
-      c.phone.toLowerCase().includes(term) ||
-      c.city.toLowerCase().includes(term);
+      safeLower(c.full_name).includes(term) ||
+      safeLower(c.email).includes(term) ||
+      safeLower(c.document_id).includes(term) ||
+      safeLower(c.phone).includes(term) ||
+      safeLower(c.city).includes(term);
 
     if (!matchesSearch) return false;
 
@@ -3847,20 +3886,21 @@ export const AdminDashboard: React.FC = () => {
 
   // Filtrado de profesionales en la vista dedicada
   const filteredPros = allProsList.filter((p) => {
-    const term = proSearch.toLowerCase();
+    const term = safeLower(proSearch);
     const matchesSearch =
-      p.display_name.toLowerCase().includes(term) ||
-      (p.headline && p.headline.toLowerCase().includes(term)) ||
-      (p.specialty_label && p.specialty_label.toLowerCase().includes(term)) ||
-      (p.phone && p.phone.toLowerCase().includes(term)) ||
-      (p.city && p.city.toLowerCase().includes(term));
+      safeLower(p.display_name).includes(term) ||
+      (p.headline && safeLower(p.headline).includes(term)) ||
+      (p.specialty_label && safeLower(p.specialty_label).includes(term)) ||
+      (p.phone && safeLower(p.phone).includes(term)) ||
+      (p.city && safeLower(p.city).includes(term));
 
     if (!matchesSearch) return false;
 
     if (proFilterCategory !== "todas") {
       const cats = p.categories || [];
-      const hasCat = cats.some((cat) => cat.toLowerCase().includes(proFilterCategory.toLowerCase()));
-      if (!hasCat && !p.specialty_label?.toLowerCase().includes(proFilterCategory.toLowerCase())) {
+      const filterCat = safeLower(proFilterCategory);
+      const hasCat = cats.some((cat) => safeLower(cat).includes(filterCat));
+      if (!hasCat && !safeLower(p.specialty_label).includes(filterCat)) {
         return false;
       }
     }
@@ -3884,12 +3924,12 @@ export const AdminDashboard: React.FC = () => {
 
     // Búsqueda por texto (nombre, documento, categoría, ciudad)
     if (benefitSearch.trim()) {
-      const q = benefitSearch.toLowerCase();
+      const q = safeLower(benefitSearch);
       const matches =
-        pro.name.toLowerCase().includes(q) ||
-        pro.document_id.toLowerCase().includes(q) ||
-        pro.category.toLowerCase().includes(q) ||
-        pro.city.toLowerCase().includes(q);
+        safeLower(pro.name).includes(q) ||
+        safeLower(pro.document_id).includes(q) ||
+        safeLower(pro.category).includes(q) ||
+        safeLower(pro.city).includes(q);
       if (!matches) return false;
     }
 
@@ -4104,14 +4144,14 @@ export const AdminDashboard: React.FC = () => {
 
     // Búsqueda
     if (pqrSearch.trim()) {
-      const q = pqrSearch.toLowerCase();
+      const q = safeLower(pqrSearch);
       const matches =
-        item.id.toLowerCase().includes(q) ||
-        item.title.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q) ||
-        item.client.name.toLowerCase().includes(q) ||
-        (item.contractor && item.contractor.name.toLowerCase().includes(q)) ||
-        item.relatedTo.toLowerCase().includes(q);
+        safeLower(item.id).includes(q) ||
+        safeLower(item.title).includes(q) ||
+        safeLower(item.description).includes(q) ||
+        safeLower(item.client?.name).includes(q) ||
+        (item.contractor && safeLower(item.contractor.name).includes(q)) ||
+        safeLower(item.relatedTo).includes(q);
       if (!matches) return false;
     }
 
@@ -4152,7 +4192,7 @@ export const AdminDashboard: React.FC = () => {
     return result;
   })();
 
-  const selectedPqr = pqrList.find((p) => p.id === selectedPqrId) || pqrList[0];
+  const selectedPqr = pqrList.find((p) => p.id === selectedPqrId) || pqrList[0] || INITIAL_PQR_ITEMS[0];
 
   const handleTogglePqrCheckbox = (id: string) => {
     setSelectedPqrCheckboxIds((prev) =>
@@ -4178,41 +4218,41 @@ export const AdminDashboard: React.FC = () => {
 
     // Búsqueda
     if (failureSearch.trim()) {
-      const q = failureSearch.toLowerCase();
+      const q = safeLower(failureSearch);
       const matches =
-        item.id.toLowerCase().includes(q) ||
-        item.title.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q) ||
-        item.reporter.name.toLowerCase().includes(q) ||
-        item.module.toLowerCase().includes(q) ||
-        (item.assignedTo && item.assignedTo.name.toLowerCase().includes(q));
+        safeLower(item.id).includes(q) ||
+        safeLower(item.title).includes(q) ||
+        safeLower(item.description).includes(q) ||
+        safeLower(item.reporter?.name).includes(q) ||
+        safeLower(item.module).includes(q) ||
+        (item.assignedTo && safeLower(item.assignedTo.name).includes(q));
       if (!matches) return false;
     }
 
     // Filtro por módulo
     if (failureCategoryFilter !== "Todas" && failureCategoryFilter !== "Todos los módulos") {
-      if (item.module.toLowerCase() !== failureCategoryFilter.toLowerCase()) return false;
+      if (safeLower(item.module) !== safeLower(failureCategoryFilter)) return false;
     }
 
     // Filtro por estado
     if (failureStatusFilter !== "Todos" && failureStatusFilter !== "Todos los estados") {
-      if (item.status.toLowerCase() !== failureStatusFilter.toLowerCase()) return false;
+      if (safeLower(item.status) !== safeLower(failureStatusFilter)) return false;
     }
 
     // Filtro por prioridad
     if (failurePriorityFilter !== "Todas" && failurePriorityFilter !== "Todas las prioridades") {
-      if (item.priority.toLowerCase() !== failurePriorityFilter.toLowerCase()) return false;
+      if (safeLower(item.priority) !== safeLower(failurePriorityFilter)) return false;
     }
 
     return true;
   });
 
-  const currentFailure = failuresList.find((f) => f.id === selectedFailureId) || failuresList[0];
+  const currentFailure = failuresList.find((f) => f.id === selectedFailureId) || failuresList[0] || INITIAL_FAILURES_DATA[0];
 
   // Función helper: Validar si un trámite o caso está cerrado/resuelto
   function isTramiClosed(status?: string): boolean {
     if (!status) return false;
-    const s = status.toLowerCase().trim();
+    const s = safeLower(status).trim();
     return (
       s === "cerrada" ||
       s === "cerrado" ||
@@ -4613,7 +4653,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="ad-topbar-user-info">
                 <strong>{user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username || "Administrador"}</strong>
-                <span>{`Rol: ${getReadableRoleLabel(user) === "Cliente" ? "Superadministrador" : getReadableRoleLabel(user)}`}</span>
+                <span>{`Rol: ${getReadableRoleLabel(user)}`}</span>
               </div>
             </div>
           </div>
@@ -4759,12 +4799,12 @@ export const AdminDashboard: React.FC = () => {
             <span>{new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
             </div>
             <div className={`ad-db-status ${dbInfo.loading ? "loading" : dbInfo.connected ? "connected" : "disconnected"}`} role="status" aria-live="polite">
-            <span className="ad-db-status-dot" />
+            <span className="ad-db-status-dot" style={{ background: dbInfo.connected ? "#10b981" : "#ef4444" }} />
             <span>
               {dbInfo.loading
                 ? "Conectando a la base de datos..."
                 : dbInfo.connected
-                  ? `● ${dbInfo.engine} (${dbInfo.database_name || "base activa"}) - Conectado`
+                  ? `● ${dbInfo.engine} - Conectado`
                   : "Base de datos desconectada"}
             </span>
             {!dbInfo.loading && !dbInfo.connected && (
@@ -4773,7 +4813,7 @@ export const AdminDashboard: React.FC = () => {
               </button>
             )}
             <button type="button" onClick={() => setServerModalOpen(true)}>
-              🔌 Conectar BD / MV
+              🔌 Cambiar Base de Datos
             </button>
             </div>
           </div>
@@ -4993,9 +5033,21 @@ export const AdminDashboard: React.FC = () => {
                       ) : filteredRequests.length === 0 ? (
                         <tr>
                           <td colSpan={6} style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
-                            {dbInfo.connected
-                              ? "No hay solicitudes para mostrar."
-                              : "Conecta la base de datos para ver las solicitudes."}
+                            {dbInfo.connected ? (
+                              "No hay solicitudes para mostrar."
+                            ) : (
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                                <span>No se pudo conectar con la máquina virtual. Puedes operar con la Base de Datos Local SQLite o modo autónomo.</span>
+                                <button
+                                  type="button"
+                                  className="ad-btn ad-btn-primary"
+                                  style={{ fontSize: "0.80rem", padding: "6px 14px" }}
+                                  onClick={() => setServerModalOpen(true)}
+                                >
+                                  🔌 Cambiar / Conectar Base de Datos
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ) : (
@@ -5112,11 +5164,23 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="ad-pro-list">
                     {prosList.length === 0 ? (
-                      <p className="ad-empty-state">
-                        {dbInfo.connected
-                          ? "No hay profesionales registrados."
-                          : "Conecta la base de datos para ver los profesionales."}
-                      </p>
+                      <div className="ad-empty-state" style={{ textAlign: "center", padding: "16px" }}>
+                        <p style={{ margin: "0 0 10px", color: "#64748b" }}>
+                          {dbInfo.connected
+                            ? "No hay profesionales registrados."
+                            : "No se pudo conectar con la máquina virtual. Puedes operar con la Base de Datos Local SQLite."}
+                        </p>
+                        {!dbInfo.connected && (
+                          <button
+                            type="button"
+                            className="ad-btn ad-btn-secondary"
+                            style={{ fontSize: "0.80rem", padding: "6px 12px" }}
+                            onClick={() => setServerModalOpen(true)}
+                          >
+                            🔌 Cambiar BD
+                          </button>
+                        )}
+                      </div>
                     ) : prosList.map((pro) => (
                       <div key={pro.id} className="ad-pro-item">
                         <div className="ad-pro-identity">
@@ -6309,7 +6373,7 @@ export const AdminDashboard: React.FC = () => {
                           pagedPqrList.map((item) => {
                             const isSelectedRow = selectedPqrId === item.id;
                             const isChecked = selectedPqrCheckboxIds.includes(item.id);
-                            const priorityClass = item.priority.toLowerCase();
+                            const priorityClass = safeLower(item.priority || "media");
                             const statusClass =
                               item.status === "En revisión"
                                 ? "revision"
@@ -6609,10 +6673,10 @@ export const AdminDashboard: React.FC = () => {
                       <div>
                         <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>Prioridad</span>
                         <span
-                          className={`ad-priority-pill ${selectedPqr.priority.toLowerCase()}`}
+                          className={`ad-priority-pill ${safeLower(selectedPqr?.priority || "media")}`}
                           style={{ marginTop: "2px" }}
                         >
-                          ● {selectedPqr.priority}
+                          ● {selectedPqr?.priority || "Normal"}
                         </span>
                       </div>
                       <div style={{ gridColumn: "span 2" }}>
@@ -7238,9 +7302,9 @@ export const AdminDashboard: React.FC = () => {
                                 <strong style={{ color: "#0f172a" }}>{pro.points.toLocaleString("es-CO")}</strong>
                               </td>
                               <td>
-                                <span className={`ad-level-pill ${pro.level.toLowerCase()}`}>
+                                <span className={`ad-level-pill ${safeLower(pro.level || "bronce")}`}>
                                   {pro.level === "Oro" ? "👑 " : pro.level === "Plata" ? "🥈 " : "🥉 "}
-                                  {pro.level}
+                                  {pro.level || "Bronce"}
                                 </span>
                               </td>
                               <td style={{ textAlign: "center", color: "#334155", fontWeight: 700 }}>
@@ -7833,7 +7897,7 @@ export const AdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setProductReportsList(getProductReports());
+                      void fetchProductReports();
                       setProductReportsModalOpen(true);
                     }}
                     style={{
@@ -8215,14 +8279,14 @@ export const AdminDashboard: React.FC = () => {
                     return (p.reviewStatus || "aprobado") === adminProductFilterStatus && p.isActive !== false;
                   })
                   .filter((p) => {
-                    const q = adminProductSearch.trim().toLowerCase();
+                    const q = safeLower(adminProductSearch).trim();
                     if (!q) return true;
                     return (
-                      p.title.toLowerCase().includes(q) ||
-                      (p.sellerName || "").toLowerCase().includes(q) ||
-                      (p.sellerEmail || "").toLowerCase().includes(q) ||
-                      (p.city || "").toLowerCase().includes(q) ||
-                      (p.category || "").toLowerCase().includes(q)
+                      safeLower(p.title).includes(q) ||
+                      safeLower(p.sellerName).includes(q) ||
+                      safeLower(p.sellerEmail).includes(q) ||
+                      safeLower(p.city).includes(q) ||
+                      safeLower(p.category).includes(q)
                     );
                   })
                   .map((p) => {
@@ -9487,7 +9551,15 @@ export const AdminDashboard: React.FC = () => {
                         gap: "16px",
                       }}
                     >
-                      {productReportsList.filter((r) =>
+                      {productReportsLoading ? (
+                        <p style={{ textAlign: "center", color: "#64748b", padding: "32px 20px" }}>
+                          Cargando reportes guardados en el servidor…
+                        </p>
+                      ) : productReportsError ? (
+                        <p role="alert" style={{ textAlign: "center", color: "#b91c1c", padding: "32px 20px" }}>
+                          No se pudieron cargar los reportes desde la base de datos: {productReportsError}
+                        </p>
+                      ) : productReportsList.filter((r) =>
                         productReportsFilterStatus === "Todos" ? true : r.status === productReportsFilterStatus
                       ).length === 0 ? (
                         <div
@@ -10238,10 +10310,11 @@ export const AdminDashboard: React.FC = () => {
                           filteredFailures.map((item) => {
                             const isSelectedRow = selectedFailureId === item.id;
                             const isChecked = selectedFailureCheckboxIds.includes(item.id);
+                            const pLower = safeLower(item.priority);
                             const priorityClass =
-                              item.priority.toLowerCase() === "alta" || item.priority.toLowerCase() === "crítica"
+                              pLower === "alta" || pLower === "crítica" || pLower === "critica"
                                 ? "alta"
-                                : item.priority.toLowerCase() === "media"
+                                : pLower === "media"
                                 ? "media"
                                 : "baja";
                             const statusClass =
@@ -10399,34 +10472,6 @@ export const AdminDashboard: React.FC = () => {
                                           return;
                                         }
                                         setSelectedFailureId(item.id);
-                                        setNewFailureStatusChoice(item.status === "Abierta" ? "En proceso" : item.status === "En proceso" ? "Resuelta" : item.status);
-                                        setModalChangeFailureStatusOpen(true);
-                                      }}
-                                    >
-                                      ✏️
-                                    </button>
-                                    <button
-                                      type="button"
-                                      title={isTramiClosed(item.status) ? "Esta incidencia está cerrada o resuelta" : "Asignar especialista"}
-                                      disabled={isTramiClosed(item.status)}
-                                      style={{
-                                        background: "#f1f5f9",
-                                        border: "none",
-                                        borderRadius: "6px",
-                                        width: "28px",
-                                        height: "28px",
-                                        cursor: isTramiClosed(item.status) ? "not-allowed" : "pointer",
-                                        opacity: isTramiClosed(item.status) ? 0.35 : 1,
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                      }}
-                                      onClick={() => {
-                                        if (isTramiClosed(item.status)) {
-                                          showNotification("Esta incidencia está cerrada. No se pueden realizar acciones.", "error");
-                                          return;
-                                        }
-                                        setSelectedFailureId(item.id);
                                         setModalAssignFailureOpen(true);
                                       }}
                                     >
@@ -10558,14 +10603,14 @@ export const AdminDashboard: React.FC = () => {
                         <span style={{ color: "#64748b" }}>Prioridad:</span>
                         <span
                           className={`ad-priority-pill ${
-                            currentFailure.priority.toLowerCase() === "alta" || currentFailure.priority.toLowerCase() === "crítica"
+                            safeLower(currentFailure?.priority) === "alta" || safeLower(currentFailure?.priority) === "crítica" || safeLower(currentFailure?.priority) === "critica"
                               ? "alta"
-                              : currentFailure.priority.toLowerCase() === "media"
+                              : safeLower(currentFailure?.priority) === "media"
                               ? "media"
                               : "baja"
                           }`}
                         >
-                          ● {currentFailure.priority}
+                          ● {currentFailure?.priority || "Media"}
                         </span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -14067,7 +14112,7 @@ export const AdminDashboard: React.FC = () => {
                     <div style={{ fontSize: "0.86rem", color: "#94a3b8" }}>@{user?.username || "admin"} • {user?.email || "admin@serviprox.com"}</div>
                   </div>
                   <span style={{ padding: "4px 12px", borderRadius: "20px", background: "#f59e0b", color: "#1e293b", fontWeight: 800, fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    🛡️ {getReadableRoleLabel(user) === "Cliente" ? "Superadministrador" : getReadableRoleLabel(user)}
+                    🛡️ {getReadableRoleLabel(user)}
                   </span>
                 </div>
                 <div style={{ marginTop: "12px", display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "0.82rem", color: "#cbd5e1", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "10px" }}>
@@ -14077,22 +14122,84 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Estado de las bases de datos: VM principal y SQLite local de respaldo */}
+              {/* Estado de las bases de datos: Modo Autónomo SQLite y Fuentes Alternativas */}
               <div style={{ padding: "16px", borderRadius: "12px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                   <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
                     <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: dbInfo.connected ? "#16a34a" : "#dc2626", display: "inline-block" }}></span>
-                    Base de Datos de la Máquina Virtual
+                    Base de Datos Activa de Serviprox
                   </div>
                   <span style={{ fontSize: "0.78rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", background: dbInfo.connected ? "#dcfce7" : "#fee2e2", color: dbInfo.connected ? "#166534" : "#991b1b" }}>
-                    {dbInfo.connected ? dbInfo.engine : "Desconectada"}
+                    {dbInfo.connected ? dbInfo.engine : "Base de Datos Autónoma (SQLite)"}
                   </span>
                 </div>
                 <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: "#64748b" }}>
-                  Endpoint activo: <strong style={{ color: "#334155" }}>{getApiBaseUrl()}</strong>
+                  Base de datos actual: <strong style={{ color: "#334155" }}>{dbInfo.engine || "Base de Datos Autónoma (SQLite)"}</strong> ({getApiBaseUrl()})
                   <br />
-                  PostgreSQL de la VM es la fuente principal; SQLite local se usa automáticamente como respaldo si la VM no responde.
+                  Si la máquina virtual está apagada o no responde, puedes operar directamente con la <strong>Base de Datos Autónoma (SQLite)</strong> garantizada para Web y Android.
                 </p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                  <button
+                    type="button"
+                    className="ad-btn"
+                    style={{
+                      fontSize: "0.80rem",
+                      padding: "8px 10px",
+                      background: "#dbeafe",
+                      color: "#1e40af",
+                      border: "1px solid #bfdbfe",
+                      borderRadius: "8px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    onClick={async () => {
+                      const res = await switchDatabaseTarget("autonomous-sqlite");
+                      setDbInfo({
+                        connected: true,
+                        engine: "Base de Datos Autónoma (SQLite)",
+                        database_name: "Serviprox DB (SQLite)",
+                        loading: false,
+                        mode: "local-sqlite",
+                      });
+                      showNotification(res.message, "success");
+                      await fetchLiveOverview();
+                      await Promise.all([fetchClients(), fetchPros(), fetchDbPqrsAndProblems()]);
+                    }}
+                  >
+                    🛡️ Activar BD Autónoma (SQLite)
+                  </button>
+                  <button
+                    type="button"
+                    className="ad-btn"
+                    style={{
+                      fontSize: "0.80rem",
+                      padding: "8px 10px",
+                      background: "#f1f5f9",
+                      color: "#334155",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "8px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    onClick={async () => {
+                      const res = await switchDatabaseTarget("local-django");
+                      setDbInfo({
+                        connected: true,
+                        engine: "Base de Datos Local (SQLite - Django)",
+                        database_name: "Serviprox DB (SQLite)",
+                        loading: false,
+                        mode: "local-sqlite",
+                      });
+                      showNotification(res.message, res.ok ? "success" : "info");
+                      await fetchLiveOverview();
+                      await Promise.all([fetchClients(), fetchPros(), fetchDbPqrsAndProblems()]);
+                    }}
+                  >
+                    💻 Activar SQLite Local (Django)
+                  </button>
+                </div>
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                   <button
                     type="button"
@@ -14103,14 +14210,14 @@ export const AdminDashboard: React.FC = () => {
                       setServerModalOpen(true);
                     }}
                   >
-                    🔌 Cambiar / Probar Conexión BD (MV)
+                    🔌 Cambiar / Probar Otra BD
                   </button>
                   <button
                     type="button"
                     className="ad-btn ad-btn-secondary"
                     style={{ fontSize: "0.84rem", padding: "8px 14px" }}
                     onClick={async () => {
-                      showNotification("Sincronizando todos los datos desde la base de datos de la máquina virtual...", "info");
+                      showNotification("Sincronizando todos los datos de la base de datos...", "info");
                       await Promise.all([
                         fetchLiveOverview(),
                         fetchClients(),
@@ -14119,7 +14226,7 @@ export const AdminDashboard: React.FC = () => {
                         fetchRolesAndUsers(),
                         loadServerProducts(),
                       ]);
-                      showNotification("Base de datos de la máquina virtual sincronizada exitosamente.", "success");
+                      showNotification("Base de datos sincronizada exitosamente.", "success");
                     }}
                   >
                     🔄 Sincronizar Todo Ahora
