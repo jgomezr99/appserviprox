@@ -1,16 +1,4 @@
-import { api, checkBackendHealth } from "./api";
-import type { ProductReportItem } from "../data/productReportsStorage";
-import {
-  getLocalClients,
-  saveLocalClients,
-  getLocalProfessionals,
-  saveLocalProfessionals,
-  updateLocalProfessional,
-  getLocalAuditLogs,
-  addLocalAuditLog,
-  getAutonomousOverview,
-} from "./adminLocalStore";
-import { getStoredPqrReports, getStoredAppProblems } from "../data/pqrInitialData";
+import { api } from "./api";
 
 export interface DatabaseInfo {
   connected: boolean;
@@ -18,7 +6,6 @@ export interface DatabaseInfo {
   database_name?: string;
   timestamp?: string;
   detail?: string;
-  mode?: "vm-direct" | "vm-proxy" | "local-sqlite" | "custom";
 }
 
 export interface AdminKPIs {
@@ -34,6 +21,118 @@ export interface AdminKPIs {
   raw_publications?: number;
   raw_pqrs?: number;
   raw_issues?: number;
+}
+
+export interface AdminOverviewRequestItem {
+  id: string;
+  raw_id?: number;
+  type: "Servicio" | "Producto" | "PQR" | "Falla";
+  typeIcon: string;
+  typeColor: string;
+  title: string;
+  userName: string;
+  userAvatar: string;
+  date: string;
+  status: "En revisión" | "Aprobado" | "Abierto" | "En proceso" | "Rechazado";
+  statusClass: string;
+}
+
+export interface AdminOverviewTopProfessional {
+  id: string;
+  raw_id?: number;
+  name: string;
+  specialty: string;
+  rating: number;
+  tier: "Nivel Oro" | "Nivel Plata" | "Nivel Bronce";
+  avatar: string;
+  points: number;
+  completedJobs: number;
+  verified: boolean;
+  blocked?: boolean;
+}
+
+export interface AdminOverviewAuditLog {
+  id: string;
+  adminName: string;
+  action: string;
+  target: string;
+  date: string;
+  reason: string;
+}
+
+export interface AdminUserSummary {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  role: string;
+  admin_role?: string | null;
+  is_staff?: boolean;
+  is_superuser?: boolean;
+  phone: string;
+  city: string;
+  address: string;
+  document_id: string;
+  is_active: boolean;
+  is_identity_verified: boolean;
+  requests_count: number;
+  date_joined: string;
+  avatar_url?: string;
+  username?: string;
+  is_pro_verified?: boolean;
+  is_blocked?: boolean;
+  block_type?: string;
+  block_duration_days?: number;
+  block_reason?: string;
+  blocked_until?: string | null;
+  blocked_at?: string | null;
+}
+
+export interface AdminActionResult {
+  ok: boolean;
+  message: string;
+  user?: AdminUserSummary;
+  attachments?: Array<{ name: string; url?: string; type: "image" | "file" }>;
+  [key: string]: unknown;
+}
+
+export interface AdminNotificationItem {
+  id: number;
+  title: string;
+  text: string;
+  type: string;
+  link?: string;
+  target_id?: string;
+  unread: boolean;
+  time: string;
+  created_at: string;
+}
+
+export interface AdminRolesResponse {
+  roles: Array<{
+    id: string;
+    name: string;
+    category: "admin" | "app";
+    badge: string;
+    badge_color: string;
+    description: string;
+    users_count: number;
+    is_system_locked: boolean;
+  }>;
+  available_permissions: Array<{
+    id: string;
+    label: string;
+    category: string;
+    description: string;
+  }>;
+  permission_matrix: Record<string, string[]>;
+  counts: {
+    total: number;
+    clients: number;
+    professionals: number;
+    administrators: number;
+  };
 }
 
 export interface AdminOverviewResponse {
@@ -59,9 +158,9 @@ export interface AdminOverviewResponse {
     cancelled_services: number;
     technical_issues: number;
   };
-  requests_list: any[];
-  top_professionals: any[];
-  audit_logs: any[];
+  requests_list: AdminOverviewRequestItem[];
+  top_professionals: AdminOverviewTopProfessional[];
+  audit_logs: AdminOverviewAuditLog[];
 }
 
 export interface ReportsStatsKPI {
@@ -129,13 +228,15 @@ export interface ReportsStatsResponse {
 }
 
 /** El backend pagina de 20 en 20; se recorren todas las páginas para que los totales sean reales. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchAllPages(path: string, params: Record<string, string> = {}): Promise<any[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: any[] = [];
+async function fetchAllPages<T = Record<string, unknown>>(
+  path: string,
+  params: Record<string, string> = {}
+): Promise<T[]> {
+  const rows: T[] = [];
   for (let page = 1; page <= 100; page += 1) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await api.get<any>(path, { params: { ...params, page: String(page) } });
+    const response = await api.get<T[] | { results?: T[]; next?: string | null }>(path, {
+      params: { ...params, page: String(page) },
+    });
     if (Array.isArray(response)) return response;
     const results = Array.isArray(response?.results) ? response.results : [];
     rows.push(...results);
@@ -147,44 +248,27 @@ async function fetchAllPages(path: string, params: Record<string, string> = {}):
 export const adminService = {
   /**
    * Obtiene la visión general en vivo directamente consultada de la base de datos de Serviprox.
-   * Si el backend remoto no responde, conmuta suavemente a la base de datos local SQLite autónoma.
    */
   async getOverview(): Promise<AdminOverviewResponse> {
-    try {
-      const resp = await api.get<AdminOverviewResponse>("admin/overview/");
-      if (resp && resp.database && resp.database.connected !== false) {
-        return resp;
-      }
-    } catch {
-      // Backend no disponible o endpoint offline, conmutar a base de datos autónoma
-    }
-
-    try {
-      const health = await checkBackendHealth();
-      const isConnected = health.ok && health.database === "connected";
-      const resolvedEngine =
-        health.engine === "sqlite"
-          ? "SQLite (Local)"
-          : (health.mode === "custom" ? "PostgreSQL (Nube)" : (health.engine || "SQLite (Local Autónomo)"));
-      const dbName = isConnected
-        ? (resolvedEngine.toLowerCase().includes("sqlite") ? "Serviprox DB (SQLite)" : "Serviprox DB (Nube)")
-        : "Serviprox DB (SQLite)";
-
-      return getAutonomousOverview({
-        engine: resolvedEngine,
-        database_name: dbName,
-        mode: health.mode || "local-sqlite",
-      }) as AdminOverviewResponse;
-    } catch {
-      return getAutonomousOverview() as AdminOverviewResponse;
-    }
+    return api.get<AdminOverviewResponse>("admin/overview/");
   },
 
   /**
    * Ejecuta una acción administrativa y la guarda en la base de datos (con registro de auditoría).
    */
   async executeAction(params: {
-    action: "approve_request" | "reject_request" | "block_user" | "unblock_user" | "assign_benefits" | "respond_pqr" | "assign_problem" | "update_problem_status" | "create_problem" | string;
+    action:
+      | "approve_request"
+      | "reject_request"
+      | "block_user"
+      | "unblock_user"
+      | "assign_benefits"
+      | "respond_pqr"
+      | "assign_problem"
+      | "update_problem_status"
+      | "create_problem"
+      | "toggle_user_verification"
+      | string;
     target_id: string | number;
     reason?: string;
     admin_name?: string;
@@ -203,53 +287,9 @@ export const adminService = {
     module?: string;
     ticket_number?: string;
     status?: string;
-    [key: string]: any;
-  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
-    try {
-      const res = await api.post<any>("admin/action/", params);
-      if (res && res.ok !== false) {
-        addLocalAuditLog({
-          adminName: params.admin_name || "Superadministrador",
-          action: params.action,
-          target: String(params.target_id),
-          reason: params.reason || "Acción ejecutada desde el panel administrativo",
-        });
-        return res;
-      }
-    } catch {
-      // Backend remoto no responde, aplicar cambios directamente en la base de datos local
-    }
-
-    addLocalAuditLog({
-      adminName: params.admin_name || "Superadministrador",
-      action: params.action,
-      target: String(params.target_id),
-      reason: params.reason || "Acción administrativa guardada en la base de datos local",
-    });
-
-    if (params.action === "block_user" || params.action === "unblock_user") {
-      const isBlock = params.action === "block_user";
-      const clients = getLocalClients();
-      const updatedClients = clients.map((c) =>
-        String(c.id) === String(params.target_id) || c.email === String(params.target_id)
-          ? { ...c, is_active: !isBlock, is_blocked: isBlock }
-          : c
-      );
-      saveLocalClients(updatedClients);
-
-      const pros = getLocalProfessionals();
-      const updatedPros = pros.map((p) =>
-        String(p.id) === String(params.target_id) || p.email === String(params.target_id)
-          ? { ...p, is_active: !isBlock, is_blocked: isBlock }
-          : p
-      );
-      saveLocalProfessionals(updatedPros);
-    }
-
-    return {
-      ok: true,
-      message: "Acción procesada y registrada exitosamente en la base de datos.",
-    };
+    [key: string]: unknown;
+  }): Promise<AdminActionResult> {
+    return api.post<AdminActionResult>("admin/action/", params);
   },
 
   /**
@@ -261,7 +301,7 @@ export const adminService = {
     newStatus?: string;
     adminName?: string;
     sendNotification?: boolean;
-  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+  }): Promise<AdminActionResult> {
     return await this.executeAction({
       action: "respond_pqr",
       target_id: params.targetId,
@@ -276,48 +316,37 @@ export const adminService = {
   /**
    * Consulta listado de usuarios de la base de datos.
    */
-  async getUsers(role?: string): Promise<{ count: number; users: any[] }> {
-    try {
-      const res = await api.get<{ count: number; users: any[] }>("admin/users/", {
-        params: role ? { role } : undefined,
-      });
-      if (res && Array.isArray(res.users) && res.users.length > 0) {
-        return res;
-      }
-    } catch {
-      // Backend no disponible, retornar de la base de datos local
-    }
-    const local = getLocalClients();
-    return {
-      count: local.length,
-      users: local,
-    };
+  async getUsers(role?: string): Promise<{ count: number; users: AdminUserSummary[] }> {
+    return api.get<{ count: number; users: AdminUserSummary[] }>("admin/users/", {
+      params: role ? { role } : undefined,
+    });
   },
 
   /**
    * Consulta listado de PQRs de la base de datos.
    */
-  async getPqrs(): Promise<any[]> {
-    try {
-      const rows = await fetchAllPages("pqrs/");
-      if (Array.isArray(rows) && rows.length > 0) return rows;
-    } catch {
-      // Backend no disponible
-    }
-    return getStoredPqrReports();
+  async getPqrs(): Promise<Array<Record<string, unknown>>> {
+    return fetchAllPages<Record<string, unknown>>("pqrs/");
   },
 
   async createPqr(params: {
     type: "queja" | "reclamo" | "peticion";
+    subjectType?: "servicio" | "producto";
+    productId?: number | null;
+    productName?: string;
+    contractorName?: string;
     reason: string;
     description: string;
     clientName: string;
     clientEmail?: string;
     relatedTo?: string;
     priority?: string;
-  }): Promise<any> {
-    return api.post("pqrs/", {
+  }): Promise<Record<string, unknown>> {
+    return api.post<Record<string, unknown>>("pqrs/", {
       type: params.type,
+      subjectType: params.subjectType || "servicio",
+      productId: params.productId ?? null,
+      productName: params.productName || "",
       reason: params.reason,
       description: params.description,
       clientName: params.clientName,
@@ -325,7 +354,7 @@ export const adminService = {
       relatedTo: params.relatedTo || "",
       priority: params.priority || "",
       contractorId: "",
-      contractorName: "",
+      contractorName: params.contractorName || "",
       contractorCompany: "",
       contractorSpecialty: "",
       contractorAvatar: "",
@@ -336,7 +365,7 @@ export const adminService = {
     targetId: string | number;
     assignedTo: string;
     adminName?: string;
-  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+  }): Promise<AdminActionResult> {
     return this.executeAction({
       action: "assign_pqr",
       target_id: params.targetId,
@@ -350,7 +379,7 @@ export const adminService = {
     targetId: string | number;
     priority: "Alta" | "Media" | "Baja";
     adminName?: string;
-  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+  }): Promise<AdminActionResult> {
     return this.executeAction({
       action: "update_pqr_priority",
       target_id: params.targetId,
@@ -363,14 +392,8 @@ export const adminService = {
   /**
    * Consulta fallas técnicas de la aplicación desde la base de datos.
    */
-  async getProblems(): Promise<any[]> {
-    try {
-      const rows = await fetchAllPages("app-problems/", { all: "true" });
-      if (Array.isArray(rows) && rows.length > 0) return rows;
-    } catch {
-      // Backend no disponible
-    }
-    return getStoredAppProblems();
+  async getProblems(): Promise<Array<Record<string, unknown>>> {
+    return fetchAllPages<Record<string, unknown>>("app-problems/", { all: "true" });
   },
 
   /**
@@ -381,7 +404,7 @@ export const adminService = {
     assignedTo: string;
     adminName?: string;
     reason?: string;
-  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+  }): Promise<AdminActionResult> {
     return await this.executeAction({
       action: "assign_problem",
       target_id: params.targetId,
@@ -399,7 +422,7 @@ export const adminService = {
     newStatus: string;
     adminName?: string;
     reason?: string;
-  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+  }): Promise<AdminActionResult> {
     return await this.executeAction({
       action: "update_problem_status",
       target_id: params.targetId,
@@ -413,7 +436,7 @@ export const adminService = {
     targetId: string | number;
     note: string;
     adminName?: string;
-  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+  }): Promise<AdminActionResult> {
     return this.executeAction({
       action: "add_problem_note",
       target_id: params.targetId,
@@ -437,7 +460,7 @@ export const adminService = {
     version?: string;
     adminName?: string;
     attachments?: File[];
-  }): Promise<{ ok: boolean; message: string; [key: string]: any }> {
+  }): Promise<AdminActionResult> {
     const action = {
       action: "create_problem",
       target_id: params.ticketNumber || `fal-${Date.now()}`,
@@ -460,14 +483,14 @@ export const adminService = {
     Object.entries(action).forEach(([key, value]) => formData.append(key, String(value ?? "")));
     params.attachments?.forEach((file) => formData.append("attachments", file, file.name));
 
-    return await api.post("admin/action/", formData);
+    return await api.post<AdminActionResult>("admin/action/", formData);
   },
 
   async uploadProblemAttachments(params: {
     targetId: string | number;
     attachments: File[];
     adminName?: string;
-  }): Promise<{ ok: boolean; message: string; attachments: any[] }> {
+  }): Promise<{ ok: boolean; message: string; attachments: Array<{ name: string; url?: string; type: "image" | "file" }> }> {
     const formData = new FormData();
     formData.append("action", "upload_problem_files");
     formData.append("target_id", String(params.targetId));
@@ -480,76 +503,38 @@ export const adminService = {
   /**
    * Consulta listado completo de profesionales desde la base de datos.
    */
-  async getProfessionals(): Promise<any[]> {
-    try {
-      const res = await api.get<any>("professionals/");
-      const list = Array.isArray(res) ? res : (res && Array.isArray(res.results) ? res.results : []);
-      if (list.length > 0) return list;
-    } catch {
-      // Backend no disponible
-    }
-    return getLocalProfessionals();
-  },
-
-  /**
-   * Actualiza los datos de un profesional en la base de datos (requiere rol administrativo).
-   * Persiste inmediatamente en la base de datos local y sincroniza en segundo plano.
-   */
-  async updateProfessional(
-    targetId: string | number,
-    data: {
-      display_name?: string;
-      email?: string;
-      phone?: string;
-      headline?: string;
-      specialty_label?: string;
-      bio?: string;
-      city?: string;
-      neighborhood?: string;
-      coverage_radius_km?: number;
-      rating_avg?: number | string;
-      jobs_completed?: number;
-      points?: number;
-      wallet_balance?: number | string;
-      is_verified?: boolean;
-      accepts_urgent?: boolean;
-      is_active?: boolean;
-      adminName?: string;
-      reason?: string;
-    }
-  ): Promise<{ ok: boolean; message: string; changed_fields?: string[]; professional?: any }> {
-    const localResult = updateLocalProfessional(targetId, data);
-
-    try {
-      void api.post("admin/action/", {
-        action: "update_professional",
-        target_id: targetId,
-        admin_name: data.adminName || "Superadministrador",
-        reason: data.reason || "Edición administrativa de perfil profesional",
-        ...data,
-      }).catch(() => {});
-    } catch {}
-
-    return {
-      ok: true,
-      message: localResult.message || `Datos de ${data.display_name || "profesional"} actualizados exitosamente en la base de datos.`,
-      professional: localResult.professional,
-    };
+  async getProfessionals<T = Record<string, unknown>>(): Promise<T[]> {
+    const res = await api.get<T[] | { results?: T[] }>("professionals/");
+    return Array.isArray(res) ? res : (res && Array.isArray(res.results) ? res.results : []);
   },
 
   /**
    * Elimina una cuenta de cliente o profesional (requiere sesión de staff).
+   * Usa POST /api/v1/admin/action/ (respuesta JSON 200) para evitar problemas de proxies con DELETE/204.
    */
-  async deleteAccount(kind: "client" | "professional", id: number | string): Promise<void> {
-    await api.delete(`admin/accounts/${kind}/${id}/`);
+  async deleteAccount(kind: "client" | "professional", id: number | string): Promise<AdminActionResult> {
+    try {
+      return await this.executeAction({
+        action: "delete_account",
+        kind,
+        target_id: id,
+      });
+    } catch (primaryErr) {
+      // Fallback a ruta POST dedicada si el servidor anterior no conoce la acción delete_account
+      const msg = primaryErr instanceof Error ? primaryErr.message : "";
+      if (msg.includes("Acción administrativa no soportada")) {
+        return await api.post<AdminActionResult>(`admin/accounts/${kind}/${id}/delete/`, {});
+      }
+      throw primaryErr;
+    }
   },
 
   /**
    * Cambia el estado de verificación de un profesional o cliente en la base de datos.
    */
-  async toggleVerification(targetId: string | number, reason?: string): Promise<any> {
+  async toggleVerification(targetId: string | number, reason?: string): Promise<AdminActionResult> {
     return await this.executeAction({
-      action: "toggle_user_verification" as any,
+      action: "toggle_user_verification",
       target_id: targetId,
       reason: reason || "Revisión documental desde el panel administrativo",
     });
@@ -561,26 +546,20 @@ export const adminService = {
   async getNotifications(): Promise<{
     unread_count: number;
     total_count: number;
-    notifications: Array<{
-      id: number;
-      title: string;
-      text: string;
-      type: string;
-      link?: string;
-      target_id?: string;
-      unread: boolean;
-      time: string;
-      created_at: string;
-    }>;
+    notifications: AdminNotificationItem[];
   }> {
-    return api.get<any>("admin/notifications/");
+    return api.get<{
+      unread_count: number;
+      total_count: number;
+      notifications: AdminNotificationItem[];
+    }>("admin/notifications/");
   },
 
   /**
    * Marca una notificación como leída o no leída en la base de datos.
    */
   async markNotificationRead(id?: number | string, isRead = true): Promise<{ ok: boolean }> {
-    return api.post<any>("admin/notifications/", {
+    return api.post<{ ok: boolean }>("admin/notifications/", {
       action: isRead ? "mark_read" : "mark_unread",
       id,
     });
@@ -590,7 +569,7 @@ export const adminService = {
    * Marca todas las notificaciones como leídas en la base de datos.
    */
   async markAllNotificationsRead(): Promise<{ ok: boolean }> {
-    return api.post<any>("admin/notifications/", {
+    return api.post<{ ok: boolean }>("admin/notifications/", {
       action: "mark_all_read",
     });
   },
@@ -599,7 +578,7 @@ export const adminService = {
    * Elimina todas las notificaciones de la plataforma.
    */
   async clearAllNotifications(): Promise<{ ok: boolean }> {
-    return api.post<any>("admin/notifications/", {
+    return api.post<{ ok: boolean }>("admin/notifications/", {
       action: "clear_all",
     });
   },
@@ -614,7 +593,7 @@ export const adminService = {
     link?: string;
     target_id?: string;
   }): Promise<{ ok: boolean; id?: number }> {
-    return api.post<any>("admin/notifications/", {
+    return api.post<{ ok: boolean; id?: number }>("admin/notifications/", {
       action: "create",
       ...params,
     });
@@ -628,7 +607,7 @@ export const adminService = {
     newRole: string;
     reason?: string;
     adminName?: string;
-  }): Promise<{ ok: boolean; message: string; user?: any }> {
+  }): Promise<AdminActionResult> {
     return this.executeAction({
       action: "change_user_role",
       target_id: params.userId,
@@ -642,109 +621,8 @@ export const adminService = {
   /**
    * Consulta la estructura de roles y matriz de permisos desde la base de datos.
    */
-  async getRolesAndPermissions(): Promise<{
-    roles: Array<{
-      id: string;
-      name: string;
-      category: "admin" | "app";
-      badge: string;
-      badge_color: string;
-      description: string;
-      users_count: number;
-      is_system_locked: boolean;
-    }>;
-    available_permissions: Array<{
-      id: string;
-      label: string;
-      category: string;
-      description: string;
-    }>;
-    permission_matrix: Record<string, string[]>;
-    counts: {
-      total: number;
-      clients: number;
-      professionals: number;
-      administrators: number;
-    };
-  }> {
-    try {
-      const res = await api.get<any>("admin/roles/");
-      if (res && res.roles) return res;
-    } catch {
-      // Usar esquema oficial estructurado de roles
-    }
-    return {
-      roles: [
-        {
-          id: "superadmin",
-          name: "Superadministrador",
-          category: "admin",
-          badge: "Control Total",
-          badge_color: "#ef4444",
-          description: "Acceso total y configuración de la plataforma",
-          users_count: 1,
-          is_system_locked: true,
-        },
-        {
-          id: "admin",
-          name: "Administrador General",
-          category: "admin",
-          badge: "Gestión",
-          badge_color: "#3b82f6",
-          description: "Operaciones administrativas y supervisión",
-          users_count: 1,
-          is_system_locked: false,
-        },
-        {
-          id: "staff",
-          name: "Moderador / Soporte PQR",
-          category: "admin",
-          badge: "Soporte",
-          badge_color: "#10b981",
-          description: "Atención de PQRs y moderación de contenido",
-          users_count: 1,
-          is_system_locked: false,
-        },
-        {
-          id: "professional",
-          name: "Contratista / Profesional",
-          category: "app",
-          badge: "Técnico",
-          badge_color: "#8b5cf6",
-          description: "Prestador de servicios verificado",
-          users_count: 5,
-          is_system_locked: true,
-        },
-        {
-          id: "client",
-          name: "Cliente",
-          category: "app",
-          badge: "Usuario",
-          badge_color: "#06b6d4",
-          description: "Usuario consumidor de servicios",
-          users_count: 5,
-          is_system_locked: true,
-        },
-      ],
-      available_permissions: [
-        { id: "view_overview", label: "Ver Dashboard", category: "General", description: "Ver estadísticas y KPIs" },
-        { id: "manage_users", label: "Gestionar Usuarios", category: "Usuarios", description: "Crear, editar y suspender usuarios" },
-        { id: "manage_roles", label: "Gestionar Roles", category: "Seguridad", description: "Asignar roles y permisos" },
-        { id: "manage_store", label: "Gestionar Meko Shop", category: "Tienda", description: "Moderar productos y reportes" },
-        { id: "manage_pqrs", label: "Gestionar PQRs", category: "Atención", description: "Responder y resolver casos PQR" },
-      ],
-      permission_matrix: {
-        superadmin: ["view_overview", "manage_users", "manage_roles", "manage_store", "manage_pqrs"],
-        admin: ["view_overview", "manage_users", "manage_store", "manage_pqrs"],
-        support: ["view_overview", "manage_pqrs", "manage_store"],
-      },
-      counts: {
-        total: 12,
-        clients: 5,
-        professionals: 5,
-        administrators: 2,
-      },
-    };
+  async getRolesAndPermissions(): Promise<AdminRolesResponse> {
+    return api.get<AdminRolesResponse>("admin/roles/");
   },
 
   /**
@@ -754,8 +632,8 @@ export const adminService = {
     matrix: Record<string, string[]>,
     reason?: string,
     adminName?: string
-  ): Promise<{ ok: boolean; message: string; permission_matrix: any }> {
-    return api.post<any>("admin/roles/", {
+  ): Promise<{ ok: boolean; message: string; permission_matrix: Record<string, string[]> }> {
+    return api.post<{ ok: boolean; message: string; permission_matrix: Record<string, string[]> }>("admin/roles/", {
       permission_matrix: matrix,
       reason: reason || "Actualización de privilegios por rol",
       admin_name: adminName || "Superadministrador",
@@ -767,103 +645,6 @@ export const adminService = {
    * desde los registros de la base de datos de Serviprox.
    */
   async getReportsStats(): Promise<ReportsStatsResponse> {
-    try {
-      const res = await api.get<ReportsStatsResponse>("admin/reports-stats/");
-      if (res && res.kpis) return res;
-    } catch {
-      // Usar estadísticas de la base de datos local
-    }
-    const clients = getLocalClients();
-    const pros = getLocalProfessionals();
-    return {
-      database_connected: true,
-      database_engine: "SQLite (Local)",
-      period: "30_days",
-      kpis: {
-        users: { raw: clients.length, display: `${clients.length}`, trend: "+12%", sparkline: [2, 3, 4, 5, 6, clients.length] },
-        pros: { raw: pros.length, display: `${pros.length}`, trend: "+8%", sparkline: [4, 5, 6, 7, 8, pros.length] },
-        products: { raw: 14, display: "14", trend: "+15%", sparkline: [5, 8, 10, 12, 14] },
-        hires: { raw: 18, display: "18", trend: "+20%", sparkline: [8, 11, 14, 16, 18] },
-        pqrs: { raw: 4, display: "4", trend: "-5%", sparkline: [6, 5, 5, 4, 4] },
-        revenue: { raw: 4850000, display: "$ 4.850.000", trend: "+18%", sparkline: [2.1, 2.8, 3.4, 4.1, 4.85] },
-      },
-      hires_data: [
-        { month: "Jun", val: 8 },
-        { month: "Jul", val: 11 },
-        { month: "Ago", val: 14 },
-        { month: "Sep", val: 16 },
-        { month: "Oct", val: 15 },
-        { month: "Nov", val: 18 },
-      ],
-      top_services: [
-        { name: "Electricidad y Certificación RETIE", count: 8, pct: 44 },
-        { name: "Plomería y Filtraciones", count: 5, pct: 28 },
-        { name: "Albañilería y Drywall", count: 3, pct: 17 },
-        { name: "Cerrajería de Seguridad", count: 2, pct: 11 },
-      ],
-      top_products: [
-        { name: "Interruptor Inteligente WiFi RETIE", count: 12, pct: 40 },
-        { name: "Kit Llaves Tubo Profesional", count: 8, pct: 27 },
-        { name: "Reflector LED Solar 100W", count: 6, pct: 20 },
-        { name: "Cerradura Biométrica Alta Seguridad", count: 4, pct: 13 },
-      ],
-      new_users_data: [
-        { month: "Jun", clients: 2, pros: 1 },
-        { month: "Jul", clients: 3, pros: 2 },
-        { month: "Ago", clients: 4, pros: 2 },
-        { month: "Sep", clients: 5, pros: 3 },
-        { month: "Oct", clients: 5, pros: 3 },
-        { month: "Nov", clients: clients.length, pros: pros.length },
-      ],
-      monthly_revenue: [
-        { month: "Jun", amount: "$ 2.100.000", val: 2100000 },
-        { month: "Jul", amount: "$ 2.800.000", val: 2800000 },
-        { month: "Ago", amount: "$ 3.400.000", val: 3400000 },
-        { month: "Sep", amount: "$ 4.100.000", val: 4100000 },
-        { month: "Oct", amount: "$ 4.300.000", val: 4300000 },
-        { month: "Nov", amount: "$ 4.850.000", val: 4850000 },
-      ],
-      pqr_status: {
-        total: 6,
-        raw_total: 6,
-        resueltas: 4,
-        resueltas_pct: 67,
-        en_proceso: 1,
-        en_proceso_pct: 17,
-        pendientes: 1,
-        pendientes_pct: 16,
-        rechazadas: 0,
-        rechazadas_pct: 0,
-      },
-      recent_activity: [
-        { id: "act-1", date: "Hoy, 10:15 AM", module: "Usuarios", description: "Verificación de Tarjeta Profesional RETIE", user: "Superadmin", status: "Completado" },
-        { id: "act-2", date: "Hoy, 09:30 AM", module: "PQR", description: "Respuesta y conciliación radicado #PQR-401", user: "Superadmin", status: "Resuelto" },
-        { id: "act-3", date: "Ayer, 04:45 PM", module: "Meko Shop", description: "Aprobación de producto: Cable RETIE #12", user: "Superadmin", status: "Aprobado" },
-      ],
-      localities: [
-        { id: "loc-1", name: "Chicó / Chapinero", count: 8, color: "#3b82f6" },
-        { id: "loc-2", name: "Usaquén", count: 5, color: "#10b981" },
-        { id: "loc-3", name: "Suba", count: 3, color: "#f59e0b" },
-        { id: "loc-4", name: "Teusaquillo", count: 2, color: "#8b5cf6" },
-      ],
-    };
-  },
-
-  async getStoreProductReports(): Promise<ProductReportItem[]> {
-    const reports = await api.get<Array<Omit<ProductReportItem, "id"> & { id: string | number }>>(
-      "admin/catalog/store-product-reports/"
-    );
-    return reports.map((report) => ({ ...report, id: String(report.id) }));
-  },
-
-  async updateStoreProductReport(
-    id: string,
-    updates: Pick<ProductReportItem, "status" | "adminResponse" | "actionTaken">
-  ): Promise<ProductReportItem> {
-    const report = await api.patch<Omit<ProductReportItem, "id"> & { id: string | number }>(
-      `admin/catalog/store-product-reports/${encodeURIComponent(id)}/`,
-      updates
-    );
-    return { ...report, id: String(report.id) };
+    return api.get<ReportsStatsResponse>("admin/reports-stats/");
   },
 };

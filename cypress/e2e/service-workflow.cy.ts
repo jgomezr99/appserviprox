@@ -194,7 +194,7 @@ describe("Seguimiento persistente y responsive", { defaultCommandTimeout: 10000 
         // El host cubre el viewport; el tamaño del panel se comprueba en su parte expuesta.
         expect(dialog.width).to.be.at.most(width + 1);
         const panel = $modal[0].shadowRoot?.querySelector('[part="content"]');
-        expect(panel, "panel del modal").to.exist;
+        expect(Boolean(panel), "panel del modal").to.equal(true);
         expect(panel!.getBoundingClientRect().width).to.be.at.least(width * .9);
       });
       cy.get("ion-modal.sp-service-modal ion-content").should("have.css", "background-color", "rgb(244, 246, 250)");

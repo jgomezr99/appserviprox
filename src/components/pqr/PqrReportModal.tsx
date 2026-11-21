@@ -35,12 +35,17 @@ import {
   Building2,
   AlertCircle,
   FileText,
+  Package,
+  Wrench,
+  MessageSquare,
 } from 'lucide-react';
 import type {
   PqrType,
   PqrReason,
+  PqrSubjectType,
   PqrReport,
   PqrContractorRef,
+  PqrProductRef,
 } from '../../types/serviprox';
 import { pqrService } from '../../services/serviprox';
 import { getCitizenAvatar } from '../../data/pqrInitialData';
@@ -60,6 +65,8 @@ interface PqrReportModalProps {
   onClose: () => void;
   contractor?: PqrContractorRef;
   allContractors: PqrContractorRef[];
+  allProducts?: PqrProductRef[];
+  initialSubjectType?: PqrSubjectType;
   serviceRequests?: ServiceRequestOption[];
   onSubmitPqr: (
     data:
@@ -69,6 +76,7 @@ interface PqrReportModalProps {
           'id' | 'radicadoNumber' | 'status' | 'createdAt' | 'estimatedResponseDays'
         >
   ) => void;
+  onOpenReportChat?: (report: PqrReport) => void;
 }
 
 export function PqrReportModal({
@@ -76,14 +84,28 @@ export function PqrReportModal({
   onClose,
   contractor,
   allContractors,
+  allProducts = [],
+  initialSubjectType = 'servicio',
   serviceRequests = [],
   onSubmitPqr,
+  onOpenReportChat,
 }: PqrReportModalProps) {
   const { user } = useAuth();
 
+  const [subjectType, setSubjectType] = useState<PqrSubjectType>(initialSubjectType);
   const [selectedContractorId, setSelectedContractorId] = useState<string>(
     contractor?.id || allContractors[0]?.id || ''
   );
+  const [selectedProductId, setSelectedProductId] = useState<string>(
+    allProducts[0]?.id ? String(allProducts[0].id) : ''
+  );
+  const [customProductName, setCustomProductName] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setSubjectType(contractor ? 'servicio' : initialSubjectType);
+    }
+  }, [isOpen, initialSubjectType, contractor]);
 
   useEffect(() => {
     if (contractor?.id) {
@@ -93,14 +115,30 @@ export function PqrReportModal({
     }
   }, [contractor, allContractors, selectedContractorId]);
 
+  useEffect(() => {
+    if ((!selectedProductId || !allProducts.some((p) => String(p.id) === selectedProductId)) && allProducts.length > 0) {
+      setSelectedProductId(String(allProducts[0].id));
+    }
+  }, [allProducts, selectedProductId]);
+
   const activeContractor =
     allContractors.find((c) => c.id === selectedContractorId) ||
     contractor ||
     allContractors[0];
 
+  const activeProduct = allProducts.find((p) => String(p.id) === selectedProductId) || allProducts[0];
+
   // ── Estados de Tipo y Motivo ──
   const [pqrType, setPqrType] = useState<PqrType>('queja');
-  const [reason, setReason] = useState<PqrReason>('mala_calidad_obra');
+  const [reason, setReason] = useState<PqrReason>(
+    initialSubjectType === 'producto' ? 'producto_defectuoso' : 'mala_calidad_obra'
+  );
+
+  const handleChangeSubjectType = (next: PqrSubjectType) => {
+    setSubjectType(next);
+    setReason(next === 'producto' ? 'producto_defectuoso' : 'mala_calidad_obra');
+    setSubmitError('');
+  };
 
   // ── Datos del Cliente Registrado en Base de Datos (100% Funcionales) ──
   const [clientName, setClientName] = useState(() => {
@@ -168,38 +206,67 @@ export function PqrReportModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!description.trim()) {
-      alert('Por favor describe los hechos de la queja o reclamo.');
+      setSubmitError('Por favor describe los hechos de la queja o reclamo.');
       return;
     }
-    if (!activeContractor) {
-      setSubmitError('No hay un profesional disponible desde la base de datos para asociar a esta PQR.');
+
+    const isProducto = subjectType === 'producto';
+    const resolvedProductName = isProducto
+      ? (selectedProductId === '__custom__' ? customProductName.trim() : activeProduct?.title || customProductName.trim())
+      : '';
+
+    if (!isProducto && !activeContractor) {
+      setSubmitError('No hay un profesional disponible desde la base de datos para asociar a esta PQR de servicio.');
+      return;
+    }
+    if (isProducto && !resolvedProductName) {
+      setSubmitError('Selecciona un producto o escribe el nombre del producto a reportar.');
       return;
     }
 
     setIsSubmitting(true);
     setSubmitError('');
 
+    const parsedProdId =
+      isProducto && selectedProductId !== '__custom__' && activeProduct && /^\d+$/.test(String(activeProduct.id))
+        ? Number(activeProduct.id)
+        : null;
+
     const payload = {
       type: pqrType,
+      subjectType,
+      productId: parsedProdId,
+      productName: isProducto ? resolvedProductName : undefined,
+      relatedTo: isProducto
+        ? parsedProdId
+          ? `Producto #${parsedProdId}: ${resolvedProductName}`
+          : `Producto: ${resolvedProductName}`
+        : serviceRequests.find((r) => r.id === serviceRequestId)?.title || activeContractor?.companyName || activeContractor?.name,
       reason,
-      contractorId: activeContractor.id,
-      contractorName: activeContractor.name,
-      contractorCompany: activeContractor.companyName,
-      contractorSpecialty: activeContractor.specialtyLabel,
-      contractorAvatar: activeContractor?.avatarUrl,
+      contractorId: isProducto ? '' : activeContractor?.id || '',
+      contractorName: isProducto ? activeProduct?.sellerName || 'Vendedor Meko Shop' : activeContractor?.name || '',
+      contractorCompany: isProducto
+        ? `Meko Shop · ${activeProduct?.sellerName || 'Vendedor'}`
+        : activeContractor?.companyName || '',
+      contractorSpecialty: isProducto
+        ? activeProduct?.category || 'Producto Meko Shop'
+        : activeContractor?.specialtyLabel,
+      contractorAvatar: isProducto ? activeProduct?.imageUrl : activeContractor?.avatarUrl,
       clientName,
       clientPhone,
       clientEmail,
       clientDocumentId,
       clientAddress,
       incidentDate,
-      serviceRequestId: serviceRequestId || undefined,
-      serviceTitle: serviceRequests.find((r) => r.id === serviceRequestId)?.title,
+      serviceRequestId: !isProducto && serviceRequestId ? serviceRequestId : undefined,
+      serviceTitle: !isProducto ? serviceRequests.find((r) => r.id === serviceRequestId)?.title : undefined,
       amountDisputed: amountDisputed ? parseFloat(amountDisputed) : undefined,
       description,
       desiredResolution:
         desiredResolution.trim() ||
-        'Revisión técnica urgente, garantía vinculante y mediación por el comité de calidad de Bogotá.',
+        (isProducto
+          ? 'Revisión del producto, garantía o reembolso respaldado por el comité de calidad Serviprox.'
+          : 'Revisión técnica urgente, garantía vinculante y mediación por el comité de calidad de Bogotá.'),
       evidenceFiles: simulatedFiles,
     };
 
@@ -226,6 +293,7 @@ export function PqrReportModal({
     setDescription('');
     setDesiredResolution('');
     setAmountDisputed('');
+    setCustomProductName('');
     setSimulatedFiles([]);
     setSubmitError('');
     onClose();
@@ -266,7 +334,9 @@ export function PqrReportModal({
                 </span>
               </div>
               <h2 className="text-lg sm:text-xl font-black text-white mt-1 tracking-tight">
-                Radicar PQR / Reclamo Oficial de Obra
+                {subjectType === 'producto'
+                  ? 'Radicar PQR / Reporte de Producto (Meko Shop)'
+                  : 'Radicar PQR / Reclamo de Servicio'}
               </h2>
             </div>
           </div>
@@ -342,9 +412,19 @@ export function PqrReportModal({
 
                 <div className="text-xs text-neutral-700 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-neutral-500 font-medium">Contratista Requerido:</span>
+                    <span className="text-neutral-500 font-medium">Categoría del Registro:</span>
+                    <span className={`font-black px-2 py-0.5 rounded-md text-[11px] uppercase ${subjectType === 'producto' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}`}>
+                      {subjectType === 'producto' ? '📦 Producto' : '🔧 Servicio'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500 font-medium">
+                      {subjectType === 'producto' ? 'Producto Reportado:' : 'Contratista Requerido:'}
+                    </span>
                     <strong className="text-neutral-900 text-right font-bold">
-                      {activeContractor?.companyName || activeContractor?.name}
+                      {subjectType === 'producto'
+                        ? (createdReport?.productName || customProductName || activeProduct?.title || 'Producto Meko Shop')
+                        : (activeContractor?.companyName || activeContractor?.name)}
                     </strong>
                   </div>
                   <div className="flex items-center justify-between">
@@ -374,11 +454,25 @@ export function PqrReportModal({
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-center gap-3">
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                {onOpenReportChat && createdReport && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = createdReport;
+                      handleResetAndClose();
+                      onOpenReportChat(target);
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-lg transition-all cursor-pointer flex items-center gap-2"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span>Abrir chat del reporte</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleResetAndClose}
-                  className="bg-neutral-900 hover:bg-neutral-800 active:scale-95 text-white font-black text-xs sm:text-sm px-8 py-3.5 rounded-2xl shadow-lg transition-all cursor-pointer flex items-center gap-2"
+                  className="bg-neutral-900 hover:bg-neutral-800 active:scale-95 text-white font-black text-xs sm:text-sm px-7 py-3.5 rounded-2xl shadow-lg transition-all cursor-pointer flex items-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   <span>Entendido y Ver Reclamos en BD</span>
@@ -539,65 +633,188 @@ export function PqrReportModal({
                 )}
               </div>
 
-              {/* ── 1. Selector de Contratista con Tarjeta Visual de Previsualización ── */}
-              <div className="bg-white p-4 sm:p-5 rounded-3xl border border-neutral-200/90 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2.5">
-                  <label className="text-xs font-black text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-rose-600" />
-                    <span>1. Contratista a Requerir (Registrado en BD)</span>
-                  </label>
-                  <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md">
-                    Registro Verificado
+              {/* ── SELECTOR DE CATEGORÍA SEPARADA: SERVICIO vs PRODUCTO ── */}
+              <div className="bg-white p-4 sm:p-5 rounded-3xl border border-neutral-200/90 shadow-sm space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-black text-neutral-800 uppercase tracking-wider">
+                    0. ¿Sobre qué deseas registrar este PQR?
+                  </span>
+                  <span className="text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md">
+                    Servicio y Producto separados · Visible en Admin
                   </span>
                 </div>
-
-                <div className="space-y-3">
-                  <select
-                    id="pqr-contractor-select"
-                    value={selectedContractorId}
-                    onChange={(e) => setSelectedContractorId(e.target.value)}
-                    className="w-full text-xs sm:text-sm font-bold bg-neutral-50 border border-neutral-300 hover:border-neutral-400 rounded-2xl px-3.5 py-2.5 focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none transition-all cursor-pointer"
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleChangeSubjectType('servicio')}
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex items-center gap-3 ${
+                      subjectType === 'servicio'
+                        ? 'border-rose-600 bg-rose-50/70 ring-2 ring-rose-500/20 shadow-sm'
+                        : 'border-neutral-200 bg-neutral-50 hover:bg-white'
+                    }`}
                   >
-                    {allContractors.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.companyName} — {c.name} {c.specialtyLabel ? `(${c.specialtyLabel})` : ''}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* Previsualización del Contratista Seleccionado */}
-                  {activeContractor && (
-                    <div className="bg-gradient-to-r from-neutral-50 via-rose-50/20 to-neutral-50 p-3.5 rounded-2xl border border-neutral-200 flex items-center gap-3.5">
-                      <div className="relative flex-shrink-0">
-                        <img
-                          src={
-                            activeContractor.avatarUrl ||
-                            `https://ui-avatars.com/api/?name=${encodeURIComponent(activeContractor.name)}&background=0284c7&color=fff&bold=true&rounded=true`
-                          }
-                          alt={activeContractor.name}
-                          className="w-13 h-13 rounded-2xl object-cover border-2 border-white shadow-sm ring-2 ring-rose-500/20"
-                        />
-                        <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] text-white font-black">
-                          ✓
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-black text-neutral-900 truncate">
-                          {activeContractor.companyName}
-                        </h4>
-                        <p className="text-xs text-neutral-600 font-semibold">
-                          Maestro: <strong className="text-neutral-900">{activeContractor.name}</strong>
-                          {activeContractor.specialtyLabel ? ` • ${activeContractor.specialtyLabel}` : ''}
-                        </p>
-                        <p className="text-[11px] text-neutral-500 mt-0.5">
-                          📍 {activeContractor.neighborhood || 'Bogotá D.C.'}
-                          {activeContractor.phone ? ` · Tel: ${activeContractor.phone}` : ''}
-                        </p>
-                      </div>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${subjectType === 'servicio' ? 'bg-rose-600 text-white' : 'bg-neutral-200 text-neutral-600'}`}>
+                      <Wrench className="w-5 h-5" />
                     </div>
-                  )}
+                    <div>
+                      <strong className="block text-xs sm:text-sm font-black text-neutral-900">
+                        PQR de Servicio
+                      </strong>
+                      <span className="text-[11px] text-neutral-600">
+                        Contratistas, obras, visitas técnicas o garantías
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleChangeSubjectType('producto')}
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex items-center gap-3 ${
+                      subjectType === 'producto'
+                        ? 'border-amber-600 bg-amber-50/70 ring-2 ring-amber-500/20 shadow-sm'
+                        : 'border-neutral-200 bg-neutral-50 hover:bg-white'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${subjectType === 'producto' ? 'bg-amber-600 text-white' : 'bg-neutral-200 text-neutral-600'}`}>
+                      <Package className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <strong className="block text-xs sm:text-sm font-black text-neutral-900">
+                        PQR de Producto
+                      </strong>
+                      <span className="text-[11px] text-neutral-600">
+                        Artículos, compras, entregas o vendedores de Meko Shop
+                      </span>
+                    </div>
+                  </button>
                 </div>
               </div>
+
+              {/* ── 1. Selector de Contratista (Servicio) o Producto (Tienda) ── */}
+              {subjectType === 'servicio' ? (
+                <div className="bg-white p-4 sm:p-5 rounded-3xl border border-neutral-200/90 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <label className="text-xs font-black text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-rose-600" />
+                      <span>1. Contratista / Servicio a Requerir (Registrado en BD)</span>
+                    </label>
+                    <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md">
+                      Registro Verificado
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <select
+                      id="pqr-contractor-select"
+                      value={selectedContractorId}
+                      onChange={(e) => setSelectedContractorId(e.target.value)}
+                      className="w-full text-xs sm:text-sm font-bold bg-neutral-50 border border-neutral-300 hover:border-neutral-400 rounded-2xl px-3.5 py-2.5 focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      {allContractors.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.companyName} — {c.name} {c.specialtyLabel ? `(${c.specialtyLabel})` : ''}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Previsualización del Contratista Seleccionado */}
+                    {activeContractor && (
+                      <div className="bg-gradient-to-r from-neutral-50 via-rose-50/20 to-neutral-50 p-3.5 rounded-2xl border border-neutral-200 flex items-center gap-3.5">
+                        <div className="relative flex-shrink-0">
+                          <img
+                            src={
+                              activeContractor.avatarUrl ||
+                              `https://ui-avatars.com/api/?name=${encodeURIComponent(activeContractor.name)}&background=0284c7&color=fff&bold=true&rounded=true`
+                            }
+                            alt={activeContractor.name}
+                            className="w-13 h-13 rounded-2xl object-cover border-2 border-white shadow-sm ring-2 ring-rose-500/20"
+                          />
+                          <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] text-white font-black">
+                            ✓
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-black text-neutral-900 truncate">
+                            {activeContractor.companyName}
+                          </h4>
+                          <p className="text-xs text-neutral-600 font-semibold">
+                            Maestro: <strong className="text-neutral-900">{activeContractor.name}</strong>
+                            {activeContractor.specialtyLabel ? ` • ${activeContractor.specialtyLabel}` : ''}
+                          </p>
+                          <p className="text-[11px] text-neutral-500 mt-0.5">
+                            📍 {activeContractor.neighborhood || 'Bogotá D.C.'}
+                            {activeContractor.phone ? ` · Tel: ${activeContractor.phone}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white p-4 sm:p-5 rounded-3xl border border-amber-200/90 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <label className="text-xs font-black text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Package className="w-4 h-4 text-amber-600" />
+                      <span>1. Producto de Meko Shop a Reportar</span>
+                    </label>
+                    <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md">
+                      Catálogo en BD
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <select
+                      id="pqr-product-select"
+                      value={selectedProductId}
+                      onChange={(e) => setSelectedProductId(e.target.value)}
+                      className="w-full text-xs sm:text-sm font-bold bg-neutral-50 border border-neutral-300 hover:border-neutral-400 rounded-2xl px-3.5 py-2.5 focus:ring-2 focus:ring-amber-500 focus:bg-white focus:outline-none transition-all cursor-pointer"
+                    >
+                      {allProducts.map((p) => (
+                        <option key={String(p.id)} value={String(p.id)}>
+                          {p.title} — {p.sellerName} {p.price ? `($${p.price.toLocaleString('es-CO')} COP)` : ''}
+                        </option>
+                      ))}
+                      <option value="__custom__">+ Otro producto (escribir nombre manualmente)</option>
+                    </select>
+
+                    {(selectedProductId === '__custom__' || allProducts.length === 0) && (
+                      <input
+                        type="text"
+                        placeholder="Escribe el nombre del producto o número de orden..."
+                        value={customProductName}
+                        onChange={(e) => setCustomProductName(e.target.value)}
+                        className="w-full text-xs sm:text-sm font-bold bg-neutral-50 border border-neutral-300 rounded-2xl px-3.5 py-2.5 focus:ring-2 focus:ring-amber-500 focus:bg-white focus:outline-none"
+                      />
+                    )}
+
+                    {selectedProductId !== '__custom__' && activeProduct && (
+                      <div className="bg-gradient-to-r from-neutral-50 via-amber-50/40 to-neutral-50 p-3.5 rounded-2xl border border-amber-200/70 flex items-center gap-3.5">
+                        <img
+                          src={
+                            activeProduct.imageUrl ||
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(activeProduct.title)}&background=d97706&color=fff&bold=true&rounded=true`
+                          }
+                          alt={activeProduct.title}
+                          className="w-13 h-13 rounded-2xl object-cover border-2 border-white shadow-sm flex-shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-black text-neutral-900 truncate">
+                            {activeProduct.title}
+                          </h4>
+                          <p className="text-xs text-neutral-600 font-semibold">
+                            Vendedor: <strong className="text-neutral-900">{activeProduct.sellerName}</strong>
+                            {activeProduct.category ? ` • ${activeProduct.category}` : ''}
+                          </p>
+                          <p className="text-[11px] text-neutral-500 mt-0.5">
+                            {activeProduct.city ? `📍 ${activeProduct.city}` : '📍 Colombia'}
+                            {activeProduct.price ? ` · $${activeProduct.price.toLocaleString('es-CO')} COP` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* ── 2 y 3. Tipo de Petición & Motivo Principal ── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -661,14 +878,28 @@ export function PqrReportModal({
                     onChange={(e) => setReason(e.target.value as PqrReason)}
                     className="w-full text-xs font-bold bg-neutral-50 border border-neutral-300 rounded-2xl px-3 py-2.5 focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none cursor-pointer"
                   >
-                    <option value="mala_calidad_obra">Mala calidad de la obra o acabados defectuosos</option>
-                    <option value="incumplimiento_horario">Incumplimiento de horario o abandono de cuadrilla</option>
-                    <option value="cobro_injustificado">Cobro injustificado o sobrecosto no pactado</option>
-                    <option value="dano_material">Daño material en el inmueble durante el servicio</option>
-                    <option value="garantia_no_atendida">Garantía no atendida tras entrega</option>
-                    <option value="abandono_obra">Abandono de la obra antes de finalizar</option>
-                    <option value="falta_respeto_trato">Falta de respeto o trato inapropiado</option>
-                    <option value="otro">Otro motivo técnico justificado</option>
+                    {subjectType === 'producto' ? (
+                      <>
+                        <option value="producto_defectuoso">Producto defectuoso o dañado al recibir</option>
+                        <option value="producto_no_recibido">Producto no entregado o retraso en envío</option>
+                        <option value="producto_diferente">Producto diferente a lo publicado</option>
+                        <option value="publicacion_enganosa">Publicación engañosa o precio inconsistente</option>
+                        <option value="garantia_producto">Garantía del producto no atendida</option>
+                        <option value="reembolso_producto">Solicitud de devolución o reembolso</option>
+                        <option value="otro">Otro motivo relacionado con el producto</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="mala_calidad_obra">Mala calidad de la obra o acabados defectuosos</option>
+                        <option value="incumplimiento_horario">Incumplimiento de horario o abandono de cuadrilla</option>
+                        <option value="cobro_injustificado">Cobro injustificado o sobrecosto no pactado</option>
+                        <option value="dano_material">Daño material en el inmueble durante el servicio</option>
+                        <option value="garantia_no_atendida">Garantía no atendida tras entrega</option>
+                        <option value="abandono_obra">Abandono de la obra antes de finalizar</option>
+                        <option value="falta_respeto_trato">Falta de respeto o trato inapropiado</option>
+                        <option value="otro">Otro motivo técnico justificado</option>
+                      </>
+                    )}
                   </select>
 
                   <div className="pt-2">
@@ -854,7 +1085,6 @@ export function PqrReportModal({
                     </label>
                     <input
                       type="text"
-                      required
                       value={clientDocumentId}
                       onChange={(e) => setClientDocumentId(e.target.value)}
                       className="w-full px-3 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-white text-xs font-bold focus:ring-2 focus:ring-rose-500 focus:outline-none"
@@ -869,7 +1099,6 @@ export function PqrReportModal({
                     </label>
                     <input
                       type="text"
-                      required
                       value={clientPhone}
                       onChange={(e) => setClientPhone(e.target.value)}
                       className="w-full px-3 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-white text-xs font-bold focus:ring-2 focus:ring-rose-500 focus:outline-none"
@@ -895,11 +1124,10 @@ export function PqrReportModal({
                   <div className="sm:col-span-2 space-y-1">
                     <label className="text-[11px] font-bold text-neutral-300 flex items-center gap-1">
                       <MapPin className="w-3 h-3 text-rose-400" />
-                      <span>Dirección del Inmueble / Obra (Bogotá D.C.):</span>
+                      <span>Dirección del Inmueble / Entrega:</span>
                     </label>
                     <input
                       type="text"
-                      required
                       value={clientAddress}
                       onChange={(e) => setClientAddress(e.target.value)}
                       className="w-full px-3 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-white text-xs font-bold focus:ring-2 focus:ring-rose-500 focus:outline-none"

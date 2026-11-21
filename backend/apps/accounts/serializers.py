@@ -89,15 +89,6 @@ class UserSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Garantizar que el usuario admin y superusuarios tengan el rol administrativo en BD
-        if getattr(instance, "is_superuser", False) or getattr(instance, "username", "") == "admin":
-            data["role"] = "staff"
-            data["is_staff"] = True
-            data["is_superuser"] = True
-        return data
-
     def update(self, instance, validated_data):
         address = validated_data.get("address")
         city = validated_data.get("city")

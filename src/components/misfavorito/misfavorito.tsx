@@ -1,91 +1,24 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
   IonCard, IonCardHeader, IonCardTitle, IonCardContent,
-  IonButton, IonIcon, IonImg, IonText, IonItem,
+  IonButton, IonIcon, IonItem,
   IonButtons,
   IonMenuButton,
   IonGrid, IonRow, IonCol, IonBadge, IonList, IonLabel
 } from "@ionic/react";
 import {
-  heartOutline, heart, star, locationOutline, cashOutline,
+  heart, star,
   globeOutline, pinOutline
 } from "ionicons/icons";
 import "./favoritos.css";
-import { Servicio, SERVICIOS_DATA } from '../../data/servicios';
-
-type Tipo = "servicio" | "espacio";
-
-type Favorito = {
-  id: string;
-  tipo: Tipo;
-  titulo: string;
-  categoria?: string;
-  descripcion?: string;      // NUEVO: descripción corta
-  profesional?: string;
-  ubicacion?: string;
-  ciudad?: string;
-  tarifa: number;
-  unidad?: string;
-  rating?: number;
-  img?: string;
-  etiquetas?: string[];
-  remoto?: boolean;
-};
-
-/* ====== DEMO ====== */
-const DATA: Favorito[] = [
-  {
-    id: "svc-plomeria-fuga",
-    tipo: "servicio",
-    titulo: "Reparación de fuga",
-    categoria: "Plomería",
-    descripcion: "Atención de fugas y goteos en baños y cocinas.",
-    profesional: "Marcela Gómez",
-    remoto: false,
-    tarifa: 90000,
-    unidad: "por visita",
-    rating: 4.8,
-    ciudad: "Bogotá, Colombia",
-    ubicacion: "Kennedy",
-    img: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?q=80&w=1200&auto=format&fit=crop"
-  },
-  {
-    id: "svc-electricidad",
-    tipo: "servicio",
-    titulo: "Revisión eléctrica residencial",
-    categoria: "Electricidad",
-    descripcion: "Revisión de tomas, iluminación y tableros eléctricos.",
-    profesional: "Diego Salcedo",
-    tarifa: 120000,
-    unidad: "por visita",
-    rating: 4.7,
-    ciudad: "Bogotá, Colombia",
-    ubicacion: "Timiza",
-    img: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1200&auto=format&fit=crop"
-  },
-  {
-    id: "svc-limpieza",
-    tipo: "servicio",
-    titulo: "Limpieza profunda",
-    categoria: "Limpieza",
-    descripcion: "Aseo residencial profundo para apartamentos y casas.",
-    profesional: "Laura Méndez",
-    tarifa: 160000,
-    unidad: "por servicio",
-    rating: 4.6,
-    ciudad: "Bogotá, Colombia",
-    ubicacion: "Chapinero",
-    etiquetas: ["limpieza", "aseo", "hogar"],
-    img: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&auto=format&fit=crop"
-  }
-];
+import { type Servicio, SERVICIOS_DATA } from '../../data/servicios';
 
 const Favoritos: React.FC = () => {
-  const [favoritos, setFavoritos] = useState<any[]>(() => {
+  const [favoritos, setFavoritos] = useState<Servicio[]>(() => {
     try {
       const raw = localStorage.getItem("mis_favoritos");
-      return raw ? JSON.parse(raw) : SERVICIOS_DATA;
+      return raw ? (JSON.parse(raw) as Servicio[]) : SERVICIOS_DATA;
     } catch {
       return SERVICIOS_DATA;
     }
@@ -97,12 +30,7 @@ const Favoritos: React.FC = () => {
     } catch { /* ignore storage errors */ }
   }, [favoritos]);
 
-  const idsFavoritos = useMemo(
-    () => new Set(favoritos.map(f => f.id)),
-    [favoritos]
-  );
-
-  const toggleFavorito = (item: any) => {
+  const toggleFavorito = (item: Servicio) => {
     setFavoritos(prev => {
       const existe = prev.some(f => f.id === item.id);
       return existe ? prev.filter(f => f.id !== item.id) : [...prev, item];
@@ -137,7 +65,7 @@ const Favoritos: React.FC = () => {
         ) : (
           <IonGrid fixed>
             <IonRow className="cards-row">
-              {favoritos.map((item: any) => {
+              {favoritos.map((item: Servicio) => {
                 return (
                   <IonCol size="12" sizeMd="6" sizeLg="4" key={item.id}>
                     <IonCard className="service-card">

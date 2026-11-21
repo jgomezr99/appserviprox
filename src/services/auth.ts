@@ -317,6 +317,12 @@ export const authService = {
   updateCurrentUser: (payload: UpdateMePayload) =>
     api.patch<User>("auth/me/", payload),
 
+  changePassword: (payload: {
+    current_password: string;
+    new_password: string;
+    confirm_password?: string;
+  }) => api.post<{ ok: boolean; detail: string }>("auth/change-password/", payload),
+
   deleteCurrentUser: (reason: string) =>
     api.delete<void>("auth/me/delete/", { reason }),
 

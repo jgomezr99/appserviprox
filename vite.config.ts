@@ -9,12 +9,22 @@ import { defineConfig } from 'vitest/config'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const isLegacyDefaultVmUrl =
+    !process.env.VITEST &&
+    process.env.ENFORCE_PROD_API !== 'true' &&
+    !process.env.REMOTE_API_URL &&
+    (env.VITE_API_URL || '').trim().replace(/\/+$/, '') === 'https://serviprox-pte.duckdns.org/api/v1'
+  if (isLegacyDefaultVmUrl) {
+    delete process.env.VITE_API_URL
+  }
+  const effectiveViteApiUrl = isLegacyDefaultVmUrl ? '' : env.VITE_API_URL || ''
   const apiTarget = new URL(
-    env.VITE_API_URL || 'http://127.0.0.1:8000'
+    effectiveViteApiUrl || 'http://127.0.0.1:3000'
   ).origin
   const apiTargetSecure = apiTarget.startsWith('https://')
 
   return {
+  ...(isLegacyDefaultVmUrl ? { define: { 'import.meta.env.VITE_API_URL': JSON.stringify('') } } : {}),
   css: {
     postcss: {
       plugins: [
@@ -51,11 +61,11 @@ export default defineConfig(({ mode }) => {
         }
       },
     },
-    react()as any,
+    react(),
   ],
   server: {
     host: true,
-    port: 8100,
+    port: 3000,
     cors: true,
     warmup: {
       clientFiles: ['./src/main.tsx', './src/App.tsx', './src/pages/Login.tsx', './src/pages/ClientHome.tsx'],
@@ -65,60 +75,22 @@ export default defineConfig(({ mode }) => {
         target: apiTarget,
         changeOrigin: true,
         secure: apiTargetSecure,
-        configure: (proxy) => {
-          proxy.on('error', (_err, _req, res) => {
-            if (res && !('headersSent' in res && res.headersSent) && 'writeHead' in res) {
-              try {
-                (res as any).writeHead(503, { 'Content-Type': 'application/json' });
-                (res as any).end(
-                  JSON.stringify({
-                    status: 'offline',
-                    database: 'autonomous-sqlite',
-                    detail: 'Servidor Django local no disponible. La aplicación opera con Base de Datos Autónoma (SQLite).',
-                  })
-                );
-              } catch {
-                // ignore
-              }
-            }
-          });
-        },
       },
       '/media': {
         target: apiTarget,
         changeOrigin: true,
         secure: apiTargetSecure,
-        configure: (proxy) => {
-          proxy.on('error', (_err, _req, res) => {
-            if (res && !('headersSent' in res && res.headersSent) && 'writeHead' in res) {
-              try {
-                (res as any).writeHead(404, { 'Content-Type': 'application/json' });
-                (res as any).end(JSON.stringify({ detail: 'Media not found on local proxy' }));
-              } catch {}
-            }
-          });
-        },
       },
       '/static': {
         target: apiTarget,
         changeOrigin: true,
         secure: apiTargetSecure,
-        configure: (proxy) => {
-          proxy.on('error', (_err, _req, res) => {
-            if (res && !('headersSent' in res && res.headersSent) && 'writeHead' in res) {
-              try {
-                (res as any).writeHead(404, { 'Content-Type': 'application/json' });
-                (res as any).end(JSON.stringify({ detail: 'Static not found on local proxy' }));
-              } catch {}
-            }
-          });
-        },
       },
     },
   },
   preview: {
     host: true,
-    port: 8100,
+    port: 3000,
     cors: true,
   },
   build: {

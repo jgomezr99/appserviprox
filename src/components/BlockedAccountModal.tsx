@@ -33,7 +33,7 @@ export const BlockedAccountModal: React.FC<BlockedAccountModalProps> = ({
         delete stored[info.user_name.trim().toLowerCase()];
       }
       localStorage.setItem("serviprox_blocked_users", JSON.stringify(stored));
-    } catch {}
+    } catch { /* ignore storage errors */ }
 
     setUnblockSuccessMsg("🎉 ¡Tu cuenta ha sido desbloqueada con éxito por la IA! Redirigiendo a la aplicación...");
     setShowAiChat(false);

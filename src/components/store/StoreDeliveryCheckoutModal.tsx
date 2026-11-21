@@ -5,19 +5,11 @@ import {
 } from "@ionic/react";
 import {
   closeOutline,
-  checkmarkCircle,
-  shieldCheckmarkOutline,
 } from "ionicons/icons";
 import {
   Truck,
   CreditCard,
   CheckCircle,
-  ShieldAlert,
-  MapPin,
-  Phone,
-  User,
-  ShoppingBag,
-  ExternalLink,
 } from "lucide-react";
 import {
   MekoCartItem,
@@ -519,19 +511,19 @@ export const StoreDeliveryCheckoutModal: React.FC<StoreDeliveryCheckoutModalProp
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                  {[
+                  {([
                     { id: "Nequi", label: "Nequi", color: "#4f46e5", badge: "Directo" },
                     { id: "Bancolombia", label: "Bancolombia", color: "#f59e0b", badge: "Transferencia" },
                     { id: "Tarjeta de Crédito / Débito", label: "Tarjeta Crédito / Débito", color: "#2563eb", badge: "Visa / MC" },
                     { id: "PSE", label: "PSE", color: "#0f766e", badge: "Todos los bancos" },
                     { id: "Daviplata", label: "Daviplata", color: "#dc2626", badge: "Celular" },
-                  ].map((m) => {
+                  ] as const).map((m) => {
                     const isSelected = paymentMethod === m.id;
                     return (
                       <button
                         key={m.id}
                         type="button"
-                        onClick={() => setPaymentMethod(m.id as any)}
+                        onClick={() => setPaymentMethod(m.id)}
                         style={{
                           display: "flex",
                           flexDirection: "column",

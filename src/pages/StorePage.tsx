@@ -73,7 +73,6 @@ import {
   compressProductImage,
   fileToDataUrl,
   PLACEHOLDER_PRODUCT_IMAGE,
-  getCuratedProductImage,
   isSellerStoreBlocked,
   type StoreProduct,
 } from "../services/storeService";
@@ -1360,12 +1359,11 @@ export const StorePage: React.FC = () => {
                         }}
                       >
                         <img
-                          src={p.image || getCuratedProductImage(p.title, p.category)}
+                          src={p.image || PLACEHOLDER_PRODUCT_IMAGE}
                           alt={p.title}
                           referrerPolicy="no-referrer"
                           onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = getCuratedProductImage(p.title, p.category);
+                            e.currentTarget.src = PLACEHOLDER_PRODUCT_IMAGE;
                           }}
                           style={{
                             width: "100%",
@@ -1652,11 +1650,7 @@ export const StorePage: React.FC = () => {
                       alt={selectedProductDetail.title}
                       referrerPolicy="no-referrer"
                       onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = getCuratedProductImage(
-                          selectedProductDetail.title,
-                          selectedProductDetail.category
-                        );
+                        e.currentTarget.src = PLACEHOLDER_PRODUCT_IMAGE;
                       }}
                       style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                     />
@@ -1695,11 +1689,7 @@ export const StorePage: React.FC = () => {
                             alt={`Miniatura ${idx + 1}`}
                             referrerPolicy="no-referrer"
                             onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = getCuratedProductImage(
-                                selectedProductDetail.title,
-                                selectedProductDetail.category
-                              );
+                              e.currentTarget.src = PLACEHOLDER_PRODUCT_IMAGE;
                             }}
                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                           />

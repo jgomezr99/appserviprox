@@ -125,8 +125,28 @@
 
 .fin-form {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   margin-top: 12px;
+}
+
+.fin-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fin-balance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(29, 78, 216, 0.08);
+  color: var(--sp-primary-dark);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .fin-form label {
@@ -134,6 +154,55 @@
   gap: 6px;
   font-weight: 700;
   font-size: 0.85rem;
+}
+
+.fin-amount-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.fin-max-btn {
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--sp-primary);
+  background: rgba(29, 78, 216, 0.08);
+  color: var(--sp-primary-dark);
+  font-weight: 700;
+  font-size: 0.84rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.fin-max-btn:hover:not(:disabled) {
+  background: var(--sp-primary);
+  color: #fff;
+}
+
+.fin-max-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fin-destination-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.fin-destination-preview {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--sp-text-muted);
+  font-size: 0.82rem;
+}
+
+.fin-destination-preview strong {
+  color: var(--sp-primary-dark);
 }
 
 .fin-receipt h2 {

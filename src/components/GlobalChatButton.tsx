@@ -13,8 +13,15 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlatformSettings } from '../services/platformSettings';
 import { isUserAdmin } from '../utils/routes';
-import type { AppProblemReport, PqrReport } from '../types/serviprox';
-import { appProblemService, pqrService } from '../services/serviprox';
+import type {
+  AppProblemReport,
+  ChatTranscriptEntry,
+  PqrContractorRef,
+  PqrProductRef,
+  PqrReport,
+} from '../types/serviprox';
+import { appProblemService, pqrService, professionalSearchService } from '../services/serviprox';
+import { storeService } from '../services/storeService';
 import { REGISTERED_CONTRACTORS_REF } from '../data/pqrInitialData';
 
 const LiveSupportChatModal = lazy(() =>
@@ -24,14 +31,53 @@ const LiveSupportChatModal = lazy(() =>
 const HIDDEN_PATHS = ['/login', '/ingresar', '/register'];
 
 export const GlobalChatButton: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const [chatOpen, setChatOpen] = useState(false);
   const [chatLoaded, setChatLoaded] = useState(false);
+  const [contractors, setContractors] = useState<PqrContractorRef[]>(REGISTERED_CONTRACTORS_REF);
+  const [products, setProducts] = useState<PqrProductRef[]>([]);
   const platform = usePlatformSettings();
 
   useEffect(() => {
-    if (chatOpen) setChatLoaded(true);
+    if (!chatOpen) return;
+    setChatLoaded(true);
+    let active = true;
+    Promise.all([
+      professionalSearchService.list().catch(() => []),
+      storeService.listProducts().catch(() => ({ products: [], fromServer: false })),
+    ]).then(([pros, storeRes]) => {
+      if (!active) return;
+      if (pros.length > 0) {
+        setContractors(
+          pros.map((p) => ({
+            id: p.slug || String(p.id),
+            name: p.display_name || `Profesional #${p.id}`,
+            companyName: p.company_name || p.headline || `${p.display_name || 'Profesional'} • Servicios`,
+            specialtyLabel:
+              p.specialty_label ||
+              (p.categories && p.categories.length > 0 ? p.categories.join(', ') : 'Servicios Técnicos'),
+            avatarUrl: p.avatar_url || undefined,
+            neighborhood: p.neighborhood || p.city || 'Bogotá',
+            phone: p.phone || undefined,
+          }))
+        );
+      }
+      setProducts(
+        (storeRes.products || []).map((prod) => ({
+          id: prod.id,
+          title: prod.title,
+          sellerName: prod.sellerName || 'Vendedor Meko Shop',
+          category: prod.category,
+          price: prod.price,
+          city: prod.city,
+          imageUrl: prod.image,
+        }))
+      );
+    });
+    return () => {
+      active = false;
+    };
   }, [chatOpen]);
 
   useEffect(() => {
@@ -55,14 +101,18 @@ export const GlobalChatButton: React.FC = () => {
   if (isHidden) return null;
 
   const handlePqrCreated = async (
-    data: Omit<PqrReport, 'id' | 'radicadoNumber' | 'status' | 'createdAt' | 'estimatedResponseDays'>
+    data: Omit<PqrReport, 'id' | 'radicadoNumber' | 'status' | 'createdAt' | 'estimatedResponseDays'> & {
+      chatTranscript?: ChatTranscriptEntry[];
+    }
   ) => {
     const created = await pqrService.create(data);
     window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
     return created;
   };
 
-  const handleAppProblem = async (problem: AppProblemReport) => {
+  const handleAppProblem = async (
+    problem: AppProblemReport & { chatTranscript?: ChatTranscriptEntry[] }
+  ) => {
     const created = await appProblemService.create({
       category: problem.category,
       categoryLabel: problem.categoryLabel,
@@ -70,6 +120,7 @@ export const GlobalChatButton: React.FC = () => {
       deviceInfo: problem.deviceInfo,
       reportedBy: problem.reportedBy,
       userEmail: problem.userEmail || user?.email || '',
+      chatTranscript: problem.chatTranscript,
     });
     window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
     return created;
@@ -172,11 +223,14 @@ export const GlobalChatButton: React.FC = () => {
           <LiveSupportChatModal
             isOpen={chatOpen}
             onClose={() => setChatOpen(false)}
-            contractors={REGISTERED_CONTRACTORS_REF}
+            contractors={contractors}
+            products={products}
             onPqrCreatedFromChat={handlePqrCreated}
             onAppProblemReported={handleAppProblem}
+            onChatSaved={() => window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'))}
           />
         </Suspense>
-      )}    </>
+      )}
+    </>
   );
 };

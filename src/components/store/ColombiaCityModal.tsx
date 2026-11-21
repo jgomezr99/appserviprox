@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { IonModal, IonIcon } from "@ionic/react";
-import { closeOutline, searchOutline, checkmarkCircle, chevronForwardOutline, chevronDownOutline } from "ionicons/icons";
-import { MapPin, Globe, Check } from "lucide-react";
+import { closeOutline, searchOutline, chevronForwardOutline, chevronDownOutline } from "ionicons/icons";
+import { MapPin, Check } from "lucide-react";
 import {
   ALL_COLOMBIA_OPTION,
   TOP_COLOMBIA_CITIES,

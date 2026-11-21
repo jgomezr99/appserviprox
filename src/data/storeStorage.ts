@@ -1,3 +1,5 @@
+import type { MockStoreProduct } from "./mockStoreProducts";
+
 export interface MekoCartItem {
   id: string | number;
   productId: string | number;
@@ -52,16 +54,16 @@ const STORAGE_KEYS = {
 };
 
 // ======================== PRODUCTOS LOCALES GUARDADOS ========================
-export const getCustomStoredProducts = (): any[] => {
+export const getCustomStoredProducts = (): MockStoreProduct[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CUSTOM_PRODUCTS);
-    return raw ? JSON.parse(raw) : [];
+    return raw ? (JSON.parse(raw) as MockStoreProduct[]) : [];
   } catch {
     return [];
   }
 };
 
-export const saveCustomStoredProduct = (product: any): void => {
+export const saveCustomStoredProduct = (product: MockStoreProduct): void => {
   try {
     const existing = getCustomStoredProducts();
     const updated = [product, ...existing.filter((p) => p.id !== product.id)];

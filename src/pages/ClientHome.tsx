@@ -90,7 +90,7 @@ const ClientHome: React.FC = () => {
       if (primary) {
         try {
           localStorage.setItem("serviprox_primary_household", JSON.stringify(primary));
-        } catch {}
+        } catch { /* ignore storage errors */ }
       }
       if (primary && !address && primary.address_line) {
         setAddress(primary.address_line);

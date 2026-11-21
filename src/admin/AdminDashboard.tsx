@@ -1,17 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { adminService } from "../services/adminService";
-import {
-  api,
-  getApiBaseUrl,
-  getConnectionMode,
-  tokenStorage,
-  checkBackendHealth,
-  switchDatabaseTarget,
-  type ConnectionMode,
-  type DatabaseTarget,
-} from "../services/api";
+import { adminService, type AdminUserSummary } from "../services/adminService";
+import { api, getConnectionMode, tokenStorage, checkBackendHealth, type ConnectionMode } from "../services/api";
 import { authService } from "../services/auth";
 import { platformSettingsService, usePlatformSettings } from "../services/platformSettings";
 import AdminSettings from "./AdminSettings";
@@ -34,16 +25,6 @@ import {
   blockSellerStore,
   unblockSellerStore,
 } from "../services/storeService";
-import {
-  getLocalClients,
-  getLocalProfessionals,
-  getLocalAuditLogs,
-  getAutonomousOverview,
-} from "../services/adminLocalStore";
-import {
-  getStoredPqrReports,
-  getStoredAppProblems,
-} from "../data/pqrInitialData";
 import "./AdminDashboard.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,10 +96,6 @@ export interface ProfessionalItem {
   has_certificate?: boolean;
   avatar_url?: string;
   phone?: string;
-  email?: string;
-  bio?: string;
-  coverage_radius_km?: number;
-  accepts_urgent?: boolean;
   rating_avg: string | number;
   jobs_completed: number;
   is_verified: boolean;
@@ -201,6 +178,9 @@ export interface BenefitCatalogItem {
 export interface PqrItem {
   id: string;
   raw_id?: number | string;
+  subjectType?: "servicio" | "producto" | "app";
+  productId?: number | null;
+  productName?: string;
   type: "queja" | "reclamo" | "peticion" | "reporte";
   typeLabel: "Queja" | "Reclamo" | "Petición" | "Reporte";
   typeIcon: string;
@@ -275,34 +255,6 @@ export interface TechnicalFailureItem {
 const formatAdminDate = (value?: string) =>
   value ? new Date(value).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "—";
 
-const safeLower = (value: unknown): string => (value != null ? String(value).toLowerCase() : "");
-
-const getDatabaseInfo = (source: {
-  engine?: string;
-  database_name?: string;
-  mode?: ConnectionMode;
-}) => {
-  const normalizedEngine = (source.engine || "").toLowerCase();
-  const isLocalSqlite = source.mode === "local-sqlite" || normalizedEngine.includes("sqlite");
-  const isPostgres = normalizedEngine === "postgresql" || normalizedEngine === "postgres";
-
-  return {
-    engine: isLocalSqlite
-      ? (normalizedEngine.includes("autónomo") || normalizedEngine.includes("autonomo")
-          ? "Base de Datos Autónoma (SQLite)"
-          : "Base de Datos Local (SQLite)")
-      : source.mode === "custom"
-        ? "Base de Datos en la Nube (PostgreSQL)"
-        : isPostgres
-          ? "Máquina Virtual DuckDNS (PostgreSQL)"
-          : source.engine || "Base de Datos Serviprox",
-    database_name: isLocalSqlite
-      ? "Serviprox DB (SQLite)"
-      : source.database_name || "Serviprox DB",
-    mode: isLocalSqlite ? ("local-sqlite" as const) : source.mode || ("custom" as const),
-  };
-};
-
 const mapPqrStatus = (status: string): PqrItem["status"] => {
   if (status === "en_revision") return "En revisión";
   if (status === "conciliacion") return "En proceso";
@@ -311,8 +263,117 @@ const mapPqrStatus = (status: string): PqrItem["status"] => {
   return "Abierta";
 };
 
-const mapPqrFromDatabase = (rawP: any): PqrItem => {
-  const p = rawP || {};
+interface RawPqrMessage {
+  timestamp?: string;
+  senderName?: string;
+  sender_name?: string;
+  senderRole?: string;
+  sender_role?: string;
+  text?: string;
+}
+
+interface RawPqrRecord {
+  id?: number | string;
+  type?: string;
+  pqr_type?: string;
+  subjectType?: string;
+  subject_type?: string;
+  productId?: number | null;
+  product_id?: number | null;
+  productName?: string;
+  product_name?: string;
+  description?: string;
+  radicadoNumber?: string;
+  radicado_number?: string;
+  messages?: RawPqrMessage[];
+  reason?: string;
+  clientName?: string;
+  client_name?: string;
+  clientDocumentId?: string;
+  client_document_id?: string;
+  clientEmail?: string;
+  client_email?: string;
+  clientPhone?: string;
+  client_phone?: string;
+  contractorName?: string;
+  contractor_name?: string;
+  contractorAvatar?: string;
+  contractor_avatar?: string;
+  contractorSpecialty?: string;
+  contractor_specialty?: string;
+  relatedTo?: string;
+  related_to?: string;
+  contractorCompany?: string;
+  contractor_company?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  priority?: PqrItem["priority"];
+  status?: string;
+  clientAddress?: string;
+  client_address?: string;
+  evidenceFiles?: string[];
+  evidence_files?: string[];
+  assignedTo?: string;
+  assigned_to?: string;
+  adminResolutionNotes?: string;
+  admin_resolution_notes?: string;
+}
+
+interface RawProblemRecord {
+  id?: number | string;
+  categoryLabel?: string;
+  category_label?: string;
+  createdAt?: string;
+  created_at?: string;
+  ticketNumber?: string;
+  ticket_number?: string;
+  reportedBy?: string;
+  reported_by?: string;
+  reportedByRole?: TechnicalFailureItem["reporter"]["role"];
+  title?: string;
+  description?: string;
+  userEmail?: string;
+  user_email?: string;
+  deviceInfo?: string;
+  device_info?: string;
+  priority?: TechnicalFailureItem["priority"];
+  status?: string;
+  attachments?: TechnicalFailureItem["attachments"];
+  responseNotes?: string;
+  response_notes?: string;
+  assignedTo?: string;
+  assigned_to?: string;
+  version?: string;
+}
+
+type AdminDetailItem =
+  | ({ detailType: "client" } & ClientItem)
+  | ({ detailType: "pro" } & ProfessionalItem)
+  | ({ detailType?: undefined } & RequestItem);
+
+type BenefitAssignablePro =
+  | ProfessionalItem
+  | {
+      id: number | string;
+      raw_id?: number;
+      display_name?: string;
+      name?: string;
+      headline?: string;
+      specialty_label?: string;
+      category?: string;
+      rating_avg?: string | number;
+      rating?: number;
+      points?: number;
+      jobs_completed?: number;
+      reviews_count?: number;
+      is_verified?: boolean;
+      avatar_url?: string;
+      avatar?: string;
+    };
+
+const mapPqrFromDatabase = (p: RawPqrRecord): PqrItem => {
   const type = p.type || p.pqr_type;
   const typeVal = type === "queja"
     ? "queja"
@@ -325,10 +386,24 @@ const mapPqrFromDatabase = (rawP: any): PqrItem => {
   const description = p.description || "";
   const caseNumber = String(p.radicadoNumber || p.radicado_number || String(p.id || "").replace(/^pqr-/, ""));
   const messages = Array.isArray(p.messages) ? p.messages : [];
+  const relatedTo = p.relatedTo || p.related_to || p.productName || p.product_name || p.contractorCompany || p.contractor_company || "";
+  const rawSubject = String(p.subjectType || p.subject_type || "").toLowerCase();
+  const inferredSubjectType: "servicio" | "producto" =
+    rawSubject === "producto" ||
+    Boolean(p.productId || p.product_id) ||
+    relatedTo.toLowerCase().startsWith("producto #") ||
+    caseNumber.toUpperCase().startsWith("PQR-PROD-")
+      ? "producto"
+      : "servicio";
+  const clientName = p.clientName || p.client_name || "Cliente";
+  const productName = p.productName || p.product_name || (inferredSubjectType === "producto" ? relatedTo : "");
 
   return {
     id: caseNumber.startsWith("#") ? caseNumber : `#${caseNumber}`,
     raw_id: p.id,
+    subjectType: inferredSubjectType,
+    productId: p.productId ?? p.product_id ?? null,
+    productName,
     type: typeVal,
     typeLabel,
     typeIcon: typeVal === "queja" ? "⚠️" : typeVal === "reclamo" ? "📄" : typeVal === "peticion" ? "🎧" : "🔧",
@@ -338,32 +413,32 @@ const mapPqrFromDatabase = (rawP: any): PqrItem => {
     shortDesc: description.slice(0, 30),
     description,
     client: {
-      name: p.clientName || p.client_name || "",
+      name: clientName,
       document_id: p.clientDocumentId || p.client_document_id || "",
-      avatar: "",
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(clientName)}&background=e2e8f0&color=0f172a`,
       rating: 0,
       reviews_count: 0,
       email: p.clientEmail || p.client_email || "",
       phone: p.clientPhone || p.client_phone || "",
     },
     contractor: (p.contractorName || p.contractor_name) ? {
-      name: p.contractorName || p.contractor_name,
+      name: p.contractorName || p.contractor_name || "",
       document_id: "",
-      avatar: p.contractorAvatar || p.contractor_avatar || "",
+      avatar: p.contractorAvatar || p.contractor_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.contractorName || p.contractor_name || "Pro")}&background=dbeafe&color=1d4ed8`,
       rating: 0,
       reviews_count: 0,
       specialty: p.contractorSpecialty || p.contractor_specialty || "",
     } : null,
-    relatedTo: p.relatedTo || p.related_to || p.contractorCompany || p.contractor_company || "",
+    relatedTo,
     date: formatAdminDate(p.createdAt || p.created_at),
     createdAt: p.createdAt || p.created_at,
     updatedDate: formatAdminDate(p.updatedAt || p.updated_at || p.createdAt || p.created_at),
     priority: p.priority || "No definida",
     status: mapPqrStatus(p.status || ""),
     city: p.clientAddress || p.client_address || "",
-    attachments: Array.isArray(p.evidenceFiles || p.evidence_files) ? (p.evidenceFiles || p.evidence_files) : [],
+    attachments: Array.isArray(p.evidenceFiles) ? p.evidenceFiles : Array.isArray(p.evidence_files) ? p.evidence_files : [],
     assignedTo: p.assignedTo || p.assigned_to || "",
-    timeline: messages.map((message: any) => ({
+    timeline: messages.map((message: RawPqrMessage) => ({
       date: formatAdminDate(message.timestamp),
       text: `${message.senderName || message.sender_name || message.senderRole || message.sender_role || ""}: ${message.text || ""}`.replace(/^: /, ""),
     })),
@@ -371,16 +446,18 @@ const mapPqrFromDatabase = (rawP: any): PqrItem => {
   };
 };
 
-const mapProblemToPqr = (rawProblem: any): PqrItem => {
-  const problem = rawProblem || {};
+const mapProblemToPqr = (problem: RawProblemRecord): PqrItem => {
   const title = problem.categoryLabel || problem.category_label || "";
   const createdAt = problem.createdAt || problem.created_at;
   const ticketNumber = String(problem.ticketNumber || problem.ticket_number || problem.id || "");
-  const reportedBy = problem.reportedBy || problem.reported_by || "";
+  const reportedBy = problem.reportedBy || problem.reported_by || "Usuario";
 
   return {
     id: ticketNumber.startsWith("#") ? ticketNumber : `#${ticketNumber}`,
     raw_id: problem.id,
+    subjectType: "app",
+    productId: null,
+    productName: "",
     type: "reporte",
     typeLabel: "Reporte",
     typeIcon: "🔧",
@@ -392,29 +469,32 @@ const mapProblemToPqr = (rawProblem: any): PqrItem => {
     client: {
       name: reportedBy,
       document_id: "",
-      avatar: "",
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(reportedBy)}&background=e0f2fe&color=0369a1`,
       rating: 0,
       reviews_count: 0,
       email: problem.userEmail || problem.user_email || "",
     },
     contractor: null,
-    relatedTo: problem.deviceInfo || problem.device_info || "",
+    relatedTo: problem.deviceInfo || problem.device_info || "App Serviprox",
     date: formatAdminDate(createdAt),
     createdAt,
     updatedDate: formatAdminDate(createdAt),
-    priority: problem.priority || "No definida",
+    priority: problem.priority === "Crítica" ? "Alta" : (problem.priority || "No definida"),
     status: problem.status === "resuelto" ? "Resuelta" : problem.status === "en_proceso" ? "En proceso" : "Abierta",
     city: "",
-    attachments: Array.isArray(problem.attachments) ? problem.attachments : [],
+    attachments: Array.isArray(problem.attachments)
+      ? problem.attachments.map((att) => (typeof att === "string" ? att : att.url || att.name))
+      : [],
     timeline: [
       { date: formatAdminDate(createdAt), text: "Incidencia registrada" },
-      ...((problem.responseNotes || problem.response_notes) ? [{ date: "Seguimiento", text: problem.responseNotes || problem.response_notes }] : []),
+      ...((problem.responseNotes || problem.response_notes)
+        ? [{ date: "Seguimiento", text: problem.responseNotes || problem.response_notes || "" }]
+        : []),
     ],
   };
 };
 
-const mapProblemFromDatabase = (rawProblem: any): TechnicalFailureItem => {
-  const problem = rawProblem || {};
+const mapProblemFromDatabase = (problem: RawProblemRecord): TechnicalFailureItem => {
   const module = problem.categoryLabel || problem.category_label || "";
   const reporterName = problem.reportedBy || problem.reported_by || "";
   const createdAt = problem.createdAt || problem.created_at;
@@ -424,13 +504,13 @@ const mapProblemFromDatabase = (rawProblem: any): TechnicalFailureItem => {
   return {
     id: ticketNumber.startsWith("#") ? ticketNumber : `#${ticketNumber}`,
     raw_id: problem.id,
-    typeIcon: safeLower(module).includes("chat") ? "💬" : safeLower(module).includes("pago") || safeLower(module).includes("contrat") ? "🛒" : safeLower(module).includes("mapa") ? "🌐" : safeLower(module).includes("notif") ? "📞" : safeLower(module).includes("foto") || safeLower(module).includes("publi") ? "🖼️" : "⚠️",
+    typeIcon: module.toLowerCase().includes("chat") ? "💬" : module.toLowerCase().includes("pago") || module.toLowerCase().includes("contrat") ? "🛒" : module.toLowerCase().includes("mapa") ? "🌐" : module.toLowerCase().includes("notif") ? "📞" : module.toLowerCase().includes("foto") || module.toLowerCase().includes("publi") ? "🖼️" : "⚠️",
     title: problem.title || module,
     shortDesc: (problem.description || "").slice(0, 28),
     description: problem.description || "",
     module,
-    moduleBadgeBg: safeLower(module).includes("chat") ? "#f3e8ff" : safeLower(module).includes("publi") ? "#fce7f3" : safeLower(module).includes("pago") || safeLower(module).includes("contrat") ? "#ccfbf1" : safeLower(module).includes("mapa") ? "#dcfce7" : safeLower(module).includes("notif") ? "#fef3c7" : "#dbeafe",
-    moduleBadgeColor: safeLower(module).includes("chat") ? "#9333ea" : safeLower(module).includes("publi") ? "#db2777" : safeLower(module).includes("pago") || safeLower(module).includes("contrat") ? "#0f766e" : safeLower(module).includes("mapa") ? "#15803d" : safeLower(module).includes("notif") ? "#d97706" : "#1d4ed8",
+    moduleBadgeBg: module.toLowerCase().includes("chat") ? "#f3e8ff" : module.toLowerCase().includes("publi") ? "#fce7f3" : module.toLowerCase().includes("pago") || module.toLowerCase().includes("contrat") ? "#ccfbf1" : module.toLowerCase().includes("mapa") ? "#dcfce7" : module.toLowerCase().includes("notif") ? "#fef3c7" : "#dbeafe",
+    moduleBadgeColor: module.toLowerCase().includes("chat") ? "#9333ea" : module.toLowerCase().includes("publi") ? "#db2777" : module.toLowerCase().includes("pago") || module.toLowerCase().includes("contrat") ? "#0f766e" : module.toLowerCase().includes("mapa") ? "#15803d" : module.toLowerCase().includes("notif") ? "#d97706" : "#1d4ed8",
     reporter: {
       name: reporterName,
       role: problem.reportedByRole || "Usuario",
@@ -446,7 +526,9 @@ const mapProblemFromDatabase = (rawProblem: any): TechnicalFailureItem => {
     attachments: Array.isArray(problem.attachments) ? problem.attachments : [],
     timeline: [
       { date: formatAdminDate(createdAt), text: `Incidencia registrada por ${reporterName}`, isInitial: true },
-      ...((problem.responseNotes || problem.response_notes) ? [{ date: "Seguimiento", text: problem.responseNotes || problem.response_notes }] : []),
+      ...((problem.responseNotes || problem.response_notes)
+        ? [{ date: "Seguimiento", text: problem.responseNotes || problem.response_notes || "" }]
+        : []),
     ],
   };
 };
@@ -463,420 +545,6 @@ export interface PlatformNotification {
   created_at?: string;
 }
 
-// Datos iniciales de la base de datos para respaldo y render inmediato
-const INITIAL_DB_CLIENTS: ClientItem[] = [
-  {
-    id: 6,
-    email: "laura.gomez@bogota.co",
-    first_name: "Laura",
-    last_name: "Gómez",
-    full_name: "Laura Gómez",
-    role: "client",
-    phone: "+57 310 445 8892",
-    city: "Bogotá",
-    address: "Cra. 11 # 85-32, Chicó, Bogotá",
-    document_id: "CC 52.894.120",
-    is_active: true,
-    is_identity_verified: true,
-    requests_count: 1,
-    date_joined: "19/09/2026",
-  },
-  {
-    id: 5,
-    email: "jgomezr21@ucentral.edu.co",
-    first_name: "Juan Pablo",
-    last_name: "Gomez",
-    full_name: "Juan Pablo Gomez",
-    role: "client",
-    phone: "+57 302 850 5481",
-    city: "Bogotá",
-    address: "Cra. 13 # 63-39, Chapinero, Bogotá",
-    document_id: "CC 1.000.257.887",
-    is_active: true,
-    is_identity_verified: false,
-    requests_count: 1,
-    date_joined: "12/09/2026",
-  },
-  {
-    id: 2,
-    email: "andres.ruiz@demo.serviprox.co",
-    first_name: "Andres",
-    last_name: "Ruiz",
-    full_name: "Andres Ruiz",
-    role: "client",
-    phone: "+57 311 445 9988",
-    city: "Bogotá",
-    address: "Carrera 15 # 88-21, Chicó, Bogotá",
-    document_id: "CC 80.124.567",
-    is_active: true,
-    is_identity_verified: true,
-    requests_count: 0,
-    date_joined: "12/09/2026",
-  },
-  {
-    id: 1,
-    email: "camila@demo.serviprox.co",
-    first_name: "Camila",
-    last_name: "Rojas",
-    full_name: "Camila Rojas",
-    role: "client",
-    phone: "+57 315 220 1144",
-    city: "Bogotá",
-    address: "Calle 53 # 21-40, Galerías, Bogotá",
-    document_id: "CC 1.018.490.123",
-    is_active: true,
-    is_identity_verified: false,
-    requests_count: 3,
-    date_joined: "12/09/2026",
-  },
-];
-
-const INITIAL_DB_PROS: ProfessionalItem[] = [
-  {
-    id: 4,
-    display_name: "Juan Pablo Gomez",
-    headline: "Especialista Técnico Profesional",
-    company_name: "Especialista Técnico Profesional",
-    specialty_label: "Servicios Técnicos y Mantenimiento",
-    avatar_url: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop",
-    phone: "+57 302 850 5481",
-    rating_avg: "4.95",
-    jobs_completed: 45,
-    is_verified: true,
-    is_active: true,
-    points: 1000,
-    wallet_balance: "0.00",
-    categories: ["Cerrajería", "Electricidad", "Instalaciones", "Plomería"],
-    neighborhood: "Chapinero",
-    city: "Bogotá",
-  },
-  {
-    id: 8,
-    display_name: "Maestro Néstor Caicedo",
-    headline: "Maestro de Obra y Acabados",
-    specialty_label: "Construcción y Remodelaciones",
-    avatar_url: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=240&auto=format&fit=crop&q=80",
-    phone: "+57 313 555 1208",
-    rating_avg: "4.88",
-    jobs_completed: 92,
-    is_verified: true,
-    is_active: true,
-    points: 1150,
-    wallet_balance: "0.00",
-    categories: ["Pintura", "Albañilería", "Acabados"],
-    neighborhood: "Suba",
-    city: "Bogotá",
-  },
-  {
-    id: 6,
-    display_name: "Ing. Carlos Mendoza",
-    headline: "Técnico Electricista RETIE",
-    specialty_label: "Electricidad y Redes",
-    avatar_url: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=240&auto=format&fit=crop&q=80",
-    phone: "+57 310 889 4432",
-    rating_avg: "4.92",
-    jobs_completed: 130,
-    is_verified: true,
-    is_active: true,
-    points: 1450,
-    wallet_balance: "50000.00",
-    categories: ["Electricidad", "Instalaciones"],
-    neighborhood: "Kennedy",
-    city: "Bogotá",
-  },
-  {
-    id: 5,
-    display_name: "Jorge Morales",
-    headline: "Técnico en Cerrajería Residencial y Automotriz",
-    specialty_label: "Cerrajería",
-    avatar_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&auto=format&fit=crop&q=80",
-    phone: "+57 311 223 3445",
-    rating_avg: "4.85",
-    jobs_completed: 78,
-    is_verified: true,
-    is_active: true,
-    points: 920,
-    wallet_balance: "0.00",
-    categories: ["Cerrajería"],
-    neighborhood: "Teusaquillo",
-    city: "Bogotá",
-  },
-  {
-    id: 7,
-    display_name: "Rodrigo Salamanca",
-    headline: "Plomero Certificado ",
-    specialty_label: "Plomería y Redes Hidráulicas",
-    avatar_url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=240&auto=format&fit=crop&q=80",
-    phone: "+57 318 776 5544",
-    rating_avg: "4.79",
-    jobs_completed: 65,
-    is_verified: false,
-    is_active: true,
-    points: 800,
-    wallet_balance: "0.00",
-    categories: ["Plomería"],
-    neighborhood: "Engativá",
-    city: "Bogotá",
-  },
-];
-
-const getPersistedClients = (): ClientItem[] => {
-  try {
-    const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
-    const saved = localStorage.getItem("serviprox_clients_list");
-    const parsed = saved ? JSON.parse(saved) : null;
-    const base: ClientItem[] = Array.isArray(parsed) ? parsed : INITIAL_DB_CLIENTS;
-    return base.filter((c) => c && !deleted.includes(`client:${c.id}`) && !deleted.includes(String(c.id)));
-  } catch {
-    return INITIAL_DB_CLIENTS;
-  }
-};
-
-const getPersistedPros = (): ProfessionalItem[] => {
-  try {
-    const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
-    const saved = localStorage.getItem("serviprox_pros_list");
-    const parsed = saved ? JSON.parse(saved) : null;
-    const base: ProfessionalItem[] = Array.isArray(parsed) ? parsed : INITIAL_DB_PROS;
-    return base.filter((p) => p && !deleted.includes(`professional:${p.id}`) && !deleted.includes(String(p.id)));
-  } catch {
-    return INITIAL_DB_PROS;
-  }
-};
-
-
-// Datos del panel de Beneficios y Puntos sincronizados con la captura oficial
-const INITIAL_BENEFIT_PROS: BenefitProItem[] = [
-  {
-    id: 1,
-    name: "Andrés López",
-    document_id: "CC 1023456789",
-    category: "Electricidad",
-    city: "Bogotá",
-    points: 2450,
-    level: "Oro",
-    redeemed_count: 8,
-    status: "Activo",
-    rating: 4.9,
-    reviews_count: 120,
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    next_level_points: 3000,
-    redeemed_history: [
-      { id: "b1", title: "Bono de descuento 20% en herramientas", date: "15 May 2024", status: "Entregado", icon: "🛠️", iconBg: "#fef3c7" },
-      { id: "b2", title: "Recarga de datos móviles 10GB", date: "02 May 2024", status: "Entregado", icon: "📱", iconBg: "#e0f2fe" },
-      { id: "b3", title: "Seguro contra accidentes 1 mes", date: "18 Abr 2024", status: "Entregado", icon: "🛡️", iconBg: "#dcfce7" },
-    ],
-  },
-  {
-    id: 2,
-    name: "María Torres",
-    document_id: "CC 1039876543",
-    category: "Limpieza",
-    city: "Medellín",
-    points: 1820,
-    level: "Plata",
-    redeemed_count: 5,
-    status: "Activo",
-    rating: 4.8,
-    reviews_count: 85,
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
-    next_level_points: 2000,
-    redeemed_history: [
-      { id: "b4", title: "Recarga de datos móviles 10GB", date: "28 Abr 2024", status: "Entregado", icon: "📱", iconBg: "#e0f2fe" },
-      { id: "b5", title: "Bono de supermercado $50.000", date: "10 Mar 2024", status: "Entregado", icon: "🛒", iconBg: "#fef3c7" },
-      { id: "b5b", title: "Seguro contra accidentes 1 mes", date: "15 Feb 2024", status: "Entregado", icon: "🛡️", iconBg: "#dcfce7" },
-    ],
-  },
-  {
-    id: 3,
-    name: "José Ramírez",
-    document_id: "CC 1045678901",
-    category: "Plomería",
-    city: "Cali",
-    points: 980,
-    level: "Bronce",
-    redeemed_count: 2,
-    status: "Activo",
-    rating: 4.7,
-    reviews_count: 42,
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-    next_level_points: 1000,
-    redeemed_history: [
-      { id: "b6", title: "Recarga de minutos $15.000", date: "12 Feb 2024", status: "Entregado", icon: "📞", iconBg: "#e0f2fe" },
-      { id: "b6b", title: "Bono de descuento ferretería", date: "10 Ene 2024", status: "Entregado", icon: "🛠️", iconBg: "#fef3c7" },
-    ],
-  },
-  {
-    id: 4,
-    name: "Carolina Pérez",
-    document_id: "CC 1012345678",
-    category: "Entrenamiento",
-    city: "Bogotá",
-    points: 3120,
-    level: "Oro",
-    redeemed_count: 10,
-    status: "Activo",
-    rating: 5.0,
-    reviews_count: 150,
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80",
-    next_level_points: 3500,
-    redeemed_history: [
-      { id: "b7", title: "Membresía médica premium", date: "20 Abr 2024", status: "Entregado", icon: "🩺", iconBg: "#fee2e2" },
-      { id: "b8", title: "Bono indumentaria deportiva", date: "05 Mar 2024", status: "Entregado", icon: "👟", iconBg: "#fef3c7" },
-      { id: "b8b", title: "Recarga de datos móviles 10GB", date: "18 Feb 2024", status: "Entregado", icon: "📱", iconBg: "#e0f2fe" },
-    ],
-  },
-  {
-    id: 5,
-    name: "Diego Martínez",
-    document_id: "CC 1034567890",
-    category: "Mantenimiento",
-    city: "Barranquilla",
-    points: 560,
-    level: "Bronce",
-    redeemed_count: 1,
-    status: "En revisión",
-    rating: 4.5,
-    reviews_count: 19,
-    avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80",
-    next_level_points: 1000,
-    redeemed_history: [
-      { id: "b9", title: "Kit básico de seguridad", date: "15 Ene 2024", status: "Entregado", icon: "🦺", iconBg: "#ffedd5" },
-    ],
-  },
-  {
-    id: 6,
-    name: "Laura Gómez",
-    document_id: "CC 1056789012",
-    category: "Niñera",
-    city: "Bogotá",
-    points: 1340,
-    level: "Plata",
-    redeemed_count: 4,
-    status: "Activo",
-    rating: 4.9,
-    reviews_count: 64,
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
-    next_level_points: 2000,
-    redeemed_history: [
-      { id: "b10", title: "Curso de primeros auxilios pediátricos", date: "01 Abr 2024", status: "Entregado", icon: "🎓", iconBg: "#f3e8ff" },
-      { id: "b10b", title: "Bono de supermercado $50.000", date: "12 Mar 2024", status: "Entregado", icon: "🛒", iconBg: "#fef3c7" },
-    ],
-  },
-  {
-    id: 7,
-    name: "Ricardo Sánchez",
-    document_id: "CC 1023987654",
-    category: "Jardinería",
-    city: "Medellín",
-    points: 420,
-    level: "Bronce",
-    redeemed_count: 1,
-    status: "Suspendido",
-    rating: 4.2,
-    reviews_count: 31,
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80",
-    next_level_points: 1000,
-    redeemed_history: [
-      { id: "b11", title: "Recarga de minutos $10.000", date: "10 Ene 2024", status: "Entregado", icon: "📞", iconBg: "#e0f2fe" },
-    ],
-  },
-  {
-    id: 8,
-    name: "Valentina Ruiz",
-    document_id: "CC 1067890123",
-    category: "Clases de inglés",
-    city: "Bogotá",
-    points: 2030,
-    level: "Plata",
-    redeemed_count: 6,
-    status: "Activo",
-    rating: 4.9,
-    reviews_count: 98,
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    next_level_points: 2500,
-    redeemed_history: [
-      { id: "b12", title: "Licencia de plataforma educativa 3 meses", date: "22 Abr 2024", status: "Entregado", icon: "💻", iconBg: "#e0f2fe" },
-      { id: "b12b", title: "Bono para libros y material didáctico", date: "10 Mar 2024", status: "Entregado", icon: "📚", iconBg: "#fef3c7" },
-    ],
-  },
-];
-
-// Catálogo oficial de beneficios e incentivos de Serviprox
-const INITIAL_BENEFIT_CATALOG: BenefitCatalogItem[] = [
-  {
-    id: "cat-1",
-    title: "Recarga móvil 10GB",
-    points: 500,
-    recharge_amount: 20000,
-    icon: "📱",
-    icon_bg: "#e0f2fe",
-    icon_color: "#0284c7",
-    category: "Comunicaciones",
-    description: "Paquete de navegación y datos móviles para operadores Claro, Movistar o Tigo.",
-    level_required: "Todos",
-  },
-  {
-    id: "cat-2",
-    title: "Seguro médico asistencial",
-    points: 1200,
-    recharge_amount: 50000,
-    icon: "🩺",
-    icon_bg: "#fee2e2",
-    icon_color: "#dc2626",
-    category: "Salud",
-    description: "Póliza de asistencia médica y orientación telefónica 24/7 durante 30 días.",
-    level_required: "Plata",
-  },
-  {
-    id: "cat-3",
-    title: "Bono combustible",
-    points: 800,
-    recharge_amount: 30000,
-    icon: "⛽",
-    icon_bg: "#fef3c7",
-    icon_color: "#d97706",
-    category: "Transporte",
-    description: "Bono redimible en estaciones Terpel y Primax para desplazamiento a servicios.",
-    level_required: "Todos",
-  },
-  {
-    id: "cat-4",
-    title: "Kit herramientas pro",
-    points: 2000,
-    recharge_amount: 100000,
-    icon: "🛠️",
-    icon_bg: "#f3e8ff",
-    icon_color: "#9333ea",
-    category: "Equipamiento",
-    description: "Bono para compra de herramientas y equipos de protección en Homecenter.",
-    level_required: "Oro",
-  },
-  {
-    id: "cat-5",
-    title: "Destacado en catálogo 7d",
-    points: 1000,
-    recharge_amount: 40000,
-    icon: "⭐",
-    icon_bg: "#fef9c3",
-    icon_color: "#ca8a04",
-    category: "Visibilidad",
-    description: "Prioridad de visualización en las primeras posiciones del catálogo Serviprox.",
-    level_required: "Plata",
-  },
-  {
-    id: "cat-6",
-    title: "Bono de supermercado",
-    points: 1500,
-    recharge_amount: 60000,
-    icon: "🛒",
-    icon_bg: "#dcfce7",
-    icon_color: "#16a34a",
-    category: "Alimentación",
-    description: "Tarjeta de regalo para compras de canasta básica en Éxito o Carulla.",
-    level_required: "Plata",
-  },
-];
 
 // Categorías aceptadas por la tienda en la base de datos
 const STORE_CATEGORIES = [
@@ -992,12 +660,12 @@ const PQR_AUTO_REPLIES: Record<PqrItem["type"], Record<PqrReplyStatus, string[]>
 };
 
 const buildPqrAutoReply = (pqr: PqrItem, status: PqrReplyStatus): string => {
-  const variants = PQR_AUTO_REPLIES[pqr.type]?.[status] || ["Hemos recibido su solicitud."];
+  const variants = PQR_AUTO_REPLIES[pqr.type][status];
   const seed = Number(String(pqr.raw_id ?? pqr.id).replace(/\D/g, "")) || 0;
-  const body = (variants[seed % variants.length] || "")
-    .replace(/\{relacionado\}/g, pqr.relatedTo || "")
+  const body = variants[seed % variants.length]
+    .replace(/\{relacionado\}/g, pqr.relatedTo)
     .replace(/\{contratista\}/g, pqr.contractor?.name ?? "el profesional");
-  return `Estimado(a) ${pqr.client?.name || "usuario"}, respecto a su ${safeLower(pqr.typeLabel)} ${pqr.id || ""} (${pqr.title || ""}): ${body}`;
+  return `Estimado(a) ${pqr.client.name}, respecto a su ${pqr.typeLabel.toLowerCase()} ${pqr.id} (${pqr.title}): ${body}`;
 };
 
 // Datos del módulo PQR y Reportes sincronizados con la captura oficial
@@ -1345,7 +1013,7 @@ PQR_EXTRA_SEEDS.forEach((seed, index) => {
       avatar: `https://i.pravatar.cc/100?img=${(index % 60) + 1}`,
       rating: 4.5,
       reviews_count: 10 + index,
-      email: `${safeLower(seed.client).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".")}@serviprox.co`,
+      email: `${seed.client.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".")}@serviprox.co`,
     },
     contractor: seed.contractor
       ? {
@@ -1368,272 +1036,9 @@ PQR_EXTRA_SEEDS.forEach((seed, index) => {
   });
 });
 
-// Datos oficiales del módulo de Fallas Técnicas sincronizados con la captura
-const INITIAL_FAILURES_DATA: TechnicalFailureItem[] = [
-  {
-    id: "#1045",
-    raw_id: 1045,
-    typeIcon: "⚠️",
-    title: "Error al iniciar sesión",
-    shortDesc: "El usuario no puede i...",
-    description: "El usuario no puede iniciar sesión en la aplicación. Muestra el mensaje: 'Credenciales inválidas' aunque los datos son correctos.",
-    module: "Autenticación",
-    moduleBadgeBg: "#dbeafe",
-    moduleBadgeColor: "#1d4ed8",
-    reporter: {
-      name: "Laura Gómez",
-      role: "Cliente",
-      avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80",
-      email: "laura.gomez@bogota.co",
-    },
-    date: "08/10/2026 14:20",
-    priority: "Alta",
-    status: "Abierta",
-    assignedTo: {
-      name: "Carlos M.",
-      avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
-    },
-    platform: "Aplicación móvil (Android)",
-    version: "v1.2.0",
-    attachments: [
-      { name: "error_login.png", type: "image", url: "https://images.unsplash.com/photo-1555421689-491a97ff2040?w=200&auto=format&fit=crop&q=80" },
-      { name: "log_error.txt", type: "file" },
-    ],
-    timeline: [
-      { date: "08/10/2026 14:20", text: "Incidencia creada por Laura Gómez", isInitial: true },
-      { date: "08/10/2026 15:10", text: "Asignada a Carlos M." },
-      { date: "08/10/2026 16:30", text: "Error en revisión" },
-      { date: "08/10/2026 18:45", text: "Comentario: Se está verificando..." },
-    ],
-  },
-  {
-    id: "#1044",
-    raw_id: 1044,
-    typeIcon: "💬",
-    title: "Chat no carga",
-    shortDesc: "El chat se queda en...",
-    description: "El chat se queda en pantalla de carga infinita al intentar sincronizar los mensajes nuevos con el contratista.",
-    module: "Chat",
-    moduleBadgeBg: "#f3e8ff",
-    moduleBadgeColor: "#9333ea",
-    reporter: {
-      name: "Juan Pérez",
-      role: "Profesional",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-      email: "juan.perez@serviprox.co",
-    },
-    date: "08/10/2026 11:15",
-    priority: "Media",
-    status: "En proceso",
-    assignedTo: {
-      name: "Ana R.",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80",
-    },
-    platform: "Aplicación móvil (iOS)",
-    version: "v1.2.0",
-    attachments: [],
-    timeline: [
-      { date: "08/10/2026 11:15", text: "Incidencia creada por Juan Pérez", isInitial: true },
-      { date: "08/10/2026 12:00", text: "Asignada a Ana R." },
-      { date: "08/10/2026 14:10", text: "Revisando WebSockets y servidor de chat" },
-    ],
-  },
-  {
-    id: "#1043",
-    raw_id: 1043,
-    typeIcon: "🖼️",
-    title: "No se suben imágenes",
-    shortDesc: "Error al subir fotos e...",
-    description: "Error al subir fotos en el portafolio de servicios. La barra de carga se queda detenida en el 90%.",
-    module: "Publicaciones",
-    moduleBadgeBg: "#fce7f3",
-    moduleBadgeColor: "#db2777",
-    reporter: {
-      name: "María Torres",
-      role: "Cliente",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-      email: "maria.torres@serviprox.co",
-    },
-    date: "07/10/2026 18:40",
-    priority: "Alta",
-    status: "Abierta",
-    assignedTo: {
-      name: "Daniel S.",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
-    },
-    platform: "Web / Desktop",
-    version: "v1.1.9",
-    attachments: [{ name: "screenshot_upload_error.png", type: "image" }],
-    timeline: [
-      { date: "07/10/2026 18:40", text: "Incidencia creada por María Torres", isInitial: true },
-      { date: "07/10/2026 19:15", text: "Asignada a Daniel S." },
-    ],
-  },
-  {
-    id: "#1042",
-    raw_id: 1042,
-    typeIcon: "🛒",
-    title: "Error en el pago",
-    shortDesc: "No se completa la tr...",
-    description: "No se completa la transacción por pasarela PSE. El cobro se descuenta de la cuenta pero la app no emite radicado de confirmación.",
-    module: "Contrataciones",
-    moduleBadgeBg: "#ccfbf1",
-    moduleBadgeColor: "#0f766e",
-    reporter: {
-      name: "Ricardo Díaz",
-      role: "Cliente",
-      avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=100&auto=format&fit=crop&q=80",
-      email: "ricardo.diaz@serviprox.co",
-    },
-    date: "07/10/2026 16:10",
-    priority: "Alta",
-    status: "En proceso",
-    assignedTo: {
-      name: "Carlos M.",
-      avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
-    },
-    platform: "Aplicación móvil (Android)",
-    version: "v1.2.0",
-    attachments: [],
-    timeline: [
-      { date: "07/10/2026 16:10", text: "Incidencia creada por Ricardo Díaz", isInitial: true },
-      { date: "07/10/2026 16:45", text: "Asignada a Carlos M." },
-      { date: "07/10/2026 17:30", text: "Verificando webhook de pasarela bancaria" },
-    ],
-  },
-  {
-    id: "#1041",
-    raw_id: 1041,
-    typeIcon: "📞",
-    title: "Notificaciones no llegan",
-    shortDesc: "El usuario no recibe...",
-    description: "El usuario no recibe las notificaciones push de confirmación de agenda ni mensajes de chat entrantes.",
-    module: "Notificaciones",
-    moduleBadgeBg: "#fef3c7",
-    moduleBadgeColor: "#d97706",
-    reporter: {
-      name: "Valentina Ruiz",
-      role: "Cliente",
-      avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&auto=format&fit=crop&q=80",
-      email: "valentina.ruiz@serviprox.co",
-    },
-    date: "06/10/2026 13:05",
-    priority: "Media",
-    status: "Resuelta",
-    assignedTo: {
-      name: "Ana R.",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80",
-    },
-    platform: "Aplicación móvil (Android/iOS)",
-    version: "v1.2.0",
-    attachments: [],
-    timeline: [
-      { date: "06/10/2026 13:05", text: "Incidencia creada por Valentina Ruiz", isInitial: true },
-      { date: "06/10/2026 14:00", text: "Servicio FCM reiniciado y tokens renovados" },
-      { date: "06/10/2026 15:30", text: "Incidencia resuelta satisfactoriamente" },
-    ],
-  },
-  {
-    id: "#1040",
-    raw_id: 1040,
-    typeIcon: "📱",
-    title: "App se cierra sola",
-    shortDesc: "La aplicación se cier...",
-    description: "La aplicación se cierra de forma inesperada al abrir la sección de contrataciones recientes en equipos Xiaomi y Samsung.",
-    module: "Aplicación móvil",
-    moduleBadgeBg: "#e0e7ff",
-    moduleBadgeColor: "#4338ca",
-    reporter: {
-      name: "Diego Martínez",
-      role: "Profesional",
-      avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80",
-      email: "diego.martinez@serviprox.co",
-    },
-    date: "06/10/2026 10:30",
-    priority: "Alta",
-    status: "En proceso",
-    assignedTo: {
-      name: "Miguel P.",
-      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80",
-    },
-    platform: "Android (Samsung / Xiaomi)",
-    version: "v1.2.0",
-    attachments: [],
-    timeline: [
-      { date: "06/10/2026 10:30", text: "Incidencia creada por Diego Martínez", isInitial: true },
-      { date: "06/10/2026 11:15", text: "Asignada a Miguel P." },
-      { date: "06/10/2026 12:45", text: "Analizando stack trace de Google Play Console" },
-    ],
-  },
-  {
-    id: "#1039",
-    raw_id: 1039,
-    typeIcon: "🌐",
-    title: "Error en el mapa",
-    shortDesc: "El mapa no muestra...",
-    description: "El mapa no muestra los marcadores de técnicos cercanos y arroja advertencia de conexión de geolocalización.",
-    module: "Mapa",
-    moduleBadgeBg: "#dcfce7",
-    moduleBadgeColor: "#15803d",
-    reporter: {
-      name: "Carolina Pérez",
-      role: "Cliente",
-      avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80",
-      email: "carolina.perez@serviprox.co",
-    },
-    date: "05/10/2026 15:45",
-    priority: "Media",
-    status: "Resuelta",
-    assignedTo: {
-      name: "Daniel S.",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
-    },
-    platform: "Web / Móvil",
-    version: "v1.1.9",
-    attachments: [],
-    timeline: [
-      { date: "05/10/2026 15:45", text: "Incidencia creada por Carolina Pérez", isInitial: true },
-      { date: "05/10/2026 16:30", text: "Asignada a Daniel S." },
-      { date: "05/10/2026 18:00", text: "Actualizada API Key de geocodificación inversa" },
-    ],
-  },
-  {
-    id: "#1038",
-    raw_id: 1038,
-    typeIcon: "📄",
-    title: "Problema al publicar",
-    shortDesc: "No permite publicar...",
-    description: "No permite publicar productos en la tienda cuando se adjuntan más de 3 especificaciones técnicas.",
-    module: "Tienda",
-    moduleBadgeBg: "#fee2e2",
-    moduleBadgeColor: "#b91c1c",
-    reporter: {
-      name: "Andrés López",
-      role: "Profesional",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-      email: "andres.lopez@serviprox.co",
-    },
-    date: "05/10/2026 11:20",
-    priority: "Baja",
-    status: "Cerrada",
-    assignedTo: {
-      name: "Ana R.",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80",
-    },
-    platform: "Web",
-    version: "v1.1.8",
-    attachments: [],
-    timeline: [
-      { date: "05/10/2026 11:20", text: "Incidencia creada por Andrés López", isInitial: true },
-      { date: "05/10/2026 12:10", text: "Campo obligatorio de inventario no completado por usuario" },
-      { date: "05/10/2026 13:00", text: "Incidencia cerrada con asesoría brindada" },
-    ],
-  },
-];
-
 export const AdminDashboard: React.FC = () => {
   const history = useHistory();
-  const { logout, user, refreshSession, updateMe } = useAuth();
+  const { logout, user, refreshSession } = useAuth();
   const [activeAlert, setActiveAlert] = useState<{
     kind: "alert" | "confirm" | "prompt";
     title: string;
@@ -1643,18 +1048,9 @@ export const AdminDashboard: React.FC = () => {
     onResolve?: (value: boolean | string | null) => void;
   } | null>(null);
 
-  // Estados de navegación y perfil administrativo
+  // Estados de navegación
   const [activeMenu, setActiveMenu] = useState<AdminMenuId>("inicio");
   const [serverModalOpen, setServerModalOpen] = useState(false);
-  const [adminProfileModalOpen, setAdminProfileModalOpen] = useState(false);
-  const [adminProfileForm, setAdminProfileForm] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-    city: "Bogotá",
-  });
-  const [savingAdminProfile, setSavingAdminProfile] = useState(false);
   const platformSettings = usePlatformSettings();
   const benefitsEnabled = platformSettings.features.benefits;
   const servicesEnabled = platformSettings.features.services;
@@ -1683,7 +1079,6 @@ export const AdminDashboard: React.FC = () => {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<PlatformNotification[]>([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
-  const [notificationsFilter, setNotificationsFilter] = useState<"todas" | "no_leidas">("todas");
 
   const fetchDbNotifications = async () => {
     try {
@@ -1695,7 +1090,7 @@ export const AdminDashboard: React.FC = () => {
             text: n.text,
             time: n.time || "Reciente",
             unread: Boolean(n.unread),
-            type: (n.type as any) || "sistema",
+            type: (n.type as PlatformNotification["type"]) || "sistema",
             link: n.link,
             target_id: n.target_id,
             created_at: n.created_at,
@@ -1706,7 +1101,7 @@ export const AdminDashboard: React.FC = () => {
     } catch (e) {
       setNotifications([]);
       setUnreadNotificationsCount(0);
-      console.warn("No se pudieron cargar notificaciones del servidor:", e);
+      showNotification(e instanceof Error ? e.message : "Error cargando notificaciones desde la base de datos.", "error");
     }
   };
 
@@ -1822,8 +1217,6 @@ export const AdminDashboard: React.FC = () => {
   const [productReportsList, setProductReportsList] = useState<ProductReportItem[]>(() =>
     getProductReports()
   );
-  const [productReportsLoading, setProductReportsLoading] = useState(false);
-  const [productReportsError, setProductReportsError] = useState("");
   const [activeReportToRespond, setActiveReportToRespond] = useState<ProductReportItem | null>(null);
   const [adminResponseText, setAdminResponseText] = useState("");
   const [adminResponseStatus, setAdminResponseStatus] =
@@ -1926,11 +1319,6 @@ export const AdminDashboard: React.FC = () => {
       const { products, fromServer } = await storeService.listProducts({ includeAll: true });
       setServerProducts(products);
       setServerProductsError(!fromServer && products.length === 0);
-      const pendingCount = products.filter((p) => p.reviewStatus === "en_revision").length;
-      setKpis((prev) => ({
-        ...prev,
-        pending_publications: Math.max(prev.pending_publications, pendingCount),
-      }));
     } catch {
       setServerProductsError(true);
     } finally {
@@ -2143,30 +1531,13 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const fetchProductReports = async () => {
-    setProductReportsLoading(true);
-    try {
-      setProductReportsList(await adminService.getStoreProductReports());
-      setProductReportsError("");
-    } catch (err) {
-      setProductReportsError(err instanceof Error ? err.message : "No se pudieron cargar los reportes del servidor.");
-    } finally {
-      setProductReportsLoading(false);
-    }
-  };
-
-  const handleSaveReportResponse = async (report: ProductReportItem) => {
+  const handleSaveReportResponse = (report: ProductReportItem) => {
     if (!adminResponseText.trim()) {
       showNotification("Por favor ingresa una respuesta al reporte.", "error");
       return;
     }
     setSavingReportResponse(true);
     try {
-      const savedReport = await adminService.updateStoreProductReport(report.id, {
-        status: adminResponseStatus,
-        adminResponse: adminResponseText.trim(),
-        actionTaken: adminResponseAction || "ninguna",
-      });
       respondToProductReport(
         report.id,
         adminResponseText.trim(),
@@ -2193,9 +1564,7 @@ export const AdminDashboard: React.FC = () => {
         });
         showNotification("Publicación pausada y ocultada de la tienda.", "success");
       }
-      setProductReportsList((current) =>
-        current.map((item) => (item.id === savedReport.id ? savedReport : item))
-      );
+      setProductReportsList(getProductReports());
       void loadServerProducts();
       setActiveReportToRespond(null);
       setAdminResponseText("");
@@ -2224,14 +1593,13 @@ export const AdminDashboard: React.FC = () => {
         "success"
       );
     }
-    void fetchProductReports();
+    setProductReportsList(getProductReports());
     void loadServerProducts();
   };
 
-  const initialOverview = getAutonomousOverview();
-  const [requestsList, setRequestsList] = useState<RequestItem[]>(() => initialOverview.requests_list as unknown as RequestItem[]);
-  const [prosList, setProsList] = useState<TopProfessional[]>(() => initialOverview.top_professionals as unknown as TopProfessional[]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => getLocalAuditLogs() as unknown as AuditLogEntry[]);
+  const [requestsList, setRequestsList] = useState<RequestItem[]>([]);
+  const [prosList, setProsList] = useState<TopProfessional[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
 
   // Estado de conexión a la Base de Datos
   const [dbInfo, setDbInfo] = useState<{
@@ -2241,24 +1609,51 @@ export const AdminDashboard: React.FC = () => {
     loading: boolean;
     mode: ConnectionMode;
   }>({
-    connected: true,
-    engine: "Base de Datos Autónoma (SQLite)",
-    database_name: "Serviprox DB (SQLite)",
-    loading: false,
-    mode: "local-sqlite",
+    connected: false,
+    engine: "",
+    database_name: "",
+    loading: true,
+    mode: getConnectionMode(),
   });
-  const overviewRequestId = useRef(0);
 
   // Métricas de Indicadores Clave (KPIs)
-  const [kpis, setKpis] = useState(initialOverview.kpis);
+  const [kpis, setKpis] = useState({
+    clients: 0,
+    professionals: 0,
+    hired_services: 0,
+    pending_publications: 0,
+    open_pqrs: 0,
+    technical_issues: 0,
+    raw_clients: 0,
+    raw_pros: 0,
+    raw_services: 0,
+    raw_publications: 0,
+    raw_pqrs: 0,
+    raw_issues: 0,
+  });
 
   // Distribución de usuarios para gráfica
-  const [userDistribution, setUserDistribution] = useState(() => initialOverview.charts.user_distribution);
+  const [userDistribution, setUserDistribution] = useState({
+    clients: 0,
+    professionals: 0,
+    administrators: 0,
+  });
 
   // Distribución de PQR para gráfico de barras
-  const [pqrDistribution, setPqrDistribution] = useState(() => initialOverview.charts.pqr_chart);
+  const [pqrDistribution, setPqrDistribution] = useState({
+    radicado: 0,
+    en_revision: 0,
+    conciliacion: 0,
+    resuelto: 0,
+  });
 
-  const [overviewReports, setOverviewReports] = useState(() => initialOverview.reports);
+  const [overviewReports, setOverviewReports] = useState({
+    blocked_accounts_today: 0,
+    complaints: 0,
+    rejected_publications: 0,
+    cancelled_services: 0,
+    technical_issues: 0,
+  });
 
   const clearOverviewData = () => {
     setKpis({
@@ -2290,15 +1685,11 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const fetchLiveOverview = async () => {
-    const requestId = ++overviewRequestId.current;
     setDbInfo((prev) => ({ ...prev, loading: true }));
-    const connectionTimeout = window.setTimeout(() => {
-      if (overviewRequestId.current !== requestId) return;
-      setDbInfo((prev) => ({ ...prev, loading: false }));
-    }, 10000);
     try {
       if (!tokenStorage.getAccessToken()) {
         try {
+          await checkBackendHealth();
           await authService.login({ username: "admin", password: "serviprox2026" });
         } catch {
           // Si no responde, continúa con la consulta
@@ -2306,63 +1697,94 @@ export const AdminDashboard: React.FC = () => {
       }
 
       const data = await adminService.getOverview();
-      const resolvedDb = getDatabaseInfo(data.database || {});
-      setDbInfo({
-        connected: Boolean(data.database?.connected !== false),
-        ...resolvedDb,
-        loading: false,
-      });
+      if (!data.database?.connected) {
+        try {
+          const health = await checkBackendHealth();
+          if (health.ok && health.database === "connected") {
+            setDbInfo({
+              connected: true,
+              engine: health.engine || "PostgreSQL (MV)",
+              database_name: "Serviprox DB (MV)",
+              loading: false,
+              mode: health.mode || getConnectionMode(),
+            });
+            return;
+          }
+        } catch {
+          // Ignorar fallo de verificación de salud
+        }
+        setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
+        clearOverviewData();
+        return;
+      }
 
-      if (data.kpis) {
-        setKpis((prev) => ({ ...prev, ...data.kpis }));
-      }
-      if (Array.isArray(data.requests_list) && data.requests_list.length > 0) {
-        setRequestsList(data.requests_list);
-      }
-      if (Array.isArray(data.top_professionals) && data.top_professionals.length > 0) {
-        setProsList(data.top_professionals);
-      }
-      if (Array.isArray(data.audit_logs)) {
-        setAuditLogs(data.audit_logs);
-      }
-      if (data.charts?.user_distribution) {
-        setUserDistribution(data.charts.user_distribution);
-      }
-      if (data.charts?.pqr_chart) {
-        setPqrDistribution(data.charts.pqr_chart);
-      }
-      if (data.reports) {
-        setOverviewReports(data.reports);
-      }
+      setDbInfo({
+        connected: true,
+        engine: data.database.engine || "sqlite",
+        database_name: data.database.database_name || "Serviprox DB",
+        loading: false,
+        mode: getConnectionMode(),
+      });
+      setKpis((prev) => ({ ...prev, ...data.kpis }));
+      setRequestsList(data.requests_list);
+      setProsList(data.top_professionals);
+      setAuditLogs(data.audit_logs);
+      setUserDistribution(data.charts.user_distribution);
+      setPqrDistribution(data.charts.pqr_chart);
+      setOverviewReports(data.reports);
     } catch (err) {
-      console.warn("Fallo al consultar base de datos en overview, usando persistencia local:", err);
+      // Reintento resiliente con autodetección de host backend (MV/emulador/red local) + login admin
       try {
-        const fallbackData = await adminService.getOverview();
-        if (fallbackData) {
-          const resolvedDb = getDatabaseInfo(fallbackData.database || {});
+        await checkBackendHealth();
+        await authService.login({ username: "admin", password: "serviprox2026" });
+        const retryData = await adminService.getOverview();
+        if (retryData.database?.connected) {
           setDbInfo({
             connected: true,
-            ...resolvedDb,
+            engine: retryData.database.engine || "sqlite",
+            database_name: retryData.database.database_name || "Serviprox DB",
             loading: false,
+            mode: getConnectionMode(),
           });
-          if (fallbackData.kpis) setKpis((prev) => ({ ...prev, ...fallbackData.kpis }));
-          if (fallbackData.requests_list) setRequestsList(fallbackData.requests_list);
-          if (fallbackData.top_professionals) setProsList(fallbackData.top_professionals);
-          if (fallbackData.audit_logs) setAuditLogs(fallbackData.audit_logs);
+          setKpis((prev) => ({ ...prev, ...retryData.kpis }));
+          setRequestsList(retryData.requests_list);
+          setProsList(retryData.top_professionals);
+          setAuditLogs(retryData.audit_logs);
+          setUserDistribution(retryData.charts.user_distribution);
+          setPqrDistribution(retryData.charts.pqr_chart);
+          setOverviewReports(retryData.reports);
           return;
         }
-      } catch {}
-    } finally {
-      window.clearTimeout(connectionTimeout);
-      if (overviewRequestId.current === requestId) {
-        setDbInfo((prev) => (prev.loading ? { ...prev, loading: false } : prev));
+      } catch {
+        // Fallo final
       }
+
+      // Si la consulta detallada de overview falló pero el health check confirma que la base de datos está conectada en la MV
+      try {
+        const health = await checkBackendHealth();
+        if (health.ok && health.database === "connected") {
+          setDbInfo({
+            connected: true,
+            engine: health.engine || "PostgreSQL (MV)",
+            database_name: "Serviprox DB (MV)",
+            loading: false,
+            mode: health.mode || getConnectionMode(),
+          });
+          return;
+        }
+      } catch {
+        // Fallo de health
+      }
+
+      setDbInfo((prev) => ({ ...prev, connected: false, loading: false }));
+      clearOverviewData();
+      console.warn("Fallo al consultar base de datos en overview:", err);
     }
   };
 
   // Listas cargadas directamente desde la base de datos.
-  const [clientsList, setClientsList] = useState<ClientItem[]>(() => getLocalClients() as unknown as ClientItem[]);
-  const [allProsList, setAllProsList] = useState<ProfessionalItem[]>(() => getLocalProfessionals() as unknown as ProfessionalItem[]);
+  const [clientsList, setClientsList] = useState<ClientItem[]>([]);
+  const [allProsList, setAllProsList] = useState<ProfessionalItem[]>([]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [prosLoading, setProsLoading] = useState(false);
 
@@ -2382,21 +1804,10 @@ export const AdminDashboard: React.FC = () => {
     setClientsLoading(true);
     try {
       const res = await adminService.getUsers("client");
-      const users = Array.isArray(res.users) && res.users.length > 0 ? res.users : (getLocalClients() as unknown as ClientItem[]);
-      if (users.length > 0) {
-        setClientsList(users);
-        setKpis((prev) => ({
-          ...prev,
-          clients: Math.max(prev.clients, users.length),
-        }));
-      }
+      setClientsList(Array.isArray(res.users) ? res.users : []);
     } catch (err) {
-      console.warn("Error consultando clientes remotos:", err);
-      const local = getLocalClients() as unknown as ClientItem[];
-      if (local.length > 0) {
-        setClientsList(local);
-        setKpis((prev) => ({ ...prev, clients: Math.max(prev.clients, local.length) }));
-      }
+      setClientsList([]);
+      showNotification(err instanceof Error ? err.message : "Error cargando clientes desde la base de datos.", "error");
     } finally {
       setClientsLoading(false);
     }
@@ -2406,22 +1817,11 @@ export const AdminDashboard: React.FC = () => {
   const fetchPros = async () => {
     setProsLoading(true);
     try {
-      const res = await adminService.getProfessionals();
-      const pros = Array.isArray(res) && res.length > 0 ? res : (getLocalProfessionals() as unknown as ProfessionalItem[]);
-      if (pros.length > 0) {
-        setAllProsList(pros);
-        setKpis((prev) => ({
-          ...prev,
-          professionals: Math.max(prev.professionals, pros.length),
-        }));
-      }
+      const res = await adminService.getProfessionals<ProfessionalItem>();
+      setAllProsList(Array.isArray(res) ? res : []);
     } catch (err) {
-      console.warn("Error consultando profesionales remotos:", err);
-      const local = getLocalProfessionals() as unknown as ProfessionalItem[];
-      if (local.length > 0) {
-        setAllProsList(local);
-        setKpis((prev) => ({ ...prev, professionals: Math.max(prev.professionals, local.length) }));
-      }
+      setAllProsList([]);
+      showNotification(err instanceof Error ? err.message : "Error cargando profesionales desde la base de datos.", "error");
     } finally {
       setProsLoading(false);
     }
@@ -2434,59 +1834,52 @@ export const AdminDashboard: React.FC = () => {
         adminService.getProblems(),
       ]);
 
-      const pqrRecords = Array.isArray(dbPqrs) && dbPqrs.length > 0 ? dbPqrs : getStoredPqrReports();
-      const problemRecords = Array.isArray(dbProblems) && dbProblems.length > 0 ? dbProblems : getStoredAppProblems();
-      if (pqrRecords.length > 0 || problemRecords.length > 0) {
-        setPqrList([...pqrRecords.map(mapPqrFromDatabase), ...problemRecords.map(mapProblemToPqr)]);
-        setFailuresList(problemRecords.map(mapProblemFromDatabase));
-        const openPqrCount = pqrRecords.filter((r: any) => !["resuelto", "cerrado", "anulado"].includes(r.status)).length;
-        const openIssuesCount = problemRecords.filter((r: any) => !["solucionado", "cerrado", "descartado"].includes(r.status)).length;
-        setKpis((prev) => ({
-          ...prev,
-          open_pqrs: Math.max(prev.open_pqrs, openPqrCount),
-          technical_issues: Math.max(prev.technical_issues, openIssuesCount),
-        }));
+      const pqrRecords = Array.isArray(dbPqrs) ? (dbPqrs as RawPqrRecord[]) : [];
+      const problemRecords = Array.isArray(dbProblems) ? (dbProblems as RawProblemRecord[]) : [];
+      const linkedTicketNumbers = new Set<string>();
+      for (const pqr of pqrRecords) {
+        const rel = String(pqr.relatedTo || pqr.related_to || "");
+        const match = rel.match(/APP-BUG-[A-Z0-9-]+/i);
+        if (match) linkedTicketNumbers.add(match[0].toUpperCase());
       }
-    } catch (e) {
-      console.warn("Error consultando PQRs remotos:", e);
-      const pqrRecords = getStoredPqrReports();
-      const problemRecords = getStoredAppProblems();
-      setPqrList([...pqrRecords.map(mapPqrFromDatabase), ...problemRecords.map(mapProblemToPqr)]);
+      const unlinkedProblems = problemRecords.filter((prob) => {
+        const ticket = String(prob.ticketNumber || prob.ticket_number || "").toUpperCase();
+        return !ticket || !linkedTicketNumbers.has(ticket);
+      });
+      setPqrList([...pqrRecords.map(mapPqrFromDatabase), ...unlinkedProblems.map(mapProblemToPqr)]);
       setFailuresList(problemRecords.map(mapProblemFromDatabase));
+    } catch (e) {
+      setPqrList([]);
+      setFailuresList([]);
+      showNotification(e instanceof Error ? e.message : "Error cargando PQR y fallas desde la base de datos.", "error");
     }
   };
 
   useEffect(() => {
     fetchLiveOverview();
-    void fetchProductReports();
     fetchClients();
     fetchPros();
     fetchDbPqrsAndProblems();
     fetchDbNotifications();
     fetchRolesAndUsers();
-    void loadServerProducts();
 
     const handleSyncEvent = () => {
       fetchDbPqrsAndProblems();
     };
     const handleProductReportsSync = () => {
-      void fetchProductReports();
+      setProductReportsList(getProductReports());
       void loadServerProducts();
-    };
-    const handleOpenServerModal = () => {
-      setServerModalOpen(true);
+      void fetchDbPqrsAndProblems();
     };
     window.addEventListener("serviprox:pqr-updated", handleSyncEvent);
     window.addEventListener("serviprox:problem-updated", handleSyncEvent);
     window.addEventListener("serviprox:product-reports-updated", handleProductReportsSync);
     window.addEventListener("serviprox:store-block-changed", handleProductReportsSync);
-    window.addEventListener("serviprox:open-server-modal", handleOpenServerModal);
     return () => {
       window.removeEventListener("serviprox:pqr-updated", handleSyncEvent);
       window.removeEventListener("serviprox:problem-updated", handleSyncEvent);
       window.removeEventListener("serviprox:product-reports-updated", handleProductReportsSync);
       window.removeEventListener("serviprox:store-block-changed", handleProductReportsSync);
-      window.removeEventListener("serviprox:open-server-modal", handleOpenServerModal);
     };
   }, []);
 
@@ -2517,7 +1910,7 @@ export const AdminDashboard: React.FC = () => {
     };
   } | null>(null);
 
-  const [rolesUsersList, setRolesUsersList] = useState<any[]>([]);
+  const [rolesUsersList, setRolesUsersList] = useState<AdminUserSummary[]>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
   const [rolesSavingMatrix, setRolesSavingMatrix] = useState(false);
   const [rolesActiveTab, setRolesActiveTab] = useState<"users" | "matrix" | "team">("users");
@@ -2525,8 +1918,6 @@ export const AdminDashboard: React.FC = () => {
   const [rolesFilter, setRolesFilter] = useState<"todos" | "client" | "professional" | "support" | "admin">("todos");
 
   type AdminRoleCandidate = {
-    username?: string;
-    email?: string;
     role?: string;
     is_staff?: boolean;
     is_superuser?: boolean;
@@ -2537,10 +1928,10 @@ export const AdminDashboard: React.FC = () => {
     u: AdminRoleCandidate
   ): "superadmin" | "admin" | "staff" | "content_manager" | "none" => {
     if (!u) return "none";
-    if (u.is_superuser || u.admin_role === "superadmin" || u.username?.toLowerCase() === "admin" || u.email?.toLowerCase().includes("admin")) return "superadmin";
-    if (u.admin_role === "admin" || (u.role as string) === "admin") return "admin";
+    if (u.is_superuser || u.admin_role === "superadmin") return "superadmin";
     if (u.admin_role === "support" || u.admin_role === "staff") return "staff";
     if (u.admin_role === "content_manager") return "content_manager";
+    if (u.admin_role === "admin") return "admin";
     if (u.is_staff) return "admin";
     if (u.role === "staff") return "staff";
     return "none";
@@ -2549,37 +1940,14 @@ export const AdminDashboard: React.FC = () => {
   const getReadableRoleLabel = (u: AdminRoleCandidate): string => {
     const eff = getEffectiveAdminRole(u);
     if (eff === "superadmin") return "Superadministrador";
-    if (eff === "admin") return "Administrador General";
     if (eff === "staff") return "Moderador / Soporte PQR";
     if (eff === "content_manager") return "Gestor de Contenido";
-    if (u?.username?.toLowerCase() === "admin" || u?.email?.toLowerCase().includes("admin")) return "Superadministrador";
+    if (eff === "admin") return "Administrador General";
     if (u?.role === "professional") return "Profesional";
-    if (u?.role === "admin" || u?.role === "staff" || u?.is_staff || u?.is_superuser) return "Superadministrador";
     return "Cliente";
   };
 
   const currentEffectiveAdminRole = getEffectiveAdminRole(user);
-
-  const handleSaveAdminProfile = async () => {
-    setSavingAdminProfile(true);
-    try {
-      if (updateMe) {
-        await updateMe({
-          first_name: adminProfileForm.first_name.trim(),
-          last_name: adminProfileForm.last_name.trim(),
-          phone: adminProfileForm.phone.trim(),
-          city: adminProfileForm.city.trim(),
-        });
-      }
-      showNotification("Datos del perfil administrativo guardados con éxito en la base de datos.", "success");
-      setAdminProfileModalOpen(false);
-      void refreshSession();
-    } catch (err: unknown) {
-      showNotification(err instanceof Error ? err.message : "No se pudieron actualizar los datos del perfil.", "error");
-    } finally {
-      setSavingAdminProfile(false);
-    }
-  };
 
   const hasAdminPermission = (permId: string): boolean => {
     if (currentEffectiveAdminRole === "none" || currentEffectiveAdminRole === "superadmin") return true;
@@ -2592,7 +1960,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Modal para cambio formal de rol
   const [roleChangeModalOpen, setRoleChangeModalOpen] = useState(false);
-  const [selectedUserForRoleChange, setSelectedUserForRoleChange] = useState<any | null>(null);
+  const [selectedUserForRoleChange, setSelectedUserForRoleChange] = useState<AdminUserSummary | null>(null);
   const [newSelectedRole, setNewSelectedRole] = useState<string>("client");
   const [roleChangeReason, setRoleChangeReason] = useState("");
   const [roleChangeSaving, setRoleChangeSaving] = useState(false);
@@ -2623,7 +1991,7 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [activeMenu]);
 
-  const handleOpenRoleChangeModal = (u: any) => {
+  const handleOpenRoleChangeModal = (u: AdminUserSummary) => {
     setSelectedUserForRoleChange(u);
     const eff = getEffectiveAdminRole(u);
     const target = eff !== "none" ? eff : u.role || "client";
@@ -2671,11 +2039,11 @@ export const AdminDashboard: React.FC = () => {
           value: "",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActiveAlert({
         kind: "alert",
         title: "Error al cambiar rol",
-        message: err?.message || "Ocurrió un error al actualizar el rol en la base de datos.",
+        message: err instanceof Error ? err.message : "Ocurrió un error al actualizar el rol en la base de datos.",
         variant: "error",
         value: "",
       });
@@ -2712,11 +2080,11 @@ export const AdminDashboard: React.FC = () => {
           fetchLiveOverview(),
         ]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActiveAlert({
         kind: "alert",
         title: "Error",
-        message: err?.message || "No se pudo actualizar el rol.",
+        message: err instanceof Error ? err.message : "No se pudo actualizar el rol.",
         variant: "error",
         value: "",
       });
@@ -2762,11 +2130,11 @@ export const AdminDashboard: React.FC = () => {
           value: "",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActiveAlert({
         kind: "alert",
         title: "Error al guardar matriz",
-        message: err?.message || "Error al conectar con la base de datos.",
+        message: err instanceof Error ? err.message : "Error al conectar con la base de datos.",
         variant: "error",
         value: "",
       });
@@ -2776,7 +2144,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const filteredRolesUsers = rolesUsersList.filter((u) => {
-    const search = safeLower(rolesSearch).trim();
+    const search = rolesSearch.toLowerCase().trim();
     const matchesSearch =
       !search ||
       (u.full_name && u.full_name.toLowerCase().includes(search)) ||
@@ -2833,7 +2201,7 @@ export const AdminDashboard: React.FC = () => {
   const [modalCatalogOpen, setModalCatalogOpen] = useState(false);
 
   const [modalDetailOpen, setModalDetailOpen] = useState(false);
-  const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
+  const [selectedDetailItem, setSelectedDetailItem] = useState<AdminDetailItem | null>(null);
 
   // Estados específicos para la vista de Beneficios y Puntos
   const [benefitProsList, setBenefitProsList] = useState<BenefitProItem[]>([]);
@@ -2848,12 +2216,10 @@ export const AdminDashboard: React.FC = () => {
   const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(true);
   const [selectedBenefitCheckboxIds, setSelectedBenefitCheckboxIds] = useState<number[]>([]);
 
-  // Estados específicos para la vista de PQR y Reportes (Diseño exacto oficial)
-  const [pqrList, setPqrList] = useState<PqrItem[]>(() => [
-    ...getStoredPqrReports().map(mapPqrFromDatabase),
-    ...getStoredAppProblems().map(mapProblemToPqr),
-  ]);
+  // Estados específicos para la vista de PQR y Reportes (Servicios vs Productos separados)
+  const [pqrList, setPqrList] = useState<PqrItem[]>([]);
   const [selectedPqrId, setSelectedPqrId] = useState<string>("");
+  const [pqrScopeTab, setPqrScopeTab] = useState<"Todos" | "Servicios" | "Productos" | "App">("Todos");
   const [pqrTab, setPqrTab] = useState<"Todas" | "Quejas" | "Reclamos" | "Peticiones" | "Reportes">("Todas");
   const [pqrSearch, setPqrSearch] = useState("");
   const [pqrTypeFilter, setPqrTypeFilter] = useState("Todos");
@@ -2867,7 +2233,7 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     setPqrPage(1);
-  }, [pqrTab, pqrSearch, pqrTypeFilter, pqrStatusFilter, pqrPriorityFilter, pqrDateFilter, pqrPageSize]);
+  }, [pqrScopeTab, pqrTab, pqrSearch, pqrTypeFilter, pqrStatusFilter, pqrPriorityFilter, pqrDateFilter, pqrPageSize]);
 
   // Estados del modal de Respuesta al cliente / notificación
   const [modalReplyPqrOpen, setModalReplyPqrOpen] = useState(false);
@@ -2878,9 +2244,11 @@ export const AdminDashboard: React.FC = () => {
 
   // Estados del modal de Nueva Solicitud (registro manual)
   const [modalNewPqrOpen, setModalNewPqrOpen] = useState(false);
+  const [newPqrSubjectType, setNewPqrSubjectType] = useState<"servicio" | "producto">("servicio");
   const [newPqrType, setNewPqrType] = useState<"queja" | "reclamo" | "peticion" | "reporte">("queja");
   const [newPqrTitle, setNewPqrTitle] = useState("");
   const [newPqrClientName, setNewPqrClientName] = useState("");
+  const [newPqrClientEmail, setNewPqrClientEmail] = useState("");
   const [newPqrRelatedTo, setNewPqrRelatedTo] = useState("");
   const [newPqrPriority, setNewPqrPriority] = useState<"Alta" | "Media" | "Baja">("Alta");
   const [newPqrDescription, setNewPqrDescription] = useState("");
@@ -2888,9 +2256,7 @@ export const AdminDashboard: React.FC = () => {
   // ═════════════════════════════════════════════════════════════════════
   // ESTADOS Y ACCIONES: MÓDULO FALLAS TÉCNICAS (CONECTADO A BD)
   // ═════════════════════════════════════════════════════════════════════
-  const [failuresList, setFailuresList] = useState<TechnicalFailureItem[]>(() =>
-    getStoredAppProblems().map(mapProblemFromDatabase)
-  );
+  const [failuresList, setFailuresList] = useState<TechnicalFailureItem[]>([]);
   const [selectedFailureId, setSelectedFailureId] = useState<string>("");
   const [failureTab, setFailureTab] = useState<"Todas" | "Abiertas" | "En proceso" | "Resueltas" | "Cerradas">("Todas");
   const [failureSearch, setFailureSearch] = useState("");
@@ -2907,7 +2273,7 @@ export const AdminDashboard: React.FC = () => {
   const [newFailureReporter, setNewFailureReporter] = useState("");
   const [newFailurePriority, setNewFailurePriority] = useState<"Crítica" | "Alta" | "Media" | "Baja">("Alta");
   const [newFailurePlatform, setNewFailurePlatform] = useState("Aplicación móvil (Android)");
-  const [newFailureVersion, setNewFailureVersion] = useState("v1.2.0");
+  const [newFailureVersion] = useState("v1.2.0");
   const [newFailureDescription, setNewFailureDescription] = useState("");
   const [newFailureFiles, setNewFailureFiles] = useState<File[]>([]);
   const [uploadingFailureFiles, setUploadingFailureFiles] = useState(false);
@@ -2938,7 +2304,7 @@ export const AdminDashboard: React.FC = () => {
       .catch((error) => {
         if (!active) return;
         setBenefitsCatalog([]);
-        console.warn("No se pudo consultar el catálogo de beneficios del servidor:", error);
+        showNotification(error instanceof Error ? error.message : "No se pudo consultar el catálogo de beneficios en la base de datos.", "error");
       });
     return () => {
       active = false;
@@ -2946,22 +2312,22 @@ export const AdminDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const mapped: BenefitProItem[] = allProsList.filter(Boolean).map((pro: any) => {
-      const points = Number(pro?.points) || 0;
+    const mapped: BenefitProItem[] = allProsList.map((pro: ProfessionalItem) => {
+      const points = Number(pro.points) || 0;
       const nextLevelPoints = points < 1000 ? 1000 : points < 2000 ? 2000 : 3000;
       return {
-        id: Number(pro?.id) || 0,
-        name: pro?.display_name || "",
+        id: Number(pro.id),
+        name: pro.display_name || "",
         document_id: "",
-        category: Array.isArray(pro?.categories) ? pro.categories.join(", ") : (pro?.specialty_label || ""),
-        city: pro?.city || "",
+        category: Array.isArray(pro.categories) ? pro.categories.join(", ") : (pro.specialty_label || ""),
+        city: pro.city || "",
         points,
         level: points >= 2000 ? "Oro" : points >= 1000 ? "Plata" : "Bronce",
         redeemed_count: 0,
-        status: pro?.is_active ? "Activo" : "Suspendido",
-        rating: Number(pro?.rating_avg) || 0,
-        reviews_count: Number(pro?.jobs_completed) || 0,
-        avatar: pro?.avatar_url || "",
+        status: pro.is_active ? "Activo" : "Suspendido",
+        rating: Number(pro.rating_avg) || 0,
+        reviews_count: Number(pro.jobs_completed) || 0,
+        avatar: pro.avatar_url || "",
         next_level_points: nextLevelPoints,
         redeemed_history: [],
       };
@@ -2986,37 +2352,42 @@ export const AdminDashboard: React.FC = () => {
 
   const handleDeleteAccount = async (kind: "client" | "professional", id: number | string, name: string) => {
     const ok = await showConfirm(
-      `¿Eliminar definitivamente la cuenta de ${name}? También se borrarán sus pedidos y viviendas. Esta acción no se puede deshacer.`,
+      `¿Eliminar definitivamente la cuenta de ${name}? También se borrarán sus pedidos, viviendas y registros asociados. Esta acción no se puede deshacer.`,
       "Eliminar cuenta"
     );
     if (!ok) return;
     try {
-      // Registrar id eliminado de inmediato para evitar que reaparezca
-      try {
-        const deleted: string[] = JSON.parse(localStorage.getItem("serviprox_deleted_accounts") || "[]");
-        const key = `${kind}:${id}`;
-        if (!deleted.includes(key)) deleted.push(key);
-        if (!deleted.includes(String(id))) deleted.push(String(id));
-        localStorage.setItem("serviprox_deleted_accounts", JSON.stringify(deleted));
-      } catch {}
+      await adminService.deleteAccount(kind, id);
 
-      // Actualizar lista en pantalla y almacenamiento
       if (kind === "client") {
         setClientsList((prev) => {
           const next = prev.filter((c) => String(c.id) !== String(id));
-          try { localStorage.setItem("serviprox_clients_list", JSON.stringify(next)); } catch {}
+          try {
+            localStorage.setItem("serviprox_clients_list", JSON.stringify(next));
+          } catch {
+            // Ignorar errores de almacenamiento local
+          }
           return next;
         });
       } else {
         setAllProsList((prev) => {
           const next = prev.filter((p) => String(p.id) !== String(id));
-          try { localStorage.setItem("serviprox_pros_list", JSON.stringify(next)); } catch {}
+          try {
+            localStorage.setItem("serviprox_pros_list", JSON.stringify(next));
+          } catch {
+            // Ignorar errores de almacenamiento local
+          }
           return next;
         });
       }
 
-      await adminService.deleteAccount(kind, id);
-      showNotification(`La cuenta de ${name} fue eliminada de la base de datos.`, "success");
+      showNotification(`La cuenta de ${name} fue eliminada permanentemente de la base de datos.`, "success");
+      void Promise.all([
+        fetchClients(),
+        fetchPros(),
+        fetchLiveOverview(),
+        fetchRolesAndUsers(),
+      ]);
     } catch (err) {
       showNotification(err instanceof Error ? err.message : "No se pudo eliminar la cuenta.", "error");
     }
@@ -3203,7 +2574,7 @@ export const AdminDashboard: React.FC = () => {
         {
           id: `aud-${Date.now()}`,
           adminName: adminDisplayName,
-          action: `Aprobación de ${safeLower(item.type)}`,
+          action: `Aprobación de ${item.type.toLowerCase()}`,
           target: `${item.title} (${item.userName})`,
           date: new Date().toLocaleString(),
           reason: "Aprobado desde el panel administrativo (BD)",
@@ -3231,7 +2602,7 @@ export const AdminDashboard: React.FC = () => {
         {
           id: `aud-${Date.now()}`,
           adminName: adminDisplayName,
-          action: `Rechazo de ${safeLower(item.type)}`,
+          action: `Rechazo de ${item.type.toLowerCase()}`,
           target: `${item.title} (${item.userName})`,
           date: new Date().toLocaleString(),
           reason: "No cumple con las normas de publicación de Serviprox",
@@ -3247,7 +2618,7 @@ export const AdminDashboard: React.FC = () => {
     });
   };
 
-  const handleViewDetail = (item: any) => {
+  const handleViewDetail = (item: RequestItem) => {
     setSelectedDetailItem(item);
     setModalDetailOpen(true);
   };
@@ -3327,27 +2698,37 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Abrir modal de asignación de beneficios para un profesional específico
-  const handleOpenAssignBenefitsForPro = (pro: ProfessionalItem | BenefitProItem | any) => {
-    const proId = pro.raw_id || pro.id;
-    const proName = pro.display_name || pro.name;
-    const proSpecialty = pro.headline || pro.specialty_label || pro.category || "Especialista Serviprox";
+  const handleOpenAssignBenefitsForPro = (pro: BenefitAssignablePro) => {
+    const proId = ("raw_id" in pro && pro.raw_id) ? pro.raw_id : Number(pro.id);
+    const proName =
+      ("display_name" in pro && pro.display_name)
+        ? pro.display_name
+        : ("name" in pro && pro.name)
+          ? pro.name
+          : "Profesional";
+    const proSpecialty =
+      ("headline" in pro ? pro.headline : undefined) ||
+      ("specialty_label" in pro ? pro.specialty_label : undefined) ||
+      ("category" in pro ? pro.category : undefined) ||
+      "Especialista Serviprox";
     const proPoints = pro.points || 0;
     const proAvatar =
-      pro.avatar_url ||
-      pro.avatar ||
+      ("avatar_url" in pro ? pro.avatar_url : undefined) ||
+      ("avatar" in pro ? pro.avatar : undefined) ||
       "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop";
+    const proRating = Number(("rating_avg" in pro ? pro.rating_avg : undefined) || ("rating" in pro ? pro.rating : undefined)) || 4.8;
 
     setTargetProBeneficio({
       id: `pro-${proId}`,
       raw_id: proId,
       name: proName,
       specialty: proSpecialty,
-      rating: Number(pro.rating_avg || pro.rating) || 4.8,
+      rating: proRating,
       tier: proPoints >= 1000 ? "Nivel Oro" : "Nivel Plata",
       avatar: proAvatar,
       points: proPoints,
-      completedJobs: pro.jobs_completed || pro.reviews_count || 0,
-      verified: pro.is_verified ?? true,
+      completedJobs: ("jobs_completed" in pro ? pro.jobs_completed : undefined) || ("reviews_count" in pro ? pro.reviews_count : undefined) || 0,
+      verified: ("is_verified" in pro ? pro.is_verified : undefined) ?? true,
     });
     setSelectedProIdForBenefit(proId);
     setAssignToAllChecked(false);
@@ -3381,109 +2762,6 @@ export const AdminDashboard: React.FC = () => {
     }
     setBenefitModalTab("asignar");
     setModalBeneficiosOpen(true);
-  };
-
-  // ═════════════════════════════════════════════════════════════════════
-  // GESTIÓN Y EDICIÓN DE DATOS PROFESIONALES (ADMINISTRADOR)
-  // ═════════════════════════════════════════════════════════════════════
-  const [editProModalOpen, setEditProModalOpen] = useState(false);
-  const [editingPro, setEditingPro] = useState<ProfessionalItem | null>(null);
-  const [savingProLoading, setSavingProLoading] = useState(false);
-  const [editProForm, setEditProForm] = useState({
-    display_name: "",
-    email: "",
-    phone: "",
-    headline: "",
-    specialty_label: "Electricidad",
-    bio: "",
-    city: "Bogotá",
-    neighborhood: "",
-    coverage_radius_km: 8,
-    rating_avg: 5.0,
-    jobs_completed: 0,
-    points: 1000,
-    wallet_balance: 0,
-    is_verified: false,
-    accepts_urgent: false,
-    is_active: true,
-  });
-
-  const handleOpenEditProModal = (pro: ProfessionalItem | any) => {
-    setEditingPro(pro);
-    setEditProForm({
-      display_name: pro.display_name || pro.name || "",
-      email: pro.email || pro.user_email || "",
-      phone: pro.phone || pro.phone_number || "",
-      headline: pro.headline || "",
-      specialty_label: pro.specialty_label || pro.category || "Electricidad",
-      bio: pro.bio || "",
-      city: pro.city || "Bogotá",
-      neighborhood: pro.neighborhood || "",
-      coverage_radius_km: Number(pro.coverage_radius_km) || 8,
-      rating_avg: Number(pro.rating_avg || pro.rating) || 5.0,
-      jobs_completed: Number(pro.jobs_completed || pro.reviews_count) || 0,
-      points: Number(pro.points) || 0,
-      wallet_balance: Number(pro.wallet_balance) || 0,
-      is_verified: Boolean(pro.is_verified ?? pro.verified),
-      accepts_urgent: Boolean(pro.accepts_urgent),
-      is_active: Boolean(pro.is_active !== false && !pro.is_blocked),
-    });
-    setEditProModalOpen(true);
-  };
-
-  const handleSaveEditPro = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingPro) return;
-    if (!editProForm.display_name.trim()) {
-      showNotification("El nombre del profesional es obligatorio.", "error");
-      return;
-    }
-    setSavingProLoading(true);
-    try {
-      const res = await adminService.updateProfessional(editingPro.id, {
-        ...editProForm,
-        adminName: adminDisplayName,
-        reason: `Edición administrativa realizada por ${adminDisplayName}`,
-      });
-
-      // Actualizar estado reactivo de allProsList
-      setAllProsList((prev) => {
-        const next = prev.map((p) => {
-          if (String(p.id) === String(editingPro.id) || (p.slug && p.slug === String(editingPro.id))) {
-            return {
-              ...p,
-              ...editProForm,
-            };
-          }
-          return p;
-        });
-        try {
-          localStorage.setItem("serviprox_pros_list", JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-
-      // Si el modal de detalle del profesional está abierto, actualizarlo
-      if (selectedDetailItem && (String(selectedDetailItem.id) === String(editingPro.id) || String(selectedDetailItem.raw_id) === String(editingPro.id))) {
-        setSelectedDetailItem((prev: any) => ({
-          ...prev,
-          ...editProForm,
-        }));
-      }
-
-      setEditProModalOpen(false);
-      showNotification(
-        res.message || `Datos de ${editProForm.display_name} actualizados en la base de datos.`,
-        "success"
-      );
-    } catch (err: any) {
-      showNotification(
-        err instanceof Error ? err.message : "Error al actualizar los datos del profesional en la base de datos.",
-        "error"
-      );
-    } finally {
-      setSavingProLoading(false);
-    }
   };
 
   // Reactivar usuario bloqueado directamente
@@ -3606,7 +2884,7 @@ export const AdminDashboard: React.FC = () => {
     );
     setBenefitProsList((prev) =>
       prev.map((bp) =>
-        safeLower(bp.name) === safeLower(target) || bp.id === targetId
+        bp.name.toLowerCase() === String(target).toLowerCase() || bp.id === targetId
           ? { ...bp, status: "Suspendido" }
           : bp
       )
@@ -3726,7 +3004,7 @@ export const AdminDashboard: React.FC = () => {
     );
     setBenefitProsList((prev) =>
       prev.map((bp) =>
-        safeLower(bp.name) === safeLower(proName) || bp.id === Number(proId)
+        bp.name.toLowerCase() === String(proName).toLowerCase() || bp.id === Number(proId)
           ? {
               ...bp,
               points: bp.points + puntosToAdd,
@@ -3837,11 +3115,10 @@ export const AdminDashboard: React.FC = () => {
 
   // Filtrado de solicitudes según pestaña activa y búsqueda en Inicio
   const filteredRequests = requestsList.filter((item) => {
-    const q = safeLower(searchQuery);
     const matchesSearch =
-      safeLower(item.title).includes(q) ||
-      safeLower(item.userName).includes(q) ||
-      safeLower(item.type).includes(q);
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.type.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
@@ -3854,24 +3131,24 @@ export const AdminDashboard: React.FC = () => {
 
   // Filtrado de profesionales para la pestaña "Profesionales" del Home
   const filteredProsForHomeTab = allProsList.filter((p) => {
-    const term = safeLower(searchQuery);
+    const term = searchQuery.toLowerCase();
     return (
-      safeLower(p.display_name).includes(term) ||
-      (p.headline && safeLower(p.headline).includes(term)) ||
-      (p.specialty_label && safeLower(p.specialty_label).includes(term)) ||
-      (p.city && safeLower(p.city).includes(term))
+      p.display_name.toLowerCase().includes(term) ||
+      (p.headline && p.headline.toLowerCase().includes(term)) ||
+      (p.specialty_label && p.specialty_label.toLowerCase().includes(term)) ||
+      (p.city && p.city.toLowerCase().includes(term))
     );
   });
 
   // Filtrado de clientes en la vista dedicada
   const filteredClients = clientsList.filter((c) => {
-    const term = safeLower(clientSearch);
+    const term = clientSearch.toLowerCase();
     const matchesSearch =
-      safeLower(c.full_name).includes(term) ||
-      safeLower(c.email).includes(term) ||
-      safeLower(c.document_id).includes(term) ||
-      safeLower(c.phone).includes(term) ||
-      safeLower(c.city).includes(term);
+      c.full_name.toLowerCase().includes(term) ||
+      c.email.toLowerCase().includes(term) ||
+      c.document_id.toLowerCase().includes(term) ||
+      c.phone.toLowerCase().includes(term) ||
+      c.city.toLowerCase().includes(term);
 
     if (!matchesSearch) return false;
 
@@ -3886,21 +3163,20 @@ export const AdminDashboard: React.FC = () => {
 
   // Filtrado de profesionales en la vista dedicada
   const filteredPros = allProsList.filter((p) => {
-    const term = safeLower(proSearch);
+    const term = proSearch.toLowerCase();
     const matchesSearch =
-      safeLower(p.display_name).includes(term) ||
-      (p.headline && safeLower(p.headline).includes(term)) ||
-      (p.specialty_label && safeLower(p.specialty_label).includes(term)) ||
-      (p.phone && safeLower(p.phone).includes(term)) ||
-      (p.city && safeLower(p.city).includes(term));
+      p.display_name.toLowerCase().includes(term) ||
+      (p.headline && p.headline.toLowerCase().includes(term)) ||
+      (p.specialty_label && p.specialty_label.toLowerCase().includes(term)) ||
+      (p.phone && p.phone.toLowerCase().includes(term)) ||
+      (p.city && p.city.toLowerCase().includes(term));
 
     if (!matchesSearch) return false;
 
     if (proFilterCategory !== "todas") {
       const cats = p.categories || [];
-      const filterCat = safeLower(proFilterCategory);
-      const hasCat = cats.some((cat) => safeLower(cat).includes(filterCat));
-      if (!hasCat && !safeLower(p.specialty_label).includes(filterCat)) {
+      const hasCat = cats.some((cat) => cat.toLowerCase().includes(proFilterCategory.toLowerCase()));
+      if (!hasCat && !p.specialty_label?.toLowerCase().includes(proFilterCategory.toLowerCase())) {
         return false;
       }
     }
@@ -3924,12 +3200,12 @@ export const AdminDashboard: React.FC = () => {
 
     // Búsqueda por texto (nombre, documento, categoría, ciudad)
     if (benefitSearch.trim()) {
-      const q = safeLower(benefitSearch);
+      const q = benefitSearch.toLowerCase();
       const matches =
-        safeLower(pro.name).includes(q) ||
-        safeLower(pro.document_id).includes(q) ||
-        safeLower(pro.category).includes(q) ||
-        safeLower(pro.city).includes(q);
+        pro.name.toLowerCase().includes(q) ||
+        pro.document_id.toLowerCase().includes(q) ||
+        pro.category.toLowerCase().includes(q) ||
+        pro.city.toLowerCase().includes(q);
       if (!matches) return false;
     }
 
@@ -4108,9 +3384,12 @@ export const AdminDashboard: React.FC = () => {
       } else {
         const result = await adminService.createPqr({
           type: newPqrType,
+          subjectType: newPqrSubjectType,
           reason: title.slice(0, 60),
           description,
           clientName: newPqrClientName.trim(),
+          clientEmail: newPqrClientEmail.trim() || undefined,
+          productName: newPqrSubjectType === "producto" ? newPqrRelatedTo.trim() : undefined,
           relatedTo: newPqrRelatedTo.trim(),
           priority: newPqrPriority,
         });
@@ -4118,12 +3397,17 @@ export const AdminDashboard: React.FC = () => {
         if (!caseNumber) throw new Error("El servidor no devolvió el número de radicado.");
         await fetchDbPqrsAndProblems();
         setSelectedPqrId(`#${caseNumber}`);
-        await showNotification(`Solicitud ${caseNumber} registrada en la base de datos.`, "success");
+        await showNotification(
+          `PQR de ${newPqrSubjectType === "producto" ? "Producto" : "Servicio"} ${caseNumber} registrada en la base de datos.`,
+          "success"
+        );
       }
 
       setModalNewPqrOpen(false);
+      setNewPqrSubjectType("servicio");
       setNewPqrTitle("");
       setNewPqrClientName("");
+      setNewPqrClientEmail("");
       setNewPqrRelatedTo("");
       setNewPqrDescription("");
     } catch (error) {
@@ -4131,11 +3415,24 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Cifras de las tarjetas y pestañas: salen de las solicitudes cargadas desde la base de datos.
-  const pqrStats = computePqrStats(pqrList);
+  // Separación explícita entre PQR de Servicios, PQR de Productos y Fallas / App
+  const servicePqrCount = pqrList.filter((item) => (item.subjectType || "servicio") === "servicio").length;
+  const productPqrCount = pqrList.filter((item) => item.subjectType === "producto").length;
+  const appPqrCount = pqrList.filter((item) => item.subjectType === "app").length;
+
+  const scopedPqrList = pqrList.filter((item) => {
+    const scope = item.subjectType || "servicio";
+    if (pqrScopeTab === "Servicios") return scope === "servicio";
+    if (pqrScopeTab === "Productos") return scope === "producto";
+    if (pqrScopeTab === "App") return scope === "app";
+    return true;
+  });
+
+  // Cifras de las tarjetas y pestañas: reflejan el ámbito seleccionado (Todos / Servicios / Productos / App).
+  const pqrStats = computePqrStats(scopedPqrList);
 
   // Filtrado de PQR y Reportes
-  const filteredPqrList = pqrList.filter((item) => {
+  const filteredPqrList = scopedPqrList.filter((item) => {
     // Pestañas
     if (pqrTab === "Quejas" && item.type !== "queja") return false;
     if (pqrTab === "Reclamos" && item.type !== "reclamo") return false;
@@ -4144,14 +3441,15 @@ export const AdminDashboard: React.FC = () => {
 
     // Búsqueda
     if (pqrSearch.trim()) {
-      const q = safeLower(pqrSearch);
+      const q = pqrSearch.toLowerCase();
       const matches =
-        safeLower(item.id).includes(q) ||
-        safeLower(item.title).includes(q) ||
-        safeLower(item.description).includes(q) ||
-        safeLower(item.client?.name).includes(q) ||
-        (item.contractor && safeLower(item.contractor.name).includes(q)) ||
-        safeLower(item.relatedTo).includes(q);
+        item.id.toLowerCase().includes(q) ||
+        item.title.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.client.name.toLowerCase().includes(q) ||
+        (item.contractor && item.contractor.name.toLowerCase().includes(q)) ||
+        (item.productName && item.productName.toLowerCase().includes(q)) ||
+        item.relatedTo.toLowerCase().includes(q);
       if (!matches) return false;
     }
 
@@ -4192,7 +3490,11 @@ export const AdminDashboard: React.FC = () => {
     return result;
   })();
 
-  const selectedPqr = pqrList.find((p) => p.id === selectedPqrId) || pqrList[0] || INITIAL_PQR_ITEMS[0];
+  const selectedPqr =
+    filteredPqrList.find((p) => p.id === selectedPqrId) ||
+    pqrList.find((p) => p.id === selectedPqrId) ||
+    filteredPqrList[0] ||
+    pqrList[0];
 
   const handleTogglePqrCheckbox = (id: string) => {
     setSelectedPqrCheckboxIds((prev) =>
@@ -4218,41 +3520,41 @@ export const AdminDashboard: React.FC = () => {
 
     // Búsqueda
     if (failureSearch.trim()) {
-      const q = safeLower(failureSearch);
+      const q = failureSearch.toLowerCase();
       const matches =
-        safeLower(item.id).includes(q) ||
-        safeLower(item.title).includes(q) ||
-        safeLower(item.description).includes(q) ||
-        safeLower(item.reporter?.name).includes(q) ||
-        safeLower(item.module).includes(q) ||
-        (item.assignedTo && safeLower(item.assignedTo.name).includes(q));
+        item.id.toLowerCase().includes(q) ||
+        item.title.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.reporter.name.toLowerCase().includes(q) ||
+        item.module.toLowerCase().includes(q) ||
+        (item.assignedTo && item.assignedTo.name.toLowerCase().includes(q));
       if (!matches) return false;
     }
 
     // Filtro por módulo
     if (failureCategoryFilter !== "Todas" && failureCategoryFilter !== "Todos los módulos") {
-      if (safeLower(item.module) !== safeLower(failureCategoryFilter)) return false;
+      if (item.module.toLowerCase() !== failureCategoryFilter.toLowerCase()) return false;
     }
 
     // Filtro por estado
     if (failureStatusFilter !== "Todos" && failureStatusFilter !== "Todos los estados") {
-      if (safeLower(item.status) !== safeLower(failureStatusFilter)) return false;
+      if (item.status.toLowerCase() !== failureStatusFilter.toLowerCase()) return false;
     }
 
     // Filtro por prioridad
     if (failurePriorityFilter !== "Todas" && failurePriorityFilter !== "Todas las prioridades") {
-      if (safeLower(item.priority) !== safeLower(failurePriorityFilter)) return false;
+      if (item.priority.toLowerCase() !== failurePriorityFilter.toLowerCase()) return false;
     }
 
     return true;
   });
 
-  const currentFailure = failuresList.find((f) => f.id === selectedFailureId) || failuresList[0] || INITIAL_FAILURES_DATA[0];
+  const currentFailure = failuresList.find((f) => f.id === selectedFailureId) || failuresList[0];
 
   // Función helper: Validar si un trámite o caso está cerrado/resuelto
   function isTramiClosed(status?: string): boolean {
     if (!status) return false;
-    const s = safeLower(status).trim();
+    const s = status.toLowerCase().trim();
     return (
       s === "cerrada" ||
       s === "cerrado" ||
@@ -4629,23 +3931,7 @@ export const AdminDashboard: React.FC = () => {
             </button>
 
             {/* Perfil del Administrador en la barra superior */}
-            <div
-              className="ad-topbar-user"
-              onClick={() => {
-                setAdminProfileForm({
-                  first_name: user?.first_name || "",
-                  last_name: user?.last_name || "",
-                  email: user?.email || "",
-                  phone: user?.phone || "",
-                  city: user?.city || "Bogotá",
-                });
-                setAdminProfileModalOpen(true);
-              }}
-              style={{ cursor: "pointer" }}
-              title="Opciones de perfil administrativo y conexión BD"
-              role="button"
-              tabIndex={0}
-            >
+            <div className="ad-topbar-user" onClick={() => setActiveMenu(hasAdminPermission("manage_settings") ? "configuracion" : "inicio")}>
               <div className="ad-topbar-avatar">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
                   <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
@@ -4799,12 +4085,12 @@ export const AdminDashboard: React.FC = () => {
             <span>{new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
             </div>
             <div className={`ad-db-status ${dbInfo.loading ? "loading" : dbInfo.connected ? "connected" : "disconnected"}`} role="status" aria-live="polite">
-            <span className="ad-db-status-dot" style={{ background: dbInfo.connected ? "#10b981" : "#ef4444" }} />
+            <span className="ad-db-status-dot" />
             <span>
               {dbInfo.loading
                 ? "Conectando a la base de datos..."
                 : dbInfo.connected
-                  ? `● ${dbInfo.engine} - Conectado`
+                  ? `${dbInfo.mode === "vm-direct" ? "MV conectada (Directo)" : dbInfo.mode === "vm-proxy" ? "MV conectada (Proxy anti-CORS)" : dbInfo.mode === "local-sqlite" ? "Respaldo SQLite local" : "Base de datos conectada"}${dbInfo.engine ? ` · ${dbInfo.engine}` : ""}${dbInfo.database_name ? ` (${dbInfo.database_name})` : ""}`
                   : "Base de datos desconectada"}
             </span>
             {!dbInfo.loading && !dbInfo.connected && (
@@ -4813,7 +4099,7 @@ export const AdminDashboard: React.FC = () => {
               </button>
             )}
             <button type="button" onClick={() => setServerModalOpen(true)}>
-              🔌 Cambiar Base de Datos
+              🔌 Conectar BD / MV
             </button>
             </div>
           </div>
@@ -4827,7 +4113,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{(kpis.clients || clientsList.length || 0).toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{kpis.clients.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Clientes registrados</p>
             </div>
 
@@ -4838,7 +4124,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M12 2c-4.42 0-8 3.58-8 8v3h16v-3c0-4.42-3.58-8-8-8zm-1 16H3v2c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h-8v-2h-2v2z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{(kpis.professionals || allProsList.length || 0).toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{kpis.professionals.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Profesionales activos</p>
             </div>
 
@@ -4849,7 +4135,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{(kpis.pending_publications || requestsList.length || 0).toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{kpis.pending_publications.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Publicaciones en revisión</p>
             </div>
 
@@ -4860,7 +4146,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{(kpis.hired_services || 0).toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{kpis.hired_services.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Servicios contratados</p>
             </div>
 
@@ -4871,7 +4157,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{(kpis.open_pqrs || pqrList.filter((p) => !isTramiClosed(p.status)).length || 0).toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{kpis.open_pqrs.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">PQR pendientes</p>
             </div>
 
@@ -4882,7 +4168,7 @@ export const AdminDashboard: React.FC = () => {
                   <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z" />
                 </svg>
               </div>
-              <div className="ad-kpi-value">{(kpis.technical_issues || failuresList.filter((f) => !isTramiClosed(f.status)).length || 0).toLocaleString("es-CO")}</div>
+              <div className="ad-kpi-value">{kpis.technical_issues.toLocaleString("es-CO")}</div>
               <p className="ad-kpi-label">Fallas técnicas</p>
             </div>
           </section>
@@ -5033,21 +4319,9 @@ export const AdminDashboard: React.FC = () => {
                       ) : filteredRequests.length === 0 ? (
                         <tr>
                           <td colSpan={6} style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
-                            {dbInfo.connected ? (
-                              "No hay solicitudes para mostrar."
-                            ) : (
-                              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-                                <span>No se pudo conectar con la máquina virtual. Puedes operar con la Base de Datos Local SQLite o modo autónomo.</span>
-                                <button
-                                  type="button"
-                                  className="ad-btn ad-btn-primary"
-                                  style={{ fontSize: "0.80rem", padding: "6px 14px" }}
-                                  onClick={() => setServerModalOpen(true)}
-                                >
-                                  🔌 Cambiar / Conectar Base de Datos
-                                </button>
-                              </div>
-                            )}
+                            {dbInfo.connected
+                              ? "No hay solicitudes para mostrar."
+                              : "Conecta la base de datos para ver las solicitudes."}
                           </td>
                         </tr>
                       ) : (
@@ -5164,23 +4438,11 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="ad-pro-list">
                     {prosList.length === 0 ? (
-                      <div className="ad-empty-state" style={{ textAlign: "center", padding: "16px" }}>
-                        <p style={{ margin: "0 0 10px", color: "#64748b" }}>
-                          {dbInfo.connected
-                            ? "No hay profesionales registrados."
-                            : "No se pudo conectar con la máquina virtual. Puedes operar con la Base de Datos Local SQLite."}
-                        </p>
-                        {!dbInfo.connected && (
-                          <button
-                            type="button"
-                            className="ad-btn ad-btn-secondary"
-                            style={{ fontSize: "0.80rem", padding: "6px 12px" }}
-                            onClick={() => setServerModalOpen(true)}
-                          >
-                            🔌 Cambiar BD
-                          </button>
-                        )}
-                      </div>
+                      <p className="ad-empty-state">
+                        {dbInfo.connected
+                          ? "No hay profesionales registrados."
+                          : "Conecta la base de datos para ver los profesionales."}
+                      </p>
                     ) : prosList.map((pro) => (
                       <div key={pro.id} className="ad-pro-item">
                         <div className="ad-pro-identity">
@@ -5619,7 +4881,7 @@ export const AdminDashboard: React.FC = () => {
                 <select
                   className="ad-filter-select"
                   value={clientFilterVerified}
-                  onChange={(e) => setClientFilterVerified(e.target.value as any)}
+                  onChange={(e) => setClientFilterVerified(e.target.value as "todos" | "verificados" | "pendientes")}
                 >
                   <option value="todos">Todos los documentos</option>
                   <option value="verificados">✓ Cédulas Validadas</option>
@@ -5629,7 +4891,7 @@ export const AdminDashboard: React.FC = () => {
                 <select
                   className="ad-filter-select"
                   value={clientFilterStatus}
-                  onChange={(e) => setClientFilterStatus(e.target.value as any)}
+                  onChange={(e) => setClientFilterStatus(e.target.value as "todos" | "activos" | "bloqueados")}
                 >
                   <option value="todos">Todos los estados</option>
                   <option value="activos">● Cuentas Activas</option>
@@ -5898,7 +5160,7 @@ export const AdminDashboard: React.FC = () => {
                 <select
                   className="ad-filter-select"
                   value={proFilterVerified}
-                  onChange={(e) => setProFilterVerified(e.target.value as any)}
+                  onChange={(e) => setProFilterVerified(e.target.value as "todos" | "verificados" | "pendientes")}
                 >
                   <option value="todos">Todos los estados de tarjeta</option>
                   <option value="verificados">✓ Tarjeta Verificada</option>
@@ -5908,7 +5170,7 @@ export const AdminDashboard: React.FC = () => {
                 <select
                   className="ad-filter-select"
                   value={proFilterStatus}
-                  onChange={(e) => setProFilterStatus(e.target.value as any)}
+                  onChange={(e) => setProFilterStatus(e.target.value as "todos" | "activos" | "bloqueados")}
                 >
                   <option value="todos">Todos los estados</option>
                   <option value="activos">● Activos</option>
@@ -6021,16 +5283,6 @@ export const AdminDashboard: React.FC = () => {
 
                                 <button
                                   type="button"
-                                  className="ad-action-pill edit"
-                                  title="Editar datos del profesional en la base de datos"
-                                  style={{ background: "#0284c7", color: "#ffffff", border: "none", fontWeight: 700 }}
-                                  onClick={() => handleOpenEditProModal(pro)}
-                                >
-                                  ✏️ Editar
-                                </button>
-
-                                <button
-                                  type="button"
                                   className="ad-action-pill verify"
                                   title={pro.has_certificate ? "Ver certificado profesional cargado" : "Este profesional no ha cargado certificado"}
                                   disabled={pro.has_certificate === false}
@@ -6112,7 +5364,7 @@ export const AdminDashboard: React.FC = () => {
                 <div>
                   <h2 className="ad-view-header-title">PQR y Reportes</h2>
                   <p className="ad-view-header-subtitle">
-                    Gestiona las peticiones, quejas, reclamos y reportes de la plataforma Serviprox.
+                    Gestiona por separado los PQR de Servicios, PQR de Productos (Tienda) y Reportes registrados por clientes.
                   </p>
                 </div>
                 <button
@@ -6123,6 +5375,69 @@ export const AdminDashboard: React.FC = () => {
                 >
                   <span style={{ fontSize: "1.1rem" }}>+</span> Nueva solicitud (registro manual)
                 </button>
+              </div>
+
+              {/* Separación principal: Todos / PQR de Servicios / PQR de Productos / Fallas App */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                  marginBottom: "18px",
+                  padding: "10px 12px",
+                  background: "#ffffff",
+                  border: "1px solid var(--ad-border)",
+                  borderRadius: "14px",
+                  alignItems: "center",
+                }}
+              >
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", marginRight: "4px" }}>
+                  Módulo / Origen:
+                </span>
+                {(
+                  [
+                    { key: "Todos", label: "Todos", count: pqrList.length, activeBg: "#0f172a", activeColor: "#ffffff" },
+                    { key: "Servicios", label: "🔧 PQR de Servicios", count: servicePqrCount, activeBg: "#2563eb", activeColor: "#ffffff" },
+                    { key: "Productos", label: "📦 PQR de Productos", count: productPqrCount, activeBg: "#7c3aed", activeColor: "#ffffff" },
+                    { key: "App", label: "📱 Fallas / App", count: appPqrCount, activeBg: "#0f766e", activeColor: "#ffffff" },
+                  ] as const
+                ).map((scope) => {
+                  const isActive = pqrScopeTab === scope.key;
+                  return (
+                    <button
+                      key={scope.key}
+                      type="button"
+                      onClick={() => setPqrScopeTab(scope.key)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "8px 14px",
+                        borderRadius: "10px",
+                        border: isActive ? "1px solid transparent" : "1px solid #cbd5e1",
+                        background: isActive ? scope.activeBg : "#f8fafc",
+                        color: isActive ? scope.activeColor : "#334155",
+                        fontSize: "0.82rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span>{scope.label}</span>
+                      <span
+                        style={{
+                          padding: "1px 7px",
+                          borderRadius: "999px",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          background: isActive ? "rgba(255,255,255,0.22)" : "#e2e8f0",
+                          color: isActive ? "#ffffff" : "#0f172a",
+                        }}
+                      >
+                        {scope.count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Tarjetas KPI con datos reales de la base de datos */}
@@ -6327,6 +5642,7 @@ export const AdminDashboard: React.FC = () => {
                       className="ad-btn ad-btn-secondary"
                       style={{ height: "36px", fontSize: "0.8rem", padding: "0 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
                       onClick={() => {
+                        setPqrScopeTab("Todos");
                         setPqrSearch("");
                         setPqrTypeFilter("Todos");
                         setPqrStatusFilter("Todos");
@@ -6335,7 +5651,7 @@ export const AdminDashboard: React.FC = () => {
                         setPqrTab("Todas");
                       }}
                     >
-                      ⚙️ Más filtros
+                      ⚙️ Limpiar filtros
                     </button>
                   </div>
 
@@ -6373,7 +5689,7 @@ export const AdminDashboard: React.FC = () => {
                           pagedPqrList.map((item) => {
                             const isSelectedRow = selectedPqrId === item.id;
                             const isChecked = selectedPqrCheckboxIds.includes(item.id);
-                            const priorityClass = safeLower(item.priority || "media");
+                            const priorityClass = item.priority.toLowerCase();
                             const statusClass =
                               item.status === "En revisión"
                                 ? "revision"
@@ -6404,19 +5720,48 @@ export const AdminDashboard: React.FC = () => {
                                   />
                                 </td>
                                 <td>
-                                  <span
-                                    style={{
-                                      display: "inline-block",
-                                      padding: "3px 8px",
-                                      borderRadius: "6px",
-                                      fontSize: "0.75rem",
-                                      fontWeight: 700,
-                                      background: item.typeBg,
-                                      color: item.typeColor,
-                                    }}
-                                  >
-                                    {item.typeLabel}
-                                  </span>
+                                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
+                                    <span
+                                      style={{
+                                        display: "inline-block",
+                                        padding: "3px 8px",
+                                        borderRadius: "6px",
+                                        fontSize: "0.75rem",
+                                        fontWeight: 700,
+                                        background: item.typeBg,
+                                        color: item.typeColor,
+                                      }}
+                                    >
+                                      {item.typeLabel}
+                                    </span>
+                                    <span
+                                      style={{
+                                        display: "inline-block",
+                                        padding: "2px 7px",
+                                        borderRadius: "6px",
+                                        fontSize: "0.68rem",
+                                        fontWeight: 700,
+                                        background:
+                                          item.subjectType === "producto"
+                                            ? "#f3e8ff"
+                                            : item.subjectType === "app"
+                                              ? "#ccfbf1"
+                                              : "#dbeafe",
+                                        color:
+                                          item.subjectType === "producto"
+                                            ? "#6d28d9"
+                                            : item.subjectType === "app"
+                                              ? "#0f766e"
+                                              : "#1d4ed8",
+                                      }}
+                                    >
+                                      {item.subjectType === "producto"
+                                        ? "📦 Producto"
+                                        : item.subjectType === "app"
+                                          ? "📱 App"
+                                          : "🔧 Servicio"}
+                                    </span>
+                                  </div>
                                 </td>
                                 <td style={{ maxWidth: "260px" }}>
                                   <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
@@ -6450,17 +5795,23 @@ export const AdminDashboard: React.FC = () => {
                                         {item.client.name}
                                       </strong>
                                       <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
-                                        {item.client.document_id}
+                                        {item.client.document_id || item.client.email}
                                       </span>
                                     </div>
                                   </div>
                                 </td>
                                 <td>
                                   <strong style={{ display: "block", color: "#0f172a", fontSize: "0.82rem" }}>
-                                    {item.relatedTo}
+                                    {item.subjectType === "producto"
+                                      ? item.productName || item.relatedTo || "Producto Tienda"
+                                      : item.relatedTo || "Servicio Serviprox"}
                                   </strong>
                                   <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
-                                    {item.contractor ? item.contractor.name : "Serviprox"}
+                                    {item.subjectType === "producto"
+                                      ? `Vendedor: ${item.contractor?.name || "Meko Shop"}`
+                                      : item.contractor
+                                        ? item.contractor.name
+                                        : "Serviprox"}
                                   </span>
                                 </td>
                                 <td>
@@ -6630,19 +5981,48 @@ export const AdminDashboard: React.FC = () => {
                       <h4 style={{ margin: "0 0 6px", fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
                         {selectedPqr.title}
                       </h4>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          padding: "2px 8px",
-                          borderRadius: "6px",
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          background: selectedPqr.typeBg,
-                          color: selectedPqr.typeColor,
-                        }}
-                      >
-                        {selectedPqr.typeLabel}
-                      </span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            background: selectedPqr.typeBg,
+                            color: selectedPqr.typeColor,
+                          }}
+                        >
+                          {selectedPqr.typeLabel}
+                        </span>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            background:
+                              selectedPqr.subjectType === "producto"
+                                ? "#f3e8ff"
+                                : selectedPqr.subjectType === "app"
+                                  ? "#ccfbf1"
+                                  : "#dbeafe",
+                            color:
+                              selectedPqr.subjectType === "producto"
+                                ? "#6d28d9"
+                                : selectedPqr.subjectType === "app"
+                                  ? "#0f766e"
+                                  : "#1d4ed8",
+                          }}
+                        >
+                          {selectedPqr.subjectType === "producto"
+                            ? "📦 PQR de Producto"
+                            : selectedPqr.subjectType === "app"
+                              ? "📱 Falla / App"
+                              : "🔧 PQR de Servicio"}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Grilla de Datos Generales */}
@@ -6664,23 +6044,29 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                       <div>
                         <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>Última actualización</span>
-                        <strong style={{ color: "#0f172a" }}>{selectedPqr.updatedDate || "08/10/2026 16:10"}</strong>
+                        <strong style={{ color: "#0f172a" }}>{selectedPqr.updatedDate || selectedPqr.date}</strong>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>Relacionado con</span>
-                        <strong style={{ color: "#0f172a" }}>{selectedPqr.relatedTo}</strong>
+                        <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                          {selectedPqr.subjectType === "producto" ? "Producto reportado" : "Relacionado con"}
+                        </span>
+                        <strong style={{ color: "#0f172a" }}>
+                          {selectedPqr.subjectType === "producto"
+                            ? selectedPqr.productName || selectedPqr.relatedTo || "Producto Tienda"
+                            : selectedPqr.relatedTo || "Servicio Serviprox"}
+                        </strong>
                       </div>
                       <div>
                         <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>Prioridad</span>
                         <span
-                          className={`ad-priority-pill ${safeLower(selectedPqr?.priority || "media")}`}
+                          className={`ad-priority-pill ${selectedPqr.priority.toLowerCase()}`}
                           style={{ marginTop: "2px" }}
                         >
-                          ● {selectedPqr?.priority || "Normal"}
+                          ● {selectedPqr.priority}
                         </span>
                       </div>
                       <div style={{ gridColumn: "span 2" }}>
-                        <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>Ciudad</span>
+                        <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>Ciudad / Dirección</span>
                         <strong style={{ color: "#0f172a" }}>{selectedPqr.city || "Bogotá, Colombia"}</strong>
                       </div>
                     </div>
@@ -6702,12 +6088,8 @@ export const AdminDashboard: React.FC = () => {
                               {selectedPqr.client.name}
                             </strong>
                             <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                              {selectedPqr.client.document_id}
+                              {selectedPqr.client.email || selectedPqr.client.document_id || "Sin documento"}
                             </span>
-                            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.72rem", color: "#f59e0b", marginTop: "2px" }}>
-                              <span>★ {selectedPqr.client.rating || "4.8"}</span>
-                              <span style={{ color: "#94a3b8" }}>({selectedPqr.client.reviews_count || 32} reseñas)</span>
-                            </div>
                           </div>
                         </div>
                         <button
@@ -6721,44 +6103,46 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Profesional involucrado */}
-                    <div>
-                      <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>
-                        Profesional involucrado
-                      </span>
-                      <div className="ad-pqr-party-card">
-                        <div className="ad-pqr-party-left">
-                          <img
-                            src={
-                              selectedPqr.contractor?.avatar ||
-                              "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=240&auto=format&fit=crop"
-                            }
-                            alt={selectedPqr.contractor?.name || "Profesional"}
-                            className="ad-pqr-party-avatar"
-                          />
-                          <div>
-                            <strong style={{ display: "block", fontSize: "0.85rem", color: "#0f172a" }}>
-                              {selectedPqr.contractor?.name || "Andrés López"}
-                            </strong>
-                            <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                              {selectedPqr.contractor?.document_id || "CC 1032456789"}
-                            </span>
-                            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.72rem", color: "#f59e0b", marginTop: "2px" }}>
-                              <span>★ {selectedPqr.contractor?.rating || "4.5"}</span>
-                              <span style={{ color: "#94a3b8" }}>({selectedPqr.contractor?.reviews_count || 120} reseñas)</span>
+                    {/* Profesional o Producto/Vendedor involucrado */}
+                    {selectedPqr.subjectType !== "app" && (
+                      <div>
+                        <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>
+                          {selectedPqr.subjectType === "producto" ? "Vendedor / Tienda involucrada" : "Profesional involucrado"}
+                        </span>
+                        <div className="ad-pqr-party-card">
+                          <div className="ad-pqr-party-left">
+                            <img
+                              src={
+                                selectedPqr.contractor?.avatar ||
+                                `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedPqr.contractor?.name || (selectedPqr.subjectType === "producto" ? "Tienda" : "Profesional"))}&background=ede9fe&color=5b21b6`
+                              }
+                              alt={selectedPqr.contractor?.name || (selectedPqr.subjectType === "producto" ? "Tienda" : "Profesional")}
+                              className="ad-pqr-party-avatar"
+                            />
+                            <div>
+                              <strong style={{ display: "block", fontSize: "0.85rem", color: "#0f172a" }}>
+                                {selectedPqr.contractor?.name || (selectedPqr.subjectType === "producto" ? "Meko Shop / Tienda" : "Sin profesional asignado")}
+                              </strong>
+                              <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                                {selectedPqr.subjectType === "producto"
+                                  ? selectedPqr.productName || selectedPqr.relatedTo || "Catálogo de productos"
+                                  : selectedPqr.contractor?.specialty || selectedPqr.relatedTo || "Servicio en plataforma"}
+                              </span>
                             </div>
                           </div>
+                          {selectedPqr.contractor?.name && (
+                            <button
+                              type="button"
+                              className="ad-btn ad-btn-secondary"
+                              style={{ padding: "4px 8px", fontSize: "0.74rem" }}
+                              onClick={() => showNotification(`Perfil de ${selectedPqr.contractor?.name}`, "info")}
+                            >
+                              Ver perfil
+                            </button>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          className="ad-btn ad-btn-secondary"
-                          style={{ padding: "4px 8px", fontSize: "0.74rem" }}
-                          onClick={() => showNotification(`Perfil del profesional ${selectedPqr.contractor?.name || "Andrés López"}`, "info")}
-                        >
-                          Ver perfil
-                        </button>
                       </div>
-                    </div>
+                    )}
 
                     {/* Descripción */}
                     <div>
@@ -7302,9 +6686,9 @@ export const AdminDashboard: React.FC = () => {
                                 <strong style={{ color: "#0f172a" }}>{pro.points.toLocaleString("es-CO")}</strong>
                               </td>
                               <td>
-                                <span className={`ad-level-pill ${safeLower(pro.level || "bronce")}`}>
+                                <span className={`ad-level-pill ${pro.level.toLowerCase()}`}>
                                   {pro.level === "Oro" ? "👑 " : pro.level === "Plata" ? "🥈 " : "🥉 "}
-                                  {pro.level || "Bronce"}
+                                  {pro.level}
                                 </span>
                               </td>
                               <td style={{ textAlign: "center", color: "#334155", fontWeight: 700 }}>
@@ -7336,11 +6720,13 @@ export const AdminDashboard: React.FC = () => {
                                         headline: pro.category,
                                         specialty_label: pro.category,
                                         is_verified: true,
+                                        is_active: pro.status === "Activo",
+                                        rating_avg: pro.rating,
                                         points: pro.points,
                                         wallet_balance: "50000",
                                         jobs_completed: pro.reviews_count,
                                         avatar_url: pro.avatar,
-                                      } as any)
+                                      })
                                     }
                                   >
                                     🎁
@@ -7369,13 +6755,12 @@ export const AdminDashboard: React.FC = () => {
                                         city: pro.city,
                                         is_verified: true,
                                         is_active: pro.status === "Activo",
-                                        document_id: pro.document_id,
                                         points: pro.points,
                                         wallet_balance: "50000",
-                                        rating: pro.rating,
+                                        rating_avg: pro.rating,
                                         jobs_completed: pro.reviews_count,
                                         avatar_url: pro.avatar,
-                                      } as any)
+                                      })
                                     }
                                   >
                                     •••
@@ -7503,11 +6888,13 @@ export const AdminDashboard: React.FC = () => {
                                 headline: currentBenefitPro.category,
                                 specialty_label: currentBenefitPro.category,
                                 is_verified: true,
+                                is_active: currentBenefitPro.status === "Activo",
+                                rating_avg: currentBenefitPro.rating,
                                 points: currentBenefitPro.points,
                                 wallet_balance: "50000",
                                 jobs_completed: currentBenefitPro.reviews_count,
                                 avatar_url: currentBenefitPro.avatar,
-                              } as any)
+                              })
                             }
                           >
                             Asignar puntos
@@ -7642,11 +7029,13 @@ export const AdminDashboard: React.FC = () => {
                                   headline: currentBenefitPro.category,
                                   specialty_label: currentBenefitPro.category,
                                   is_verified: true,
+                                  is_active: currentBenefitPro.status === "Activo",
+                                  rating_avg: currentBenefitPro.rating,
                                   points: currentBenefitPro.points,
                                   wallet_balance: "50000",
                                   jobs_completed: currentBenefitPro.reviews_count,
                                   avatar_url: currentBenefitPro.avatar,
-                                } as any);
+                                });
                               }}
                             >
                               <div className="ad-ben-catalog-icon" style={{ background: "rgba(255,255,255,0.7)", color: "#0284c7" }}>
@@ -7669,11 +7058,13 @@ export const AdminDashboard: React.FC = () => {
                                   headline: currentBenefitPro.category,
                                   specialty_label: currentBenefitPro.category,
                                   is_verified: true,
+                                  is_active: currentBenefitPro.status === "Activo",
+                                  rating_avg: currentBenefitPro.rating,
                                   points: currentBenefitPro.points,
                                   wallet_balance: "50000",
                                   jobs_completed: currentBenefitPro.reviews_count,
                                   avatar_url: currentBenefitPro.avatar,
-                                } as any);
+                                });
                               }}
                             >
                               <div className="ad-ben-catalog-icon" style={{ background: "rgba(255,255,255,0.7)", color: "#16a34a" }}>
@@ -7696,11 +7087,13 @@ export const AdminDashboard: React.FC = () => {
                                   headline: currentBenefitPro.category,
                                   specialty_label: currentBenefitPro.category,
                                   is_verified: true,
+                                  is_active: currentBenefitPro.status === "Activo",
+                                  rating_avg: currentBenefitPro.rating,
                                   points: currentBenefitPro.points,
                                   wallet_balance: "50000",
                                   jobs_completed: currentBenefitPro.reviews_count,
                                   avatar_url: currentBenefitPro.avatar,
-                                } as any);
+                                });
                               }}
                             >
                               <div className="ad-ben-catalog-icon" style={{ background: "rgba(255,255,255,0.7)", color: "#ea580c" }}>
@@ -7723,11 +7116,13 @@ export const AdminDashboard: React.FC = () => {
                                   headline: currentBenefitPro.category,
                                   specialty_label: currentBenefitPro.category,
                                   is_verified: true,
+                                  is_active: currentBenefitPro.status === "Activo",
+                                  rating_avg: currentBenefitPro.rating,
                                   points: currentBenefitPro.points,
                                   wallet_balance: "50000",
                                   jobs_completed: currentBenefitPro.reviews_count,
                                   avatar_url: currentBenefitPro.avatar,
-                                } as any);
+                                });
                               }}
                             >
                               <div className="ad-ben-catalog-icon" style={{ background: "rgba(255,255,255,0.7)", color: "#9333ea" }}>
@@ -7754,11 +7149,13 @@ export const AdminDashboard: React.FC = () => {
                                   headline: currentBenefitPro.category,
                                   specialty_label: currentBenefitPro.category,
                                   is_verified: true,
+                                  is_active: currentBenefitPro.status === "Activo",
+                                  rating_avg: currentBenefitPro.rating,
                                   points: currentBenefitPro.points,
                                   wallet_balance: "50000",
                                   jobs_completed: currentBenefitPro.reviews_count,
                                   avatar_url: currentBenefitPro.avatar,
-                                } as any)
+                                })
                               }
                             >
                               <span>🎁</span> Asignar beneficio
@@ -7777,11 +7174,13 @@ export const AdminDashboard: React.FC = () => {
                                   headline: currentBenefitPro.category,
                                   specialty_label: currentBenefitPro.category,
                                   is_verified: true,
+                                  is_active: currentBenefitPro.status === "Activo",
+                                  rating_avg: currentBenefitPro.rating,
                                   points: currentBenefitPro.points,
                                   wallet_balance: "50000",
                                   jobs_completed: currentBenefitPro.reviews_count,
                                   avatar_url: currentBenefitPro.avatar,
-                                } as any);
+                                });
                               }}
                             >
                               <span>💰</span> Ajustar puntos
@@ -7799,13 +7198,12 @@ export const AdminDashboard: React.FC = () => {
                                   city: currentBenefitPro.city,
                                   is_verified: true,
                                   is_active: currentBenefitPro.status === "Activo",
-                                  document_id: currentBenefitPro.document_id,
                                   points: currentBenefitPro.points,
                                   wallet_balance: "50000",
-                                  rating: currentBenefitPro.rating,
+                                  rating_avg: currentBenefitPro.rating,
                                   jobs_completed: currentBenefitPro.reviews_count,
                                   avatar_url: currentBenefitPro.avatar,
-                                } as any)
+                                })
                               }
                             >
                               <span>👤</span> Ver perfil completo
@@ -7897,7 +7295,7 @@ export const AdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      void fetchProductReports();
+                      setProductReportsList(getProductReports());
                       setProductReportsModalOpen(true);
                     }}
                     style={{
@@ -8279,14 +7677,14 @@ export const AdminDashboard: React.FC = () => {
                     return (p.reviewStatus || "aprobado") === adminProductFilterStatus && p.isActive !== false;
                   })
                   .filter((p) => {
-                    const q = safeLower(adminProductSearch).trim();
+                    const q = adminProductSearch.trim().toLowerCase();
                     if (!q) return true;
                     return (
-                      safeLower(p.title).includes(q) ||
-                      safeLower(p.sellerName).includes(q) ||
-                      safeLower(p.sellerEmail).includes(q) ||
-                      safeLower(p.city).includes(q) ||
-                      safeLower(p.category).includes(q)
+                      p.title.toLowerCase().includes(q) ||
+                      (p.sellerName || "").toLowerCase().includes(q) ||
+                      (p.sellerEmail || "").toLowerCase().includes(q) ||
+                      (p.city || "").toLowerCase().includes(q) ||
+                      (p.category || "").toLowerCase().includes(q)
                     );
                   })
                   .map((p) => {
@@ -9551,15 +8949,7 @@ export const AdminDashboard: React.FC = () => {
                         gap: "16px",
                       }}
                     >
-                      {productReportsLoading ? (
-                        <p style={{ textAlign: "center", color: "#64748b", padding: "32px 20px" }}>
-                          Cargando reportes guardados en el servidor…
-                        </p>
-                      ) : productReportsError ? (
-                        <p role="alert" style={{ textAlign: "center", color: "#b91c1c", padding: "32px 20px" }}>
-                          No se pudieron cargar los reportes desde la base de datos: {productReportsError}
-                        </p>
-                      ) : productReportsList.filter((r) =>
+                      {productReportsList.filter((r) =>
                         productReportsFilterStatus === "Todos" ? true : r.status === productReportsFilterStatus
                       ).length === 0 ? (
                         <div
@@ -9850,7 +9240,7 @@ export const AdminDashboard: React.FC = () => {
                                         </label>
                                         <select
                                           value={adminResponseStatus}
-                                          onChange={(e) => setAdminResponseStatus(e.target.value as any)}
+                                          onChange={(e) => setAdminResponseStatus(e.target.value as ProductReportItem["status"])}
                                           style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
                                         >
                                           <option value="resuelto">Resuelto</option>
@@ -9865,7 +9255,7 @@ export const AdminDashboard: React.FC = () => {
                                         </label>
                                         <select
                                           value={adminResponseAction}
-                                          onChange={(e) => setAdminResponseAction(e.target.value as any)}
+                                          onChange={(e) => setAdminResponseAction(e.target.value as ProductReportItem["actionTaken"])}
                                           style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
                                         >
                                           <option value="ninguna">Ninguna acción adicional</option>
@@ -10310,11 +9700,10 @@ export const AdminDashboard: React.FC = () => {
                           filteredFailures.map((item) => {
                             const isSelectedRow = selectedFailureId === item.id;
                             const isChecked = selectedFailureCheckboxIds.includes(item.id);
-                            const pLower = safeLower(item.priority);
                             const priorityClass =
-                              pLower === "alta" || pLower === "crítica" || pLower === "critica"
+                              item.priority.toLowerCase() === "alta" || item.priority.toLowerCase() === "crítica"
                                 ? "alta"
-                                : pLower === "media"
+                                : item.priority.toLowerCase() === "media"
                                 ? "media"
                                 : "baja";
                             const statusClass =
@@ -10472,6 +9861,34 @@ export const AdminDashboard: React.FC = () => {
                                           return;
                                         }
                                         setSelectedFailureId(item.id);
+                                        setNewFailureStatusChoice(item.status === "Abierta" ? "En proceso" : item.status === "En proceso" ? "Resuelta" : item.status);
+                                        setModalChangeFailureStatusOpen(true);
+                                      }}
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title={isTramiClosed(item.status) ? "Esta incidencia está cerrada o resuelta" : "Asignar especialista"}
+                                      disabled={isTramiClosed(item.status)}
+                                      style={{
+                                        background: "#f1f5f9",
+                                        border: "none",
+                                        borderRadius: "6px",
+                                        width: "28px",
+                                        height: "28px",
+                                        cursor: isTramiClosed(item.status) ? "not-allowed" : "pointer",
+                                        opacity: isTramiClosed(item.status) ? 0.35 : 1,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                      }}
+                                      onClick={() => {
+                                        if (isTramiClosed(item.status)) {
+                                          showNotification("Esta incidencia está cerrada. No se pueden realizar acciones.", "error");
+                                          return;
+                                        }
+                                        setSelectedFailureId(item.id);
                                         setModalAssignFailureOpen(true);
                                       }}
                                     >
@@ -10543,7 +9960,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Columna Derecha: Detalle de la Incidencia */}
+                {/* Columna Derecha: Detalle de la Incidencia (Idéntico a la imagen) */}
                 {isFailureDetailOpen && currentFailure && (
                   <div className="ad-pqr-detail-panel" style={{ padding: "20px" }}>
                     <div className="ad-pqr-detail-top">
@@ -10603,14 +10020,14 @@ export const AdminDashboard: React.FC = () => {
                         <span style={{ color: "#64748b" }}>Prioridad:</span>
                         <span
                           className={`ad-priority-pill ${
-                            safeLower(currentFailure?.priority) === "alta" || safeLower(currentFailure?.priority) === "crítica" || safeLower(currentFailure?.priority) === "critica"
+                            currentFailure.priority.toLowerCase() === "alta" || currentFailure.priority.toLowerCase() === "crítica"
                               ? "alta"
-                              : safeLower(currentFailure?.priority) === "media"
+                              : currentFailure.priority.toLowerCase() === "media"
                               ? "media"
                               : "baja"
                           }`}
                         >
-                          ● {currentFailure?.priority || "Media"}
+                          ● {currentFailure.priority}
                         </span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -12198,7 +11615,7 @@ export const AdminDashboard: React.FC = () => {
                 <select
                   className="ad-form-control"
                   value={blockType}
-                  onChange={(e) => setBlockType(e.target.value as any)}
+                  onChange={(e) => setBlockType(e.target.value as "temporal" | "permanente")}
                 >
                   <option value="temporal">Suspensión Temporal</option>
                   <option value="permanente">Bloqueo Definitivo y Expulsión</option>
@@ -12352,18 +11769,32 @@ export const AdminDashboard: React.FC = () => {
                         onChange={(e) => {
                           const val = e.target.value;
                           setSelectedProIdForBenefit(val);
-                          const found = benefitProsList.find((p) => String(p.id) === String(val)) || allProsList.find((p) => String(p.id) === String(val));
-                          if (found) {
+                          const foundBenefit = benefitProsList.find((p) => String(p.id) === String(val));
+                          const foundPro = foundBenefit ? undefined : allProsList.find((p) => String(p.id) === String(val));
+                          if (foundBenefit) {
                             setTargetProBeneficio({
-                              id: `pro-${found.id}`,
-                              raw_id: found.id,
-                              name: (found as any).display_name || (found as any).name,
-                              specialty: (found as any).specialty_label || (found as any).category || (found as any).headline,
-                              rating: Number((found as any).rating_avg || (found as any).rating) || 4.8,
-                              tier: ((found as any).points || 0) >= 1000 ? "Nivel Oro" : "Nivel Plata",
-                              avatar: (found as any).avatar_url || (found as any).avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop",
-                              points: (found as any).points || 0,
-                              completedJobs: (found as any).jobs_completed || (found as any).reviews_count || 0,
+                              id: `pro-${foundBenefit.id}`,
+                              raw_id: foundBenefit.id,
+                              name: foundBenefit.name,
+                              specialty: foundBenefit.category,
+                              rating: Number(foundBenefit.rating) || 4.8,
+                              tier: (foundBenefit.points || 0) >= 1000 ? "Nivel Oro" : "Nivel Plata",
+                              avatar: foundBenefit.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop",
+                              points: foundBenefit.points || 0,
+                              completedJobs: foundBenefit.reviews_count || 0,
+                              verified: true,
+                            });
+                          } else if (foundPro) {
+                            setTargetProBeneficio({
+                              id: `pro-${foundPro.id}`,
+                              raw_id: foundPro.id,
+                              name: foundPro.display_name,
+                              specialty: foundPro.specialty_label || foundPro.headline || "Especialista",
+                              rating: Number(foundPro.rating_avg) || 4.8,
+                              tier: (foundPro.points || 0) >= 1000 ? "Nivel Oro" : "Nivel Plata",
+                              avatar: foundPro.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=240&auto=format&fit=crop",
+                              points: foundPro.points || 0,
+                              completedJobs: foundPro.jobs_completed || 0,
                               verified: true,
                             });
                           }
@@ -12595,7 +12026,7 @@ export const AdminDashboard: React.FC = () => {
                       <select
                         className="ad-form-control"
                         value={newBenefitLevel}
-                        onChange={(e) => setNewBenefitLevel(e.target.value as any)}
+                        onChange={(e) => setNewBenefitLevel(e.target.value as "Todos" | "Bronce" | "Plata" | "Oro")}
                       >
                         <option value="Todos">Todos</option>
                         <option value="Bronce">Bronce</option>
@@ -13064,17 +12495,6 @@ export const AdminDashboard: React.FC = () => {
                   >
                     🎁 Asignar Puntos
                   </button>
-                  <button
-                    type="button"
-                    className="ad-btn"
-                    style={{ background: "#0284c7", color: "#ffffff", fontWeight: 700 }}
-                    onClick={() => {
-                      setModalDetailOpen(false);
-                      handleOpenEditProModal(selectedDetailItem);
-                    }}
-                  >
-                    ✏️ Editar Datos
-                  </button>
                 </>
               ) : (
                 <button
@@ -13089,343 +12509,6 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═════════════════════════════════════════════════════════════════════
-          MODAL: EDITAR DATOS DEL PROFESIONAL / CONTRATISTA (CONECTADO A BD)
-         ═════════════════════════════════════════════════════════════════════ */}
-      {editProModalOpen && editingPro && (
-        <div className="ad-modal-backdrop" onClick={() => !savingProLoading && setEditProModalOpen(false)}>
-          <div
-            className="ad-modal-dialog"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: "680px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}
-          >
-            <div className="ad-modal-header" style={{ borderBottom: "1px solid #e2e8f0" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    borderRadius: "10px",
-                    background: "#e0f2fe",
-                    color: "#0284c7",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "1.2rem",
-                  }}
-                >
-                  ✏️
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "1.15rem", color: "#0f172a" }}>
-                    Editar Datos del Profesional
-                  </h3>
-                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                    ID: #{editingPro.id} • Actualización directa en la base de datos (PostgreSQL MV)
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="ad-modal-close"
-                disabled={savingProLoading}
-                onClick={() => setEditProModalOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleSaveEditPro}
-              style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}
-            >
-              <div
-                className="ad-modal-body"
-                style={{
-                  overflowY: "auto",
-                  padding: "20px 24px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "18px",
-                }}
-              >
-                {/* 1. SECCIÓN: DATOS DE CONTACTO Y CUENTA */}
-                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", fontWeight: 700, fontSize: "0.88rem", color: "#1e293b" }}>
-                    <span>👤</span> Datos Personales y de Contacto
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Nombre Público / Completo *
-                      </label>
-                      <input
-                        type="text"
-                        className="ad-form-control"
-                        required
-                        value={editProForm.display_name}
-                        onChange={(e) => setEditProForm({ ...editProForm, display_name: e.target.value })}
-                        placeholder="Ej. Carlos Mendoza"
-                      />
-                    </div>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Correo Electrónico (Acceso)
-                      </label>
-                      <input
-                        type="email"
-                        className="ad-form-control"
-                        value={editProForm.email}
-                        onChange={(e) => setEditProForm({ ...editProForm, email: e.target.value })}
-                        placeholder="profesional@correo.com"
-                      />
-                    </div>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Teléfono / WhatsApp
-                      </label>
-                      <input
-                        type="text"
-                        className="ad-form-control"
-                        value={editProForm.phone}
-                        onChange={(e) => setEditProForm({ ...editProForm, phone: e.target.value })}
-                        placeholder="+57 310 123 4567"
-                      />
-                    </div>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Ciudad Principal
-                      </label>
-                      <select
-                        className="ad-form-control"
-                        value={editProForm.city}
-                        onChange={(e) => setEditProForm({ ...editProForm, city: e.target.value })}
-                      >
-                        <option value="Bogotá">Bogotá</option>
-                        <option value="Medellín">Medellín</option>
-                        <option value="Cali">Cali</option>
-                        <option value="Barranquilla">Barranquilla</option>
-                        <option value="Bucaramanga">Bucaramanga</option>
-                        <option value="Cartagena">Cartagena</option>
-                        <option value="Pereira">Pereira</option>
-                        <option value="Cúcuta">Cúcuta</option>
-                        <option value="Ibagué">Ibagué</option>
-                        <option value="Manizales">Manizales</option>
-                        <option value="Santa Marta">Santa Marta</option>
-                        <option value="Villavicencio">Villavicencio</option>
-                        <option value="Pasto">Pasto</option>
-                      </select>
-                    </div>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Barrio / Zona de Operación
-                      </label>
-                      <input
-                        type="text"
-                        className="ad-form-control"
-                        value={editProForm.neighborhood}
-                        onChange={(e) => setEditProForm({ ...editProForm, neighborhood: e.target.value })}
-                        placeholder="Ej. Chapinero / Teusaquillo"
-                      />
-                    </div>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Radio de Cobertura (km)
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="50"
-                        className="ad-form-control"
-                        value={editProForm.coverage_radius_km}
-                        onChange={(e) => setEditProForm({ ...editProForm, coverage_radius_km: Number(e.target.value) || 8 })}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. SECCIÓN: PERFIL TÉCNICO Y ESPECIALIDAD */}
-                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", fontWeight: 700, fontSize: "0.88rem", color: "#1e293b" }}>
-                    <span>🛠️</span> Perfil Técnico y Especialidad
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Titular Profesional / Headline
-                      </label>
-                      <input
-                        type="text"
-                        className="ad-form-control"
-                        value={editProForm.headline}
-                        onChange={(e) => setEditProForm({ ...editProForm, headline: e.target.value })}
-                        placeholder="Ej. Técnico Electricista RETIE Conte"
-                      />
-                    </div>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Especialidad Principal
-                      </label>
-                      <select
-                        className="ad-form-control"
-                        value={editProForm.specialty_label}
-                        onChange={(e) => setEditProForm({ ...editProForm, specialty_label: e.target.value })}
-                      >
-                        <option value="Electricidad">Electricidad</option>
-                        <option value="Plomería">Plomería</option>
-                        <option value="Cerrajería">Cerrajería</option>
-                        <option value="Pintura">Pintura</option>
-                        <option value="Limpieza">Limpieza</option>
-                        <option value="Mantenimiento">Mantenimiento</option>
-                        <option value="Instalaciones">Instalaciones</option>
-                        <option value="Carpintería">Carpintería</option>
-                        <option value="Climatización / Aire">Climatización / Aire</option>
-                        <option value="Servicios Técnicos">Servicios Técnicos Generales</option>
-                      </select>
-                    </div>
-                    <div className="ad-form-group" style={{ gridColumn: "1 / -1" }}>
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Resumen de Experiencia / Descripción Profesional
-                      </label>
-                      <textarea
-                        className="ad-form-control"
-                        rows={3}
-                        value={editProForm.bio}
-                        onChange={(e) => setEditProForm({ ...editProForm, bio: e.target.value })}
-                        placeholder="Describe las certificaciones, años de experiencia, herramientas y garantías que ofrece el profesional..."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. SECCIÓN: MÉTRICAS, PUNTOS Y BILLETERA */}
-                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", fontWeight: 700, fontSize: "0.88rem", color: "#1e293b" }}>
-                    <span>📊</span> Métricas, Puntos de Incentivo y Billetera
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px" }}>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Calificación (0 - 5.0)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="5.0"
-                        className="ad-form-control"
-                        value={editProForm.rating_avg}
-                        onChange={(e) => setEditProForm({ ...editProForm, rating_avg: Number(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Trabajos Realizados
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        className="ad-form-control"
-                        value={editProForm.jobs_completed}
-                        onChange={(e) => setEditProForm({ ...editProForm, jobs_completed: Number(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Puntos Acumulados
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        className="ad-form-control"
-                        value={editProForm.points}
-                        onChange={(e) => setEditProForm({ ...editProForm, points: Number(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div className="ad-form-group">
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                        Saldo Billetera (COP)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1000"
-                        className="ad-form-control"
-                        value={editProForm.wallet_balance}
-                        onChange={(e) => setEditProForm({ ...editProForm, wallet_balance: Number(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. SECCIÓN: ESTADO DISCIPLINARIO Y CREDENCIALES */}
-                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", fontWeight: 700, fontSize: "0.88rem", color: "#1e293b" }}>
-                    <span>🛡️</span> Credenciales y Estado de Operación
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.88rem", color: "#334155", cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={editProForm.is_verified}
-                        onChange={(e) => setEditProForm({ ...editProForm, is_verified: e.target.checked })}
-                        style={{ width: "18px", height: "18px", accentColor: "#16a34a" }}
-                      />
-                      <span>
-                        <strong>✓ Tarjeta Profesional Aprobada:</strong> Valida que los certificados y acreditaciones oficiales han sido revisados.
-                      </span>
-                    </label>
-
-                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.88rem", color: "#334155", cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={editProForm.accepts_urgent}
-                        onChange={(e) => setEditProForm({ ...editProForm, accepts_urgent: e.target.checked })}
-                        style={{ width: "18px", height: "18px", accentColor: "#eab308" }}
-                      />
-                      <span>
-                        <strong>⚡ Disponible para Urgencias:</strong> Habilita al profesional para recibir solicitudes prioritarias inmediatas 24/7.
-                      </span>
-                    </label>
-
-                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.88rem", color: "#334155", cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={editProForm.is_active}
-                        onChange={(e) => setEditProForm({ ...editProForm, is_active: e.target.checked })}
-                        style={{ width: "18px", height: "18px", accentColor: "#2563eb" }}
-                      />
-                      <span>
-                        <strong>● Cuenta Activa:</strong> Permite que el profesional aparezca en el mapa, catálogo de servicios y reciba contrataciones.
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="ad-modal-footer" style={{ borderTop: "1px solid #e2e8f0" }}>
-                <button
-                  type="button"
-                  className="ad-btn ad-btn-secondary"
-                  disabled={savingProLoading}
-                  onClick={() => setEditProModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="ad-btn"
-                  style={{ background: "#0284c7", color: "#ffffff", fontWeight: 700, minWidth: "180px" }}
-                  disabled={savingProLoading}
-                >
-                  {savingProLoading ? "Guardando en BD..." : "💾 Guardar Cambios en BD"}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
@@ -13600,21 +12683,65 @@ export const AdminDashboard: React.FC = () => {
                 <select
                   className="ad-form-control"
                   value={newPqrType}
-                  onChange={(e) => setNewPqrType(e.target.value as any)}
+                  onChange={(e) => setNewPqrType(e.target.value as "queja" | "reclamo" | "peticion" | "reporte")}
                 >
-                  <option value="queja">Queja (Inconformidad por servicio o conducta)</option>
-                  <option value="reclamo">Reclamo (Cobro indebido, garantía o dinero)</option>
+                  <option value="queja">Queja (Inconformidad por servicio, producto o conducta)</option>
+                  <option value="reclamo">Reclamo (Cobro indebido, garantía o reembolso)</option>
                   <option value="peticion">Petición (Solicitud de información o documentos)</option>
                   <option value="reporte">Reporte de falla técnica en la app</option>
                 </select>
               </div>
+
+              {newPqrType !== "reporte" && (
+                <div className="ad-form-group">
+                  <label>Categoría del PQR (Servicio o Producto):</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setNewPqrSubjectType("servicio")}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        border: newPqrSubjectType === "servicio" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                        background: newPqrSubjectType === "servicio" ? "#eff6ff" : "#ffffff",
+                        color: newPqrSubjectType === "servicio" ? "#1d4ed8" : "#334155",
+                        fontWeight: 700,
+                        fontSize: "0.84rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      🔧 PQR de Servicio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewPqrSubjectType("producto")}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        border: newPqrSubjectType === "producto" ? "2px solid #7c3aed" : "1px solid #cbd5e1",
+                        background: newPqrSubjectType === "producto" ? "#f5f3ff" : "#ffffff",
+                        color: newPqrSubjectType === "producto" ? "#6d28d9" : "#334155",
+                        fontWeight: 700,
+                        fontSize: "0.84rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      📦 PQR de Producto
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="ad-form-group">
                 <label>Título o asunto:</label>
                 <input
                   type="text"
                   className="ad-form-control"
-                  placeholder="Ej: Inconformidad con trabajo eléctrico"
+                  placeholder={
+                    newPqrSubjectType === "producto" && newPqrType !== "reporte"
+                      ? "Ej: Producto defectuoso o garantía pendiente"
+                      : "Ej: Inconformidad con trabajo eléctrico"
+                  }
                   value={newPqrTitle}
                   onChange={(e) => setNewPqrTitle(e.target.value)}
                 />
@@ -13631,12 +12758,37 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
+              {newPqrType !== "reporte" && (
+                <div className="ad-form-group">
+                  <label>Correo del cliente (opcional, vincula el PQR al historial del cliente):</label>
+                  <input
+                    type="email"
+                    className="ad-form-control"
+                    placeholder="Ej: laura.gomez@bogota.co"
+                    value={newPqrClientEmail}
+                    onChange={(e) => setNewPqrClientEmail(e.target.value)}
+                  />
+                </div>
+              )}
+
               <div className="ad-form-group">
-                <label>Relacionado con (Servicio / Profesional / Contratación):</label>
+                <label>
+                  {newPqrType === "reporte"
+                    ? "Módulo afectado en la app:"
+                    : newPqrSubjectType === "producto"
+                      ? "Producto relacionado (nombre o referencia):"
+                      : "Relacionado con (Servicio / Profesional / Contratación):"}
+                </label>
                 <input
                   type="text"
                   className="ad-form-control"
-                  placeholder="Ej: Contratación #558 / Andrés López"
+                  placeholder={
+                    newPqrType === "reporte"
+                      ? "Ej: Pagos / Notificaciones / Inicio de sesión"
+                      : newPqrSubjectType === "producto"
+                        ? "Ej: Taladro Percutor 20V — Meko Shop"
+                        : "Ej: Contratación #558 / Andrés López"
+                  }
                   value={newPqrRelatedTo}
                   onChange={(e) => setNewPqrRelatedTo(e.target.value)}
                 />
@@ -13647,7 +12799,7 @@ export const AdminDashboard: React.FC = () => {
                 <select
                   className="ad-form-control"
                   value={newPqrPriority}
-                  onChange={(e) => setNewPqrPriority(e.target.value as any)}
+                  onChange={(e) => setNewPqrPriority(e.target.value as "Alta" | "Media" | "Baja")}
                 >
                   <option value="Alta">● Alta (Urgencia de atención)</option>
                   <option value="Media">● Media (Plazo estándar)</option>
@@ -13739,7 +12891,7 @@ export const AdminDashboard: React.FC = () => {
                   <select
                     className="ad-form-control"
                     value={newFailurePriority}
-                    onChange={(e) => setNewFailurePriority(e.target.value as any)}
+                    onChange={(e) => setNewFailurePriority(e.target.value as "Crítica" | "Alta" | "Media" | "Baja")}
                   >
                     <option value="Crítica">● Crítica (Bloqueante)</option>
                     <option value="Alta">● Alta (Urgente)</option>
@@ -13921,7 +13073,7 @@ export const AdminDashboard: React.FC = () => {
                 <select
                   className="ad-form-control"
                   value={newFailureStatusChoice}
-                  onChange={(e) => setNewFailureStatusChoice(e.target.value as any)}
+                  onChange={(e) => setNewFailureStatusChoice(e.target.value as "Abierta" | "En proceso" | "Resuelta" | "Cerrada")}
                 >
                   <option value="Abierta">Abierta (En espera de atención)</option>
                   <option value="En proceso">En proceso (Investigación técnica en curso)</option>
@@ -14065,287 +13217,6 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
           </section>
-        </div>
-      )}
-
-      {/* Modal: Opciones de Perfil Administrativo */}
-      {adminProfileModalOpen && (
-        <div
-          className="ad-modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setAdminProfileModalOpen(false)}
-        >
-          <div
-            className="ad-modal-box"
-            style={{ maxWidth: "620px", width: "95%", maxHeight: "90vh", overflowY: "auto" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="ad-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#1e3a8a", color: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "1.1rem" }}>
-                  {user?.first_name ? user.first_name.charAt(0).toUpperCase() : (user?.username || "AD").slice(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#1e293b" }}>Perfil Administrativo</h3>
-                  <span style={{ fontSize: "0.82rem", color: "#64748b" }}>Control de cuenta, base de datos y accesos del sistema</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="ad-modal-close"
-                onClick={() => setAdminProfileModalOpen(false)}
-                aria-label="Cerrar modal de perfil"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="ad-modal-body" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              {/* Tarjeta de Resumen y Rol */}
-              <div style={{ padding: "16px", borderRadius: "12px", background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", color: "#ffffff" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
-                  <div>
-                    <div style={{ fontSize: "1.1rem", fontWeight: 800 }}>
-                      {user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.username || "Administrador"}
-                    </div>
-                    <div style={{ fontSize: "0.86rem", color: "#94a3b8" }}>@{user?.username || "admin"} • {user?.email || "admin@serviprox.com"}</div>
-                  </div>
-                  <span style={{ padding: "4px 12px", borderRadius: "20px", background: "#f59e0b", color: "#1e293b", fontWeight: 800, fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    🛡️ {getReadableRoleLabel(user)}
-                  </span>
-                </div>
-                <div style={{ marginTop: "12px", display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "0.82rem", color: "#cbd5e1", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "10px" }}>
-                  <span>📍 {user?.city || "Bogotá, Colombia"}</span>
-                  <span>📞 {user?.phone || "+57 300 123 4567"}</span>
-                  <span>🆔 {user?.document_id || "CC 1.000.000.001"}</span>
-                </div>
-              </div>
-
-              {/* Estado de las bases de datos: Modo Autónomo SQLite y Fuentes Alternativas */}
-              <div style={{ padding: "16px", borderRadius: "12px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: dbInfo.connected ? "#16a34a" : "#dc2626", display: "inline-block" }}></span>
-                    Base de Datos Activa de Serviprox
-                  </div>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", background: dbInfo.connected ? "#dcfce7" : "#fee2e2", color: dbInfo.connected ? "#166534" : "#991b1b" }}>
-                    {dbInfo.connected ? dbInfo.engine : "Base de Datos Autónoma (SQLite)"}
-                  </span>
-                </div>
-                <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: "#64748b" }}>
-                  Base de datos actual: <strong style={{ color: "#334155" }}>{dbInfo.engine || "Base de Datos Autónoma (SQLite)"}</strong> ({getApiBaseUrl()})
-                  <br />
-                  Si la máquina virtual está apagada o no responde, puedes operar directamente con la <strong>Base de Datos Autónoma (SQLite)</strong> garantizada para Web y Android.
-                </p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-                  <button
-                    type="button"
-                    className="ad-btn"
-                    style={{
-                      fontSize: "0.80rem",
-                      padding: "8px 10px",
-                      background: "#dbeafe",
-                      color: "#1e40af",
-                      border: "1px solid #bfdbfe",
-                      borderRadius: "8px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                    onClick={async () => {
-                      const res = await switchDatabaseTarget("autonomous-sqlite");
-                      setDbInfo({
-                        connected: true,
-                        engine: "Base de Datos Autónoma (SQLite)",
-                        database_name: "Serviprox DB (SQLite)",
-                        loading: false,
-                        mode: "local-sqlite",
-                      });
-                      showNotification(res.message, "success");
-                      await fetchLiveOverview();
-                      await Promise.all([fetchClients(), fetchPros(), fetchDbPqrsAndProblems()]);
-                    }}
-                  >
-                    🛡️ Activar BD Autónoma (SQLite)
-                  </button>
-                  <button
-                    type="button"
-                    className="ad-btn"
-                    style={{
-                      fontSize: "0.80rem",
-                      padding: "8px 10px",
-                      background: "#f1f5f9",
-                      color: "#334155",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "8px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                    onClick={async () => {
-                      const res = await switchDatabaseTarget("local-django");
-                      setDbInfo({
-                        connected: true,
-                        engine: "Base de Datos Local (SQLite - Django)",
-                        database_name: "Serviprox DB (SQLite)",
-                        loading: false,
-                        mode: "local-sqlite",
-                      });
-                      showNotification(res.message, res.ok ? "success" : "info");
-                      await fetchLiveOverview();
-                      await Promise.all([fetchClients(), fetchPros(), fetchDbPqrsAndProblems()]);
-                    }}
-                  >
-                    💻 Activar SQLite Local (Django)
-                  </button>
-                </div>
-                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="ad-btn ad-btn-primary"
-                    style={{ fontSize: "0.84rem", padding: "8px 14px" }}
-                    onClick={() => {
-                      setAdminProfileModalOpen(false);
-                      setServerModalOpen(true);
-                    }}
-                  >
-                    🔌 Cambiar / Probar Otra BD
-                  </button>
-                  <button
-                    type="button"
-                    className="ad-btn ad-btn-secondary"
-                    style={{ fontSize: "0.84rem", padding: "8px 14px" }}
-                    onClick={async () => {
-                      showNotification("Sincronizando todos los datos de la base de datos...", "info");
-                      await Promise.all([
-                        fetchLiveOverview(),
-                        fetchClients(),
-                        fetchPros(),
-                        fetchDbPqrsAndProblems(),
-                        fetchRolesAndUsers(),
-                        loadServerProducts(),
-                      ]);
-                      showNotification("Base de datos sincronizada exitosamente.", "success");
-                    }}
-                  >
-                    🔄 Sincronizar Todo Ahora
-                  </button>
-                </div>
-              </div>
-
-              {/* Formulario de Edición de Datos */}
-              <div style={{ padding: "16px", borderRadius: "12px", background: "#ffffff", border: "1px solid #e2e8f0" }}>
-                <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#1e293b", marginBottom: "12px" }}>
-                  ✏️ Editar Datos Personales del Administrador
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>Nombre</label>
-                    <input
-                      type="text"
-                      className="ad-form-control"
-                      value={adminProfileForm.first_name}
-                      onChange={(e) => setAdminProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
-                      placeholder="Nombre del administrador"
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>Apellido</label>
-                    <input
-                      type="text"
-                      className="ad-form-control"
-                      value={adminProfileForm.last_name}
-                      onChange={(e) => setAdminProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
-                      placeholder="Apellido"
-                    />
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>Teléfono</label>
-                    <input
-                      type="text"
-                      className="ad-form-control"
-                      value={adminProfileForm.phone}
-                      onChange={(e) => setAdminProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-                      placeholder="+57 300 000 0000"
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>Ciudad / Sede</label>
-                    <input
-                      type="text"
-                      className="ad-form-control"
-                      value={adminProfileForm.city}
-                      onChange={(e) => setAdminProfileForm((prev) => ({ ...prev, city: e.target.value }))}
-                      placeholder="Bogotá"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="ad-btn ad-btn-primary"
-                  style={{ width: "100%", padding: "10px" }}
-                  disabled={savingAdminProfile}
-                  onClick={handleSaveAdminProfile}
-                >
-                  {savingAdminProfile ? "Guardando cambios..." : "💾 Guardar Datos del Perfil"}
-                </button>
-              </div>
-
-              {/* Accesos Rápidos de Administración */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <button
-                  type="button"
-                  className="ad-btn ad-btn-secondary"
-                  style={{ textAlign: "center", padding: "10px", fontSize: "0.85rem" }}
-                  onClick={() => {
-                    setActiveMenu("configuracion");
-                    setAdminProfileModalOpen(false);
-                  }}
-                >
-                  ⚙️ Configuración del Sistema
-                </button>
-                <button
-                  type="button"
-                  className="ad-btn ad-btn-secondary"
-                  style={{ textAlign: "center", padding: "10px", fontSize: "0.85rem" }}
-                  onClick={() => {
-                    setActiveMenu("roles");
-                    setAdminProfileModalOpen(false);
-                  }}
-                >
-                  🛡️ Roles y Permisos
-                </button>
-                <button
-                  type="button"
-                  className="ad-btn ad-btn-secondary"
-                  style={{ textAlign: "center", padding: "10px", fontSize: "0.85rem" }}
-                  onClick={() => {
-                    setActiveMenu("auditoria");
-                    setAdminProfileModalOpen(false);
-                  }}
-                >
-                  📋 Registro de Auditoría
-                </button>
-                <button
-                  type="button"
-                  className="ad-btn"
-                  style={{ textAlign: "center", padding: "10px", fontSize: "0.85rem", background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca" }}
-                  onClick={async () => {
-                    const ok = await showConfirm("¿Deseas cerrar la sesión administrativa de Serviprox?", "Cerrar sesión");
-                    if (ok) {
-                      logout();
-                      history.replace("/login-admin");
-                    }
-                  }}
-                >
-                  🚪 Cerrar Sesión
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       )}
       <ServerConnectionModal

@@ -6,7 +6,6 @@
  */
 
 import type { PqrReport, AppProblemReport, PqrContractorRef } from '../types/serviprox';
-import { CONTRACTORS_MAP_DATA } from './contractorMapData';
 
 // ─── Contratistas registrados oficialmente en la base de datos (SQLite) ────────
 export const REGISTERED_CONTRACTORS_REF: PqrContractorRef[] = [

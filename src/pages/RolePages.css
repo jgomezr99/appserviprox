@@ -149,6 +149,111 @@
 .client-profile-delete-modal h2, .client-profile-delete-modal p { margin-top: 0; }
 .client-profile-delete-modal p { color: var(--sp-text-muted); }
 
+.sp-account-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.sp-account-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px 20px;
+  margin-top: 14px;
+}
+
+.sp-account-review-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--sp-border);
+  background: var(--sp-surface);
+}
+
+.sp-account-review-item span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--sp-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sp-account-review-item strong {
+  font-size: 0.94rem;
+  color: var(--sp-text);
+  word-break: break-word;
+}
+
+.sp-password-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--sp-border);
+  background: var(--sp-surface);
+  color: var(--sp-primary-dark);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sp-password-note {
+  margin: 12px 0 14px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.sp-password-field {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--sp-border);
+  border-radius: 12px;
+  background: var(--sp-surface);
+  overflow: hidden;
+}
+
+.sp-password-field:focus-within {
+  border-color: var(--sp-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.sp-password-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--sp-text);
+  padding: 11px 12px;
+  font-size: 0.95rem;
+}
+
+.sp-password-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--sp-text-muted);
+  padding: 0 12px;
+  height: 42px;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+.sp-password-toggle:hover {
+  color: var(--sp-primary);
+}
+
+.sp-password-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--sp-text-muted);
+}
+
 body.dark {
   --sp-bg: #111827;
   --sp-background: #111827;

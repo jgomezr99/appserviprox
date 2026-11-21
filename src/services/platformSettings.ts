@@ -182,55 +182,20 @@ const readCache = (): PlatformSettings => {
 
 export const platformSettingsService = {
   async fetchPublic(): Promise<PlatformSettings> {
+    const data = await api.get<PlatformSettings>("platform/settings/", { auth: false });
+    const merged = { ...DEFAULT_SETTINGS, ...data, features: { ...DEFAULT_SETTINGS.features, ...data.features } };
     try {
-      const data = await api.get<PlatformSettings>("platform/settings/", { auth: false });
-      const merged = { ...DEFAULT_SETTINGS, ...data, features: { ...DEFAULT_SETTINGS.features, ...data.features } };
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
-      } catch {
-        /* imágenes grandes pueden exceder la cuota */
-      }
-      applyAppearance(merged.appearance);
-      window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: merged }));
-      return merged;
+      localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
     } catch {
-      return readCache();
+      /* imágenes grandes pueden exceder la cuota */
     }
+    applyAppearance(merged.appearance);
+    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: merged }));
+    return merged;
   },
-  getAdmin: async (): Promise<PlatformSettings> => {
-    try {
-      const data = await api.get<PlatformSettings>("admin/settings/");
-      const merged: PlatformSettings = {
-        ...DEFAULT_SETTINGS,
-        ...data,
-        features: { ...DEFAULT_SETTINGS.features, ...(data?.features || {}) },
-        sections: { ...(data?.sections || {}) },
-        role_params: data?.role_params || data?.sections?.role_params,
-      };
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
-      } catch {}
-      applyAppearance(merged.appearance);
-      return merged;
-    } catch (err) {
-      console.warn("admin/settings/ fallback to local cached platform settings:", err);
-      return readCache();
-    }
-  },
+  getAdmin: () => api.get<PlatformSettings>("admin/settings/"),
   saveAdmin: async (patch: Partial<PlatformSettings>) => {
-    let saved: PlatformSettings;
-    try {
-      saved = await api.patch<PlatformSettings>("admin/settings/", patch);
-    } catch (err) {
-      console.warn("admin/settings/ patch fallback to local persistence:", err);
-      const current = readCache();
-      saved = {
-        ...current,
-        ...patch,
-        features: { ...current.features, ...(patch.features || {}) },
-        sections: { ...current.sections, ...(patch.sections || {}) },
-      };
-    }
+    const saved = await api.patch<PlatformSettings>("admin/settings/", patch);
     const merged: PlatformSettings = {
       ...DEFAULT_SETTINGS,
       ...saved,

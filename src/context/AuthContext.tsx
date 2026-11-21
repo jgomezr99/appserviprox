@@ -153,24 +153,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   });
 
   const saveUser = useCallback((u: User | null) => {
-    let normalized = u;
-    if (normalized && (normalized.username?.toLowerCase() === "admin" || normalized.email?.toLowerCase().includes("admin"))) {
-      normalized = {
-        ...normalized,
-        role: "staff",
-        is_staff: true,
-        is_superuser: true,
-      };
-    }
-    setUser(normalized);
+    setUser(u);
     try {
-      if (normalized) {
-        const json = JSON.stringify(normalized);
-        localStorage.setItem(CACHED_USER_KEY, json);
-        localStorage.setItem("serviprox_auth_user", json);
+      if (u) {
+        localStorage.setItem(CACHED_USER_KEY, JSON.stringify(u));
       } else {
         localStorage.removeItem(CACHED_USER_KEY);
-        localStorage.removeItem("serviprox_auth_user");
       }
     } catch {
       // Almacenamiento local no disponible
@@ -181,7 +169,6 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     tokenStorage.clear();
     localStorage.removeItem(DEMO_SESSION_KEY);
     localStorage.removeItem(CACHED_USER_KEY);
-    localStorage.removeItem("serviprox_auth_user");
     setUser(null);
   }, []);
 
@@ -239,8 +226,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const demoUser = getDemoUser(payload);
     if (demoUser) {
       try {
-        await authService.login(payload, options);
-        const currentUser = await authService.getCurrentUser();
+        const tokens = await authService.login(payload, options);
+        const currentUser = tokens?.user ?? (await authService.getCurrentUser());
         localStorage.removeItem(DEMO_SESSION_KEY);
         saveUser(currentUser);
         return currentUser;
@@ -255,8 +242,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       }
     }
 
-    await authService.login(payload, options);
-    const currentUser = await authService.getCurrentUser();
+    const tokens = await authService.login(payload, options);
+    const currentUser = tokens?.user ?? (await authService.getCurrentUser());
     localStorage.removeItem(DEMO_SESSION_KEY);
     saveUser(currentUser);
     return currentUser;
@@ -264,8 +251,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const register = useCallback(async (payload: RegisterPayload) => {
     await authService.register(payload);
-    await authService.login({ email: payload.email, password: payload.password });
-    const currentUser = await authService.getCurrentUser();
+    const tokens = await authService.login({ email: payload.email, password: payload.password });
+    const currentUser = tokens?.user ?? (await authService.getCurrentUser());
     localStorage.removeItem(DEMO_SESSION_KEY);
     saveUser(currentUser);
     return currentUser;

@@ -27,7 +27,6 @@ import {
   shieldCheckmarkOutline,
   star,
 } from "ionicons/icons";
-import { useHistory } from "react-router-dom";
 
 import { catalogService, professionalSearchService } from "../services/serviprox";
 import type {
@@ -65,7 +64,6 @@ const formatCount = (count: number) =>
   count === 1 ? "1 profesional" : `${count} profesionales`;
 
 const ExploreContainer: React.FC<ContainerProps> = () => {
-  const history = useHistory();
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [apiState, setApiState] = useState<"ready" | "offline">("offline");
@@ -152,10 +150,6 @@ const ExploreContainer: React.FC<ContainerProps> = () => {
     setTimeout(() => {
       setIsServiceModalOpen(true);
     }, 280);
-  };
-
-  const handleViewMap = (cat: ServiceCategory) => {
-    history.push(`/cliente/mapa?category=${encodeURIComponent(cat.slug || cat.name)}`);
   };
 
   const modalities: Modality[] = useMemo(

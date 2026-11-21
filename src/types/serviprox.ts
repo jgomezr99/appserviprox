@@ -51,6 +51,7 @@ export interface ProfessionalCertificatePayload {
 
 export interface UpdateMePayload {
   email?: string;
+  username?: string;
   first_name?: string;
   last_name?: string;
   phone?: string;
@@ -68,6 +69,7 @@ export interface LoginPayload {
 export interface AuthTokenResponse {
   access: string;
   refresh: string;
+  user?: User;
 }
 
 export interface RefreshTokenResponse {
@@ -86,6 +88,7 @@ export interface RegisterPayload {
   address?: string;
   role: PublicRegisterRole;
   password: string;
+  confirm_password?: string;
   profession?: string;
   certificate?: File;
 }
@@ -418,6 +421,8 @@ export type PqrStatus =
 
 export type PqrType = 'queja' | 'reclamo' | 'recurso_garantia' | 'peticion';
 
+export type PqrSubjectType = 'servicio' | 'producto';
+
 export type PqrReason =
   | 'mala_calidad_obra'
   | 'incumplimiento_horario'
@@ -426,6 +431,12 @@ export type PqrReason =
   | 'garantia_no_atendida'
   | 'abandono_obra'
   | 'falta_respeto_trato'
+  | 'producto_defectuoso'
+  | 'producto_no_recibido'
+  | 'producto_diferente'
+  | 'publicacion_enganosa'
+  | 'garantia_producto'
+  | 'reembolso_producto'
   | 'otro';
 
 export type PqrMessageSender = 'client' | 'contractor' | 'support_agent' | 'system';
@@ -444,8 +455,12 @@ export interface PqrReport {
   radicadoNumber: string;
   status: PqrStatus;
   type: PqrType;
-  reason: PqrReason;
-  // Contractor
+  subjectType?: PqrSubjectType;
+  productId?: number | null;
+  productName?: string;
+  relatedTo?: string;
+  reason: PqrReason | string;
+  // Contractor or Seller
   contractorId: string;
   contractorName: string;
   contractorCompany: string;
@@ -468,9 +483,20 @@ export interface PqrReport {
   // Thread
   messages?: PqrMessage[];
   adminResolutionNotes?: string;
+  chatId?: number;
   // Metadata
   createdAt: string;
   estimatedResponseDays?: number;
+}
+
+export interface PqrProductRef {
+  id: string | number;
+  title: string;
+  sellerName: string;
+  category?: string;
+  price?: number;
+  city?: string;
+  imageUrl?: string;
 }
 
 // ─── App Problem Reports ──────────────────────────────────────────────────────
@@ -495,6 +521,50 @@ export interface AppProblemReport {
   status: 'recibido' | 'en_proceso' | 'resuelto';
   createdAt: string;
   responseNotes?: string;
+  chatId?: number;
+  pqrId?: string;
+  radicadoNumber?: string;
+}
+
+export interface ChatTranscriptEntry {
+  sender: string;
+  senderName?: string;
+  text: string;
+}
+
+export interface SupportChatMessage {
+  id: number;
+  chatId: number;
+  sender: 'user' | 'agent' | 'admin' | 'system' | string;
+  senderName: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface SupportChat {
+  id: number;
+  userId: number | null;
+  userName: string;
+  userEmail: string;
+  title: string;
+  topic: string;
+  relatedPqrId: number | null;
+  relatedRadicado: string;
+  status: string;
+  messagesCount: number;
+  lastMessage: string;
+  messages: SupportChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupportChatCreatePayload {
+  title: string;
+  topic?: string;
+  initialMessage?: string;
+  relatedPqrId?: number | string | null;
+  relatedRadicado?: string;
+  messages?: ChatTranscriptEntry[];
 }
 
 // ─── Live Support Chat ────────────────────────────────────────────────────────
@@ -509,7 +579,7 @@ export interface LiveChatMessage {
   quickOptions?: { label: string; action: string }[];
   ticketCreated?: {
     ticketNumber: string;
-    type: 'pqr_contratista' | 'problema_app';
+    type: 'pqr_contratista' | 'pqr_producto' | 'problema_app' | 'chat_soporte';
     summary: string;
   };
 }

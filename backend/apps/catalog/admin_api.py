@@ -16,42 +16,8 @@ from apps.accounts.models import AdminAuditLog
 from apps.accounts.permissions import IsServiproxAdministrator
 from apps.diagnosis.engine import normalize, suggest_services
 
-from .models import Service, ServiceCategory, StoreProduct, StoreProductReport
-from .serializers import ServiceCategoryListSerializer, ServiceSerializer, StoreProductReportSerializer
-
-
-class AdminStoreProductReports(APIView):
-    permission_classes = [IsServiproxAdministrator]
-
-    def get(self, request):
-        reports = StoreProductReport.objects.select_related("product").all()
-        return Response(StoreProductReportSerializer(reports, many=True).data)
-
-    def patch(self, request, pk):
-        report = get_object_or_404(StoreProductReport.objects.select_related("product"), pk=pk)
-        status_value = request.data.get("status", report.status)
-        if status_value not in StoreProductReport.Status.values:
-            return Response({"detail": "Estado de reporte inválido."}, status=status.HTTP_400_BAD_REQUEST)
-        action_taken = request.data.get("actionTaken", request.data.get("action_taken", report.action_taken))
-        allowed_actions = {"ninguna", "producto_oculto", "tienda_bloqueada", "producto_eliminado"}
-        if action_taken not in allowed_actions:
-            return Response({"detail": "Acción de moderación inválida."}, status=status.HTTP_400_BAD_REQUEST)
-
-        report.status = status_value
-        report.admin_response = str(request.data.get("adminResponse", request.data.get("admin_response", report.admin_response)))
-        report.admin_name = request.user.get_full_name() or request.user.get_username()
-        report.admin_responded_at = timezone.now()
-        report.action_taken = action_taken
-        report.save(update_fields=["status", "admin_response", "admin_name", "admin_responded_at", "action_taken"])
-
-        if action_taken == "producto_oculto" and report.product_id:
-            StoreProduct.objects.filter(pk=report.product_id).update(is_active=False)
-        if action_taken == "producto_eliminado" and report.product_id:
-            report.product.delete()
-            report.product = None
-            report.save(update_fields=["product"])
-
-        return Response(StoreProductReportSerializer(report).data)
+from .models import Service, ServiceCategory
+from .serializers import ServiceCategoryListSerializer, ServiceSerializer
 
 
 class KeywordField(serializers.CharField):

@@ -35,6 +35,19 @@ const TABS: Array<[Tab, string]> = [
 
 const MIN_WITHDRAWAL = 10000;
 
+const BANK_ENTITIES = [
+  { id: "Nequi", label: "Nequi", isWallet: true },
+  { id: "Daviplata", label: "Daviplata", isWallet: true },
+  { id: "Bancolombia", label: "Bancolombia", isWallet: false },
+  { id: "Davivienda", label: "Davivienda", isWallet: false },
+  { id: "Banco de Bogotá", label: "Banco de Bogotá", isWallet: false },
+  { id: "BBVA", label: "BBVA", isWallet: false },
+  { id: "Nubank / Lulo", label: "Nubank / Lulo", isWallet: false },
+  { id: "Otro", label: "Otro banco", isWallet: false },
+] as const;
+
+type BankEntityId = (typeof BANK_ENTITIES)[number]["id"];
+
 const withdrawalColor = (status: WithdrawalStatus) =>
   status === "paid" ? "success" : status === "rejected" ? "danger" : "warning";
 
@@ -47,7 +60,10 @@ const ProfessionalEarningsPage: React.FC = () => {
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("incomes");
   const [amount, setAmount] = useState("");
-  const [destination, setDestination] = useState("");
+  const [entity, setEntity] = useState<BankEntityId>("Nequi");
+  const [customBank, setCustomBank] = useState("");
+  const [accountType, setAccountType] = useState<"Ahorros" | "Corriente">("Ahorros");
+  const [accountNumber, setAccountNumber] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [toast, setToast] = useState("");
@@ -68,25 +84,63 @@ const ProfessionalEarningsPage: React.FC = () => {
     void load();
   }, [load]);
 
+  const selectedEntityMeta = BANK_ENTITIES.find((item) => item.id === entity) || BANK_ENTITIES[0];
+  const resolvedBankName = entity === "Otro" ? customBank.trim() : selectedEntityMeta.label;
+  const cleanedAccount = accountNumber.trim();
+  const formattedDestination = cleanedAccount
+    ? selectedEntityMeta.isWallet
+      ? `${resolvedBankName} · ${cleanedAccount}`
+      : `${resolvedBankName || "Banco"} (${accountType}) · ${cleanedAccount}`
+    : "";
+
+  const handleWithdrawAll = () => {
+    if (!data) return;
+    const maxAmount = Math.floor(data.summary.available_balance);
+    if (maxAmount >= MIN_WITHDRAWAL) {
+      setAmount(String(maxAmount));
+      setFormError("");
+    }
+  };
+
   const submitWithdrawal = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting || !data) return;
-    const value = Number(amount);
+    const normalizedAmount = amount.replace(/[^\d.,]/g, "").replace(",", ".");
+    const value = Number(normalizedAmount);
     setFormError("");
+
+    if (data.summary.available_balance < MIN_WITHDRAWAL) {
+      setFormError(`Necesitas al menos ${formatMoney(MIN_WITHDRAWAL)} de saldo disponible para retirar.`);
+      return;
+    }
     if (!Number.isFinite(value) || value < MIN_WITHDRAWAL) {
       setFormError(`El retiro mínimo es ${formatMoney(MIN_WITHDRAWAL)}.`);
       return;
     }
     if (value > data.summary.available_balance) {
-      setFormError("El monto supera tu saldo disponible.");
+      setFormError(`El monto supera tu saldo disponible (${formatMoney(data.summary.available_balance)}).`);
       return;
     }
+    if (entity === "Otro" && resolvedBankName.length < 2) {
+      setFormError("Escribe el nombre del banco de destino.");
+      return;
+    }
+    if (cleanedAccount.length < 6) {
+      setFormError(
+        selectedEntityMeta.isWallet
+          ? "Ingresa un número de celular válido (mínimo 6 dígitos)."
+          : "Ingresa un número de cuenta válido (mínimo 6 dígitos)."
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await financeService.requestWithdrawal(value, destination);
+      await financeService.requestWithdrawal(value, formattedDestination);
       setAmount("");
-      setDestination("");
-      setToast("Solicitud de retiro enviada. La revisará el equipo de Serviprox.");
+      setAccountNumber("");
+      setCustomBank("");
+      setToast("Solicitud de retiro enviada. El equipo de Serviprox fue notificado para revisarla.");
       setTab("withdrawals");
       await load();
     } catch (err) {
@@ -97,6 +151,7 @@ const ProfessionalEarningsPage: React.FC = () => {
   };
 
   const summary = data?.summary;
+  const canWithdraw = Boolean(summary && summary.available_balance >= MIN_WITHDRAWAL);
 
   return (
     <IonPage>
@@ -139,7 +194,7 @@ const ProfessionalEarningsPage: React.FC = () => {
                 <div className="sp-card fin-kpi fin-kpi--highlight">
                   <span>Saldo disponible</span>
                   <strong>{formatMoney(summary.available_balance)}</strong>
-                  <small>Liquidado y listo para retirar</small>
+                  <small>Liquidado automáticamente al completar y pagar el servicio</small>
                 </div>
                 <div className="sp-card fin-kpi">
                   <span>Pendiente de liquidación</span>
@@ -166,45 +221,132 @@ const ProfessionalEarningsPage: React.FC = () => {
               </section>
 
               <section className="sp-card">
-                <h2 className="fin-section-title">Solicitar retiro</h2>
-                <form className="fin-form" onSubmit={submitWithdrawal}>
+                <div className="fin-form-header">
+                  <h2 className="fin-section-title">Solicitar retiro</h2>
+                  <span className="fin-balance-pill">
+                    Disponible: {formatMoney(summary.available_balance)}
+                  </span>
+                </div>
+                <form className="fin-form" onSubmit={submitWithdrawal} noValidate>
                   <label>
                     Valor a retirar (COP)
-                    <input
-                      className="fin-input"
-                      type="number"
-                      inputMode="numeric"
-                      min={MIN_WITHDRAWAL}
-                      step={1000}
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      placeholder={`Mínimo ${MIN_WITHDRAWAL}`}
-                      required
-                    />
+                    <div className="fin-amount-row">
+                      <input
+                        className="fin-input"
+                        type="number"
+                        inputMode="numeric"
+                        min={MIN_WITHDRAWAL}
+                        step={1}
+                        value={amount}
+                        onChange={(event) => {
+                          setAmount(event.target.value);
+                          if (formError) setFormError("");
+                        }}
+                        placeholder={`Monto exacto desde ${formatMoney(MIN_WITHDRAWAL)}`}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="fin-max-btn"
+                        disabled={!canWithdraw || submitting}
+                        onClick={handleWithdrawAll}
+                      >
+                        Retirar todo
+                      </button>
+                    </div>
                   </label>
-                  <label>
-                    Cuenta de destino
-                    <input
-                      className="fin-input"
-                      type="text"
-                      maxLength={160}
-                      value={destination}
-                      onChange={(event) => setDestination(event.target.value)}
-                      placeholder="Banco, tipo de cuenta y número (o Nequi)"
-                      required
-                    />
-                  </label>
+
+                  <div className="fin-destination-grid">
+                    <label>
+                      Banco o billetera
+                      <select
+                        className="fin-input"
+                        value={entity}
+                        onChange={(event) => {
+                          setEntity(event.target.value as BankEntityId);
+                          if (formError) setFormError("");
+                        }}
+                      >
+                        {BANK_ENTITIES.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {entity === "Otro" && (
+                      <label>
+                        Nombre del banco
+                        <input
+                          className="fin-input"
+                          type="text"
+                          maxLength={60}
+                          value={customBank}
+                          onChange={(event) => {
+                            setCustomBank(event.target.value);
+                            if (formError) setFormError("");
+                          }}
+                          placeholder="Ej: Banco Agrario / Scotiabank"
+                          required
+                        />
+                      </label>
+                    )}
+
+                    {!selectedEntityMeta.isWallet && (
+                      <label>
+                        Tipo de cuenta
+                        <select
+                          className="fin-input"
+                          value={accountType}
+                          onChange={(event) => setAccountType(event.target.value as "Ahorros" | "Corriente")}
+                        >
+                          <option value="Ahorros">Ahorros</option>
+                          <option value="Corriente">Corriente</option>
+                        </select>
+                      </label>
+                    )}
+
+                    <label>
+                      {selectedEntityMeta.isWallet ? "Número de celular" : "Número de cuenta"}
+                      <input
+                        className="fin-input"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={80}
+                        value={accountNumber}
+                        onChange={(event) => {
+                          setAccountNumber(event.target.value);
+                          if (formError) setFormError("");
+                        }}
+                        placeholder={selectedEntityMeta.isWallet ? "Ej: 3028505810" : "Ej: 12345678901"}
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  {formattedDestination && (
+                    <p className="fin-destination-preview">
+                      Destino registrado: <strong>{formattedDestination}</strong>
+                    </p>
+                  )}
+
                   {formError && <p className="sp-error">{formError}</p>}
+
                   <IonButton
                     type="submit"
                     className="sp-primary-button"
-                    disabled={submitting || summary.available_balance < MIN_WITHDRAWAL}
+                    disabled={submitting || !canWithdraw}
                   >
                     {submitting ? <IonSpinner name="crescent" /> : "Solicitar retiro"}
                   </IonButton>
-                  {summary.available_balance < MIN_WITHDRAWAL && (
+
+                  {!canWithdraw && (
                     <p className="sp-muted">
                       Necesitas al menos {formatMoney(MIN_WITHDRAWAL)} de saldo disponible para retirar.
+                      {summary.pending_settlement > 0
+                        ? ` Tienes ${formatMoney(summary.pending_settlement)} pendiente de liquidación que se liberará automáticamente al completar el servicio.`
+                        : " Cuando completes y se pague un servicio, tu saldo quedará disponible automáticamente."}
                     </p>
                   )}
                 </form>

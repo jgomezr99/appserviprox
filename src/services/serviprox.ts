@@ -17,6 +17,10 @@ import type {
   PqrReport,
   PqrMessage,
   AppProblemReport,
+  ChatTranscriptEntry,
+  SupportChat,
+  SupportChatCreatePayload,
+  SupportChatMessage,
 } from "../types/serviprox";
 
 
@@ -170,11 +174,13 @@ export const orderService = {
 type PqrCreatePayload = Omit<
   PqrReport,
   "id" | "radicadoNumber" | "status" | "createdAt" | "estimatedResponseDays" | "messages"
->;
+> & {
+  chatTranscript?: ChatTranscriptEntry[];
+};
 
 export const pqrService = {
-  /** List all PQRs, optionally filtered by user / email */
-  list: (params?: { mine?: boolean; email?: string }) =>
+  /** List all PQRs, optionally filtered by user / email / subject_type */
+  list: (params?: { mine?: boolean; email?: string; subject_type?: "servicio" | "producto" }) =>
     api
       .get<PaginatedResponse<PqrReport> | PqrReport[]>("pqrs/", { params })
       .then(unwrapList),
@@ -203,6 +209,26 @@ export const appProblemService = {
       .get<PaginatedResponse<AppProblemReport> | AppProblemReport[]>("app-problems/", { params })
       .then(unwrapList),
 
-  create: (payload: Omit<AppProblemReport, "id" | "ticketNumber" | "status" | "createdAt">) =>
-    api.post<AppProblemReport>("app-problems/", payload),
+  create: (
+    payload: Omit<AppProblemReport, "id" | "ticketNumber" | "status" | "createdAt"> & {
+      chatTranscript?: ChatTranscriptEntry[];
+    }
+  ) => api.post<AppProblemReport>("app-problems/", payload),
+};
+
+/** Support chats (crear chat y seguimiento persistente en SQLite) */
+export const supportChatService = {
+  list: () =>
+    api
+      .get<PaginatedResponse<SupportChat> | SupportChat[]>("support-chats/")
+      .then(unwrapList),
+
+  get: (chatId: number | string) =>
+    api.get<SupportChat>(`support-chats/${chatId}/`),
+
+  create: (payload: SupportChatCreatePayload) =>
+    api.post<SupportChat>("support-chats/", payload),
+
+  sendMessage: (chatId: number | string, text: string) =>
+    api.post<SupportChatMessage>(`support-chats/${chatId}/messages/`, { text }),
 };

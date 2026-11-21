@@ -25,6 +25,7 @@ import { PqrListView } from '../components/pqr/PqrListView';
 import { PqrReportModal } from '../components/pqr/PqrReportModal';
 import { PqrDetailModal } from '../components/pqr/PqrDetailModal';
 import { LiveSupportChatModal } from '../components/pqr/LiveSupportChatModal';
+import { SupportChatDetailModal } from '../components/pqr/SupportChatDetailModal';
 import '../components/pqr/pqrStyles.css';
 import '../theme/tailwind.css';
 
@@ -32,14 +33,20 @@ import '../theme/tailwind.css';
 import type {
   PqrReport,
   PqrContractorRef,
+  PqrProductRef,
+  PqrSubjectType,
   AppProblemReport,
+  ChatTranscriptEntry,
+  SupportChat,
 } from '../types/serviprox';
 
 import {
   pqrService,
   appProblemService,
   professionalSearchService,
+  supportChatService,
 } from '../services/serviprox';
+import { storeService } from '../services/storeService';
 
 import { useAuth } from '../context/AuthContext';
 import { MaintenanceNotice, useMaintenance } from '../components/MaintenanceNotice';
@@ -55,6 +62,109 @@ const PqrPage: React.FC = () => {
   const pqrEnabled = platform.features.pqr;
   const { active: maintenance } = useMaintenance();
   const blockedMsg = 'La plataforma está en mantenimiento. No puedes registrar ni editar cambios por ahora.';
+
+  // ── Datos con precarga desde la base de datos (filtrados por cuenta) ──────
+  const [pqrReports, setPqrReports] = useState<PqrReport[]>([]);
+  const [appProblemReports, setAppProblemReports] = useState<AppProblemReport[]>([]);
+  const [supportChats, setSupportChats] = useState<SupportChat[]>([]);
+  const [contractorRefs, setContractorRefs] = useState<PqrContractorRef[]>([]);
+  const [productRefs, setProductRefs] = useState<PqrProductRef[]>([]);
+
+  // ── Estados de UI y modales ───────────────────────────────────────────────
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [toastMsg, setToastMsg] = useState('');
+
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [chatInitialFlow, setChatInitialFlow] = useState<'inicio' | 'chat_directo'>('inicio');
+  const [showSupportChatModal, setShowSupportChatModal] = useState(false);
+
+  const [selectedReport, setSelectedReport] = useState<PqrReport | null>(null);
+  const [selectedSupportChat, setSelectedSupportChat] = useState<SupportChat | null>(null);
+  const [targetContractor, setTargetContractor] = useState<PqrContractorRef | undefined>(undefined);
+  const [targetSubjectType, setTargetSubjectType] = useState<PqrSubjectType>('servicio');
+
+  // ── Sincronizar datos con el servidor / API de la base de datos oficial ───
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const email = user?.email;
+      const params = email ? { email } : undefined;
+      const [apiPqrs, apiProblems, apiProfessionals, storeRes, apiChats] = await Promise.all([
+        pqrService.list(params),
+        appProblemService.list(params),
+        professionalSearchService.list(),
+        storeService.listProducts().catch(() => ({ products: [], fromServer: false })),
+        supportChatService.list().catch(() => []),
+      ]);
+
+      setPqrReports(apiPqrs);
+      setAppProblemReports(apiProblems);
+      setSupportChats(apiChats);
+      setContractorRefs(apiProfessionals.map((p) => ({
+          id: p.slug || String(p.id),
+          name: p.display_name || `Profesional #${p.id}`,
+          companyName: p.company_name || p.headline || `${p.display_name || 'Profesional'} • Servicios`,
+          specialtyLabel:
+            p.specialty_label ||
+            (p.categories && p.categories.length > 0
+              ? p.categories.join(', ')
+              : p.matching_service?.service_name || 'Servicios Técnicos'),
+          avatarUrl: p.avatar_url || undefined,
+          neighborhood: p.neighborhood || p.city || 'Bogotá',
+          phone: p.phone || undefined,
+        })));
+      setProductRefs(
+        (storeRes.products || []).map((prod) => ({
+          id: prod.id,
+          title: prod.title,
+          sellerName: prod.sellerName || 'Vendedor Meko Shop',
+          category: prod.category,
+          price: prod.price,
+          city: prod.city,
+          imageUrl: prod.image,
+        }))
+      );
+    } catch (err) {
+      console.warn('[PqrPage] No fue posible cargar los datos de la API:', err);
+      setPqrReports([]);
+      setAppProblemReports([]);
+      setSupportChats([]);
+      setContractorRefs([]);
+      setProductRefs([]);
+      setLoadError('No fue posible conectar con la API y cargar los datos. Verifica la conexión e inténtalo de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!pqrEnabled) return;
+    void loadAll();
+  }, [loadAll, pqrEnabled, user]);
+
+  useEffect(() => {
+    if (!pqrEnabled) return;
+    const handleSync = () => {
+      void loadAll();
+    };
+    window.addEventListener('serviprox:pqr-updated', handleSync);
+    return () => {
+      window.removeEventListener('serviprox:pqr-updated', handleSync);
+    };
+  }, [loadAll, pqrEnabled]);
+
+  const refreshSupportChats = useCallback(async () => {
+    try {
+      const updated = await supportChatService.list();
+      setSupportChats(updated);
+    } catch {
+      // non-fatal
+    }
+  }, []);
 
   if (!pqrEnabled) {
     return (
@@ -116,83 +226,28 @@ const PqrPage: React.FC = () => {
     );
   }
 
-  // ── Datos con precarga desde la base de datos (filtrados por cuenta) ──────
-  const [pqrReports, setPqrReports] = useState<PqrReport[]>([]);
-  const [appProblemReports, setAppProblemReports] = useState<AppProblemReport[]>([]);
-  const [contractorRefs, setContractorRefs] = useState<PqrContractorRef[]>([]);
-
-  // ── Estados de UI y modales ───────────────────────────────────────────────
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-  const [toastMsg, setToastMsg] = useState('');
-
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showChatModal, setShowChatModal] = useState(false);
-
-  const [selectedReport, setSelectedReport] = useState<PqrReport | null>(null);
-  const [targetContractor, setTargetContractor] = useState<PqrContractorRef | undefined>(undefined);
-
-  // ── Sincronizar datos con el servidor / API de la base de datos oficial ───
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const email = user?.email;
-      const params = email ? { email } : undefined;
-      const [apiPqrs, apiProblems, apiProfessionals] = await Promise.all([
-        pqrService.list(params),
-        appProblemService.list(params),
-        professionalSearchService.list(),
-      ]);
-
-      setPqrReports(apiPqrs);
-      setAppProblemReports(apiProblems);
-      setContractorRefs(apiProfessionals.map((p) => ({
-          id: p.slug || String(p.id),
-          name: p.display_name || `Profesional #${p.id}`,
-          companyName: p.company_name || p.headline || `${p.display_name || 'Profesional'} • Servicios`,
-          specialtyLabel:
-            p.specialty_label ||
-            (p.categories && p.categories.length > 0
-              ? p.categories.join(', ')
-              : p.matching_service?.service_name || 'Servicios Técnicos'),
-          avatarUrl: p.avatar_url || undefined,
-          neighborhood: p.neighborhood || p.city || 'Bogotá',
-          phone: p.phone || undefined,
-        })));
-    } catch (err) {
-      console.warn('[PqrPage] No fue posible cargar los datos de la API:', err);
-      setPqrReports([]);
-      setAppProblemReports([]);
-      setContractorRefs([]);
-      setLoadError('No fue posible conectar con la API y cargar los datos. Verifica la conexión e inténtalo de nuevo.');
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    void loadAll();
-  }, [loadAll, user]);
-
   // ── Manejadores de acciones ───────────────────────────────────────────────
 
-  const handleOpenNewPqr = (contractor?: PqrContractorRef) => {
+  const handleOpenNewPqr = (contractor?: PqrContractorRef, subjectType: PqrSubjectType = 'servicio') => {
     if (maintenance) {
       setToastMsg(blockedMsg);
       return;
     }
-    if (!contractor && contractorRefs.length === 0) {
-      setToastMsg('No hay profesionales disponibles desde la base de datos. Actualiza la lista e inténtalo de nuevo.');
+    if (subjectType === 'servicio' && !contractor && contractorRefs.length === 0 && productRefs.length === 0) {
+      setToastMsg('No hay profesionales ni productos disponibles desde la base de datos. Actualiza la lista e inténtalo de nuevo.');
       return;
     }
     setTargetContractor(contractor);
+    setTargetSubjectType(subjectType);
     setShowReportModal(true);
   };
 
   const handleSubmitPqr = async (
-    data: PqrReport | Omit<PqrReport, 'id' | 'radicadoNumber' | 'status' | 'createdAt' | 'estimatedResponseDays'>
+    data:
+      | PqrReport
+      | (Omit<PqrReport, 'id' | 'radicadoNumber' | 'status' | 'createdAt' | 'estimatedResponseDays'> & {
+          chatTranscript?: ChatTranscriptEntry[];
+        })
   ) => {
     const userFullName = user
       ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username
@@ -208,12 +263,13 @@ const PqrPage: React.FC = () => {
     if ('id' in data && 'radicadoNumber' in data && data.id && data.radicadoNumber) {
       const created = data as PqrReport;
       setPqrReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
-      setToastMsg(`✅ Reclamo formal ${created.radicadoNumber} guardado en la base de datos.`);
+      void refreshSupportChats();
+      setToastMsg(`✅ Reclamo formal ${created.radicadoNumber} y su chat guardados en la base de datos.`);
       return created;
     }
 
     try {
-      // Guardar directamente en la base de datos oficial (Django / SQLite)
+      // Guardar directamente en la base de datos oficial
       const pqrPayload = {
         ...data,
         clientEmail,
@@ -224,7 +280,8 @@ const PqrPage: React.FC = () => {
       };
       const created = await pqrService.create(pqrPayload);
       setPqrReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
-      setToastMsg(`✅ Reclamo formal ${created.radicadoNumber} guardado en la base de datos.`);
+      void refreshSupportChats();
+      setToastMsg(`✅ Reclamo formal ${created.radicadoNumber} y su chat guardados en la base de datos.`);
       return created;
     } catch (err) {
       console.warn('[PqrPage] No fue posible registrar la PQR en la API:', err);
@@ -261,7 +318,58 @@ const PqrPage: React.FC = () => {
     setShowDetailModal(true);
   };
 
-  const handleAppProblem = async (problem: AppProblemReport) => {
+  const handleInspectSupportChat = async (chat: SupportChat) => {
+    setSelectedSupportChat(chat);
+    setShowSupportChatModal(true);
+    try {
+      const fresh = await supportChatService.get(chat.id);
+      setSelectedSupportChat(fresh);
+      setSupportChats((prev) => prev.map((c) => (c.id === fresh.id ? fresh : c)));
+    } catch {
+      // keep existing chat state
+    }
+  };
+
+  const handleSendSupportChatMessage = async (chatId: number, text: string) => {
+    if (maintenance) {
+      setToastMsg(blockedMsg);
+      return;
+    }
+    try {
+      const newMsg = await supportChatService.sendMessage(chatId, text);
+      setSupportChats((prev) =>
+        prev.map((c) =>
+          c.id === chatId
+            ? {
+                ...c,
+                updatedAt: newMsg.createdAt,
+                lastMessage: newMsg.text,
+                messagesCount: (c.messagesCount || c.messages?.length || 0) + 1,
+                messages: [...(c.messages || []), newMsg],
+              }
+            : c
+        )
+      );
+      setSelectedSupportChat((prev) =>
+        prev && prev.id === chatId
+          ? {
+              ...prev,
+              updatedAt: newMsg.createdAt,
+              lastMessage: newMsg.text,
+              messagesCount: (prev.messagesCount || prev.messages?.length || 0) + 1,
+              messages: [...(prev.messages || []), newMsg],
+            }
+          : prev
+      );
+    } catch (err) {
+      console.warn('[PqrPage] No fue posible enviar mensaje al chat:', err);
+      setToastMsg('No se pudo enviar el mensaje. Inténtalo nuevamente.');
+    }
+  };
+
+  const handleAppProblem = async (
+    problem: AppProblemReport & { chatTranscript?: ChatTranscriptEntry[] }
+  ) => {
     if (maintenance) {
       setToastMsg(blockedMsg);
       return;
@@ -278,9 +386,17 @@ const PqrPage: React.FC = () => {
         deviceInfo: problem.deviceInfo,
         reportedBy: userFullName || 'Usuario',
         userEmail,
+        chatTranscript: problem.chatTranscript,
       });
       setAppProblemReports((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
-      setToastMsg(`✅ Reporte técnico ${created.ticketNumber} guardado en la base de datos.`);
+      // Refrescar también el listado oficial de PQRs y Mis Chats para mostrar de inmediato el PQR-APP radicado
+      const params = user?.email ? { email: user.email } : undefined;
+      void pqrService.list(params).then((updatedPqrs) => setPqrReports(updatedPqrs)).catch(() => {});
+      void refreshSupportChats();
+      const radicadoLabel = created.radicadoNumber
+        ? `PQR ${created.radicadoNumber} (Ticket ${created.ticketNumber})`
+        : `Reporte técnico ${created.ticketNumber}`;
+      setToastMsg(`✅ ${radicadoLabel} y su chat guardados en la base de datos.`);
       return created;
     } catch (err) {
       console.warn('[PqrPage] No fue posible guardar el reporte técnico en la API:', err);
@@ -330,21 +446,41 @@ const PqrPage: React.FC = () => {
             <PqrListView
               pqrReports={pqrReports}
               appProblemReports={appProblemReports}
+              supportChats={supportChats}
               onOpenNewPqrModal={handleOpenNewPqr}
-              onOpenLiveSupportChat={() => (maintenance ? setToastMsg(blockedMsg) : setShowChatModal(true))}
+              onOpenLiveSupportChat={() => {
+                if (maintenance) {
+                  setToastMsg(blockedMsg);
+                  return;
+                }
+                setChatInitialFlow('inicio');
+                setShowChatModal(true);
+              }}
+              onOpenCreateChat={() => {
+                if (maintenance) {
+                  setToastMsg(blockedMsg);
+                  return;
+                }
+                setChatInitialFlow('chat_directo');
+                setShowChatModal(true);
+              }}
               onInspectReport={handleInspect}
+              onInspectChat={handleInspectSupportChat}
             />
           </div>
         )}
       </IonContent>
 
-      {/* ── Modal de Radicación Formal ── */}
+      {/* ── Modal de Radicación Formal (Servicios y Productos Separados) ── */}
       <PqrReportModal
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
         contractor={targetContractor}
         allContractors={contractorRefs}
+        allProducts={productRefs}
+        initialSubjectType={targetSubjectType}
         onSubmitPqr={handleSubmitPqr}
+        onOpenReportChat={handleInspect}
       />
 
       {/* ── Modal de Expediente y Respuestas ── */}
@@ -355,13 +491,27 @@ const PqrPage: React.FC = () => {
         onSendMessage={handleSendMessage}
       />
 
+      {/* ── Modal de Chat Guardado (Soporte / Reporte) ── */}
+      <SupportChatDetailModal
+        isOpen={showSupportChatModal}
+        onClose={() => setShowSupportChatModal(false)}
+        chat={selectedSupportChat}
+        onSendMessage={handleSendSupportChatMessage}
+      />
+
       {/* ── Chat en Vivo con Sondeo y Validación de BD ── */}
       <LiveSupportChatModal
         isOpen={showChatModal}
         onClose={() => setShowChatModal(false)}
         contractors={contractorRefs}
+        products={productRefs}
+        initialFlow={chatInitialFlow}
         onPqrCreatedFromChat={handleSubmitPqr}
         onAppProblemReported={handleAppProblem}
+        onChatSaved={(chat) => {
+          setSupportChats((prev) => [chat, ...prev.filter((c) => c.id !== chat.id)]);
+          setToastMsg(`✅ Chat "${chat.title}" guardado en Mis Chats.`);
+        }}
       />
 
       {/* Notificación Toast */}

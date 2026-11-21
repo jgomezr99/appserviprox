@@ -30,8 +30,8 @@
    SIDEBAR IZQUIERDO (NAVBAR LATERAL OSCURO)
    ───────────────────────────────────────────────────────────────────────── */
 .ad-sidebar {
-  width: 242px;
-  min-width: 242px;
+  width: 260px;
+  min-width: 260px;
   background-color: var(--ad-bg-sidebar);
   color: #ffffff;
   display: flex;
@@ -429,7 +429,7 @@
   padding: 24px 32px 48px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 /* ── Fila de Bienvenida & Fecha ── */
@@ -546,13 +546,13 @@
 /* ── Fila de Tarjetas KPI (6 columnas) ── */
 .ad-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, 1fr);
   gap: 16px;
 }
 
 @media (max-width: 1400px) {
   .ad-kpi-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 @media (max-width: 768px) {
@@ -639,7 +639,7 @@
 /* ── Cuadrícula Principal (2 Columnas: Izquierda ancha, Derecha lateral) ── */
 .ad-content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.56fr) minmax(320px, 1fr);
+  grid-template-columns: 2.2fr 1fr;
   gap: 20px;
 }
 
@@ -665,7 +665,7 @@
 .ad-card {
   background: #ffffff;
   border: 1px solid var(--ad-border);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 22px 24px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
   display: flex;

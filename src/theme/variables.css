@@ -143,25 +143,6 @@ ion-app.theme-professional,
 }
 
 /* ========================================================
-   TEMA ADMINISTRATIVO: FONDO CLARO #f8fafc (NEUTRAL)
-   ======================================================== */
-:root[data-theme="admin"],
-body.theme-admin,
-ion-app.theme-admin,
-.theme-admin,
-[data-theme="admin"] ion-page,
-[data-theme="admin"] ion-content,
-.theme-admin ion-page,
-.theme-admin ion-content,
-.sp-admin-page {
-	--sp-bg: #f8fafc !important;
-	--sp-background: #f8fafc !important;
-	--ion-background-color: #f8fafc !important;
-	--background: #f8fafc !important;
-	background: #f8fafc !important;
-}
-
-/* ========================================================
    REGLAS GLOBALES DE INTERFAZ:
    Cliente #F5C3BA | Profesional #D3DCF2 | Tarjetas #FFFFFF
    ======================================================== */

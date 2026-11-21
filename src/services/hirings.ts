@@ -147,8 +147,9 @@ export const hiringService = {
   summary: async (): Promise<HiringSummary> => {
     try {
       return await api.get<HiringSummary>("admin/hirings/summary/");
-    } catch (err: any) {
-      if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      if (e?.status === 404 || e?.status === 403 || String(e?.message || "").includes("Recurso no encontrado")) {
         return DEFAULT_HIRING_SUMMARY;
       }
       throw err;
@@ -157,8 +158,9 @@ export const hiringService = {
   list: async (filters: HiringFilters): Promise<HiringPage<HiringRow>> => {
     try {
       return await api.get<HiringPage<HiringRow>>(`admin/hirings/${query(filters)}`);
-    } catch (err: any) {
-      if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      if (e?.status === 404 || e?.status === 403 || String(e?.message || "").includes("Recurso no encontrado")) {
         return {
           count: 0,
           page: filters.page || 1,
@@ -178,8 +180,9 @@ export const hiringService = {
   requests: async (params: { kind?: string; page?: number; page_size?: number }): Promise<HiringPage<OpenRequest>> => {
     try {
       return await api.get<HiringPage<OpenRequest>>(`admin/hirings/requests/${query(params)}`);
-    } catch (err: any) {
-      if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      if (e?.status === 404 || e?.status === 403 || String(e?.message || "").includes("Recurso no encontrado")) {
         return {
           count: 0,
           page: params.page || 1,

@@ -33,11 +33,18 @@ import type {
   PqrReport,
   AppProblemReport,
   PqrContractorRef,
+  PqrProductRef,
+  PublicRegisterRole,
+  SupportChat,
+  ChatTranscriptEntry,
+  User,
 } from '../../types/serviprox';
 import { REGISTERED_CONTRACTORS_REF } from '../../data/pqrInitialData';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
 import { authService } from '../../services/auth';
+import { supportChatService, pqrService, appProblemService } from '../../services/serviprox';
+import { getEntryRoute } from '../../utils/routes';
 import '../../theme/tailwind.css';
 import './pqrStyles.css';
 
@@ -46,6 +53,19 @@ import './pqrStyles.css';
 
 type ChatFlow =
   | 'inicio'
+  | 'user_reg_role'
+  | 'user_reg_fullname'
+  | 'user_reg_email'
+  | 'user_reg_password'
+  | 'user_reg_confirm_password'
+  | 'user_reg_phone'
+  | 'user_reg_city'
+  | 'user_reg_document'
+  | 'user_reg_address'
+  | 'user_reg_profession'
+  | 'user_reg_saving'
+  | 'chat_directo_titulo'
+  | 'chat_directo_mensaje'
   | 'admin_worker_key'
   | 'admin_username'
   | 'admin_fullname'
@@ -56,6 +76,7 @@ type ChatFlow =
   | 'admin_saving'
   | 'queja_contratista'
   | 'queja_cual_contratista'
+  | 'queja_cual_producto'
   | 'queja_descripcion'
   | 'queja_fecha'
   | 'queja_monto'
@@ -72,6 +93,24 @@ type ChatFlow =
   | 'desbloqueo_foto'
   | 'desbloqueo_evaluando'
   | 'fin';
+
+interface UserAccountDraft {
+  role?: PublicRegisterRole;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  password?: string;
+  confirm_password?: string;
+  phone?: string;
+  city?: string;
+  document_id?: string;
+  address?: string;
+  profession?: string;
+}
+
+interface DirectChatDraft {
+  title?: string;
+}
 
 interface AdminWorkerDraft {
   worker_key?: string;
@@ -93,6 +132,9 @@ interface ApelacionDraft {
 }
 
 interface QuejaDraft {
+  subjectType?: 'servicio' | 'producto';
+  productId?: number | null;
+  productName?: string;
   contractorId?: string;
   contractorName?: string;
   contractorCompany?: string;
@@ -116,15 +158,19 @@ interface LiveSupportChatModalProps {
   isOpen: boolean;
   onClose: () => void;
   contractors?: PqrContractorRef[];
-  onPqrCreatedFromChat: (
+  products?: PqrProductRef[];
+  initialFlow?: 'inicio' | 'crear_cuenta' | 'queja_contratista' | 'queja_producto' | 'problema_app' | 'chat_directo';
+  onPqrCreatedFromChat?: (
     report: Omit<
       PqrReport,
       'id' | 'radicadoNumber' | 'status' | 'createdAt' | 'estimatedResponseDays'
-    >
+    > & { chatTranscript?: ChatTranscriptEntry[] }
   ) => Promise<PqrReport | void> | PqrReport | void;
   onAppProblemReported?: (
-    problem: AppProblemReport
+    problem: AppProblemReport & { chatTranscript?: ChatTranscriptEntry[] }
   ) => Promise<AppProblemReport | void> | AppProblemReport | void;
+  onAccountCreated?: (user: User) => void;
+  onChatSaved?: (chat: SupportChat) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -206,15 +252,43 @@ function renderFormattedChatText(text: string): React.ReactNode {
 // ─── Mensaje inicial exacto de la interfaz ────────────────────────────────────
 
 const INITIAL_MESSAGE: LiveChatMessage = agentMsg(
-  '¡Hola! Soy Sofía de la Defensoría y Mesa Técnica de Serviprox Bogotá. ¿En qué te puedo ayudar hoy? Puedes solicitar el desbloqueo de tu cuenta con IA, radicar PQRs contra contratistas, presentar apelaciones o reportar fallas técnicas con la app.',
+  '¡Hola! Soy Sofía de la Defensoría y Mesa Técnica de Serviprox Bogotá. ¿En qué te puedo ayudar hoy? Puedes crear tu cuenta (Cliente o Profesional), radicar PQR de servicio o producto, reportar fallas técnicas o abrir un chat guardado con soporte.',
   [
-    { label: '🔓 Desbloqueo de Cuenta con IA', action: 'iniciar_desbloqueo' },
-    { label: '⚖️ Radicar PQR (Queja o Reclamo)', action: 'queja_contratista' },
-    { label: '🛡️ Presentar Apelación de Cuenta / Sanción', action: 'iniciar_apelacion' },
+    { label: '👤 Crear cuenta (Cliente o Profesional)', action: 'iniciar_crear_cuenta' },
+    { label: '⚖️ Radicar PQR de Servicio', action: 'queja_contratista' },
+    { label: '📦 Radicar PQR de Producto', action: 'queja_producto' },
     { label: '📇 Reportar problema con la app', action: 'problema_app' },
+    { label: '💬 Crear chat directo con soporte', action: 'iniciar_chat_directo' },
+    { label: '🔓 Desbloqueo de Cuenta con IA', action: 'iniciar_desbloqueo' },
+    { label: '🛡️ Presentar Apelación de Cuenta / Sanción', action: 'iniciar_apelacion' },
     { label: '🔐 Crear cuenta administrativa (Staff)', action: 'iniciar_crear_admin' },
   ]
 );
+
+const CREATE_ACCOUNT_INTRO_MESSAGE = (): LiveChatMessage =>
+  agentMsg(
+    '👤 **Crear cuenta en Serviprox por el chat**\n\nTe guiaré paso a paso para registrar tu cuenta (Nombre y apellido, correo, contraseña, teléfono, ciudad, cédula y dirección del inmueble).\n\n👉 **Paso 1:** ¿Qué tipo de cuenta deseas crear?',
+    [
+      { label: '🏠 Cuenta Cliente (Perfil)', action: 'sel_reg_role:client' },
+      { label: '🛠️ Cuenta Profesional', action: 'sel_reg_role:professional' },
+    ]
+  );
+
+const DIRECT_CHAT_INTRO_MESSAGE = (): LiveChatMessage =>
+  agentMsg(
+    '💬 **Crear chat de soporte**\n\nEste chat quedará guardado en tu historial y notificado al equipo de Serviprox para hacerle seguimiento.\n\n👉 Escribe el **asunto o título** de tu consulta (ejemplo: "Consulta sobre un servicio", "Seguimiento de pedido", "Ayuda con mi perfil"):'
+  );
+
+const buildUsernameFromNames = (firstName: string, lastName: string) => {
+  const clean = (v: string) =>
+    v
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  const base = [clean(firstName), clean(lastName)].filter(Boolean).join('.');
+  return base.length >= 3 ? base : `${base || 'usuario'}sp`;
+};
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
@@ -222,8 +296,12 @@ export function LiveSupportChatModal({
   isOpen,
   onClose,
   contractors: propsContractors,
+  products: propsProducts = [],
+  initialFlow = 'inicio',
   onPqrCreatedFromChat,
   onAppProblemReported,
+  onAccountCreated,
+  onChatSaved,
 }: LiveSupportChatModalProps) {
   const { user, login, logout } = useAuth();
   // Lista unificada de contratistas registrados en base de datos
@@ -236,6 +314,13 @@ export function LiveSupportChatModal({
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [flow, setFlow] = useState<ChatFlow>('inicio');
+  const [userRegDraft, setUserRegDraft] = useState<UserAccountDraft>({});
+  const [createdUserCreds, setCreatedUserCreds] = useState<{
+    email: string;
+    password: string;
+    role: PublicRegisterRole;
+  } | null>(null);
+  const [directChatDraft, setDirectChatDraft] = useState<DirectChatDraft>({});
   const [adminDraft, setAdminDraft] = useState<AdminWorkerDraft>({});
   const [createdAdminCreds, setCreatedAdminCreds] = useState<{
     username: string;
@@ -250,10 +335,52 @@ export function LiveSupportChatModal({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const savingReportRef = useRef(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevOpenRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  useEffect(() => {
+    if (isOpen && !prevOpenRef.current) {
+      if (initialFlow === 'crear_cuenta') {
+        setFlow('user_reg_role');
+        setUserRegDraft({});
+        setCreatedUserCreds(null);
+        setMessages([CREATE_ACCOUNT_INTRO_MESSAGE()]);
+      } else if (initialFlow === 'chat_directo') {
+        setFlow('chat_directo_titulo');
+        setDirectChatDraft({});
+        setMessages([DIRECT_CHAT_INTRO_MESSAGE()]);
+      } else if (initialFlow === 'queja_producto') {
+        setFlow('queja_cual_producto');
+        setQuejaDraft({ subjectType: 'producto' });
+        const prodOpts = propsProducts.slice(0, 6).map((p) => ({
+          label: `📦 ${p.title} (${p.sellerName})`,
+          action: `sel_product:${p.id}`,
+        }));
+        setMessages([
+          agentMsg(
+            '📦 **Radicar PQR de Producto (Meko Shop)**\n\nSelecciona el producto que deseas reportar o escribe su nombre directamente:',
+            prodOpts.length > 0 ? prodOpts : undefined
+          ),
+        ]);
+      } else if (initialFlow === 'problema_app') {
+        setFlow('problema_app_categoria');
+        setMessages([
+          agentMsg('¿Qué tipo de fallo técnico estás experimentando en la aplicación?', [
+            { label: '🗺️ El mapa no carga o GPS falla', action: 'cat:error_mapa' },
+            { label: '💳 Error al pagar o anticipo PSE', action: 'cat:falla_pago' },
+            { label: '⚡ App lenta o congelada', action: 'cat:lentitud_carga' },
+            { label: '🔐 Error al iniciar sesión', action: 'cat:error_login' },
+            { label: '🔔 Fallo en notificaciones', action: 'cat:notificaciones' },
+            { label: '❓ Otro problema técnico', action: 'cat:otro_tecnico' },
+          ]),
+        ]);
+      }
+    }
+    prevOpenRef.current = isOpen;
+  }, [isOpen, initialFlow, propsProducts]);
 
   useEffect(() => {
     return () => {
@@ -264,6 +391,21 @@ export function LiveSupportChatModal({
   }, []);
 
   if (!isOpen) return null;
+
+  const buildChatTranscript = (): ChatTranscriptEntry[] =>
+    messages
+      .filter((m) => m.text && m.text !== '••••••••')
+      .slice(-30)
+      .map((m) => ({
+        sender: m.sender === 'agent' ? 'agent' : 'user',
+        senderName:
+          m.sender === 'agent'
+            ? m.agentName || 'Sofía • Defensoría y Mesa Técnica'
+            : (user && `${user.first_name || ''} ${user.last_name || ''}`.trim()) ||
+              user?.username ||
+              'Usuario',
+        text: m.text,
+      }));
 
   // Helper para generar opciones de contratistas registrados
   const getContractorOptions = () =>
@@ -295,11 +437,179 @@ export function LiveSupportChatModal({
 
   // Iniciar flujo de selección de contratista registrado
   const startContractorComplaint = () => {
+    setQuejaDraft({ subjectType: 'servicio' });
     setFlow('queja_cual_contratista');
     pushAgent(
-      'Para que tu reclamo tenga respaldo legal formal de la Defensoría de Bogotá (Ley 1480 del Consumidor), el contratista debe estar registrado en nuestra base de datos oficial.\n\nPor favor, selecciona el contratista registrado en la base de datos contra el cual deseas radicar el reclamo:',
+      'Para que tu reclamo de servicio tenga respaldo formal de la Defensoría de Bogotá (Ley 1480 del Consumidor), selecciona el contratista registrado contra el cual deseas radicar el PQR:',
       getContractorOptions()
     );
+  };
+
+  const startProductComplaint = () => {
+    setQuejaDraft({ subjectType: 'producto' });
+    setFlow('queja_cual_producto');
+    const prodOpts = propsProducts.slice(0, 6).map((p) => ({
+      label: `📦 ${p.title} (${p.sellerName})`,
+      action: `sel_product:${p.id}`,
+    }));
+    pushAgent(
+      '📦 **Radicar PQR de Producto (Meko Shop)**\n\nSelecciona uno de los productos publicados o escribe el nombre del producto que deseas reportar:',
+      prodOpts.length > 0 ? prodOpts : undefined
+    );
+  };
+
+  // Finalizar creación de cuenta Cliente (Perfil) o Profesional
+  const finalizarCrearCuentaUsuario = async (draftFinal: UserAccountDraft) => {
+    if (savingReportRef.current) return;
+    savingReportRef.current = true;
+    setFlow('user_reg_saving');
+    setIsTyping(true);
+
+    const role: PublicRegisterRole = draftFinal.role === 'professional' ? 'professional' : 'client';
+    const firstName = (draftFinal.first_name || '').trim();
+    const lastName = (draftFinal.last_name || '').trim();
+    const email = (draftFinal.email || '').trim().toLowerCase();
+    const password = draftFinal.password || '';
+    const confirmPassword = draftFinal.confirm_password || password;
+    const phone = (draftFinal.phone || '').trim();
+    const city = (draftFinal.city || 'Bogotá').trim() || 'Bogotá';
+    const documentId = (draftFinal.document_id || '').trim();
+    const address = (draftFinal.address || '').trim();
+    const profession = (draftFinal.profession || '').trim();
+
+    try {
+      const created = await authService.register({
+        email,
+        username: buildUsernameFromNames(firstName, lastName),
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        city,
+        document_id: documentId,
+        address,
+        role,
+        password,
+        confirm_password: confirmPassword,
+        ...(role === 'professional' && profession ? { profession } : {}),
+      });
+      setIsTyping(false);
+      setFlow('fin');
+      setCreatedUserCreds({ email: created.email, password, role });
+      setUserRegDraft({});
+      onAccountCreated?.(created);
+
+      pushAgent(
+        `🎉 **¡Cuenta creada exitosamente en Serviprox!**\n\n` +
+          `📋 **Resumen de tu perfil registrado:**\n` +
+          `• 🏷️ **Tipo de cuenta:** ${role === 'professional' ? 'Profesional' : 'Cliente (Perfil)'}\n` +
+          `• 👤 **Nombre:** ${created.first_name} ${created.last_name}\n` +
+          `• 📧 **Correo:** ${created.email}\n` +
+          `• 📞 **Teléfono:** ${created.phone || phone || 'Registrado'}\n` +
+          `• 🏙️ **Ciudad:** ${created.city || city}\n` +
+          `• 🪪 **Cédula:** ${created.document_id || documentId || 'Registrada'}\n` +
+          `• 📍 **Dirección del inmueble:** ${created.address || address || 'Registrada'}\n` +
+          (role === 'professional' && profession ? `• 🛠️ **Profesión:** ${profession}\n` : '') +
+          `\nTu cuenta ya quedó guardada en la base de datos. Puedes ingresar de inmediato:`,
+        [
+          { label: '⚡ Entrar a mi cuenta ahora', action: 'instant_user_login' },
+          { label: '🚀 Ir a Iniciar sesión', action: 'goto_user_login' },
+          { label: '🔄 Crear otra cuenta', action: 'iniciar_crear_cuenta' },
+          { label: '✕ Cerrar chat', action: 'cerrar_chat' },
+        ],
+        undefined,
+        250
+      );
+    } catch (err: unknown) {
+      setIsTyping(false);
+      const detail = extractApiErrorMessage(err);
+      const lowerDetail = detail.toLowerCase();
+      if (lowerDetail.includes('correo') || lowerDetail.includes('email')) {
+        setFlow('user_reg_email');
+        pushAgent(
+          `❌ **No se pudo crear la cuenta:**\n${detail}\n\nEscribe otro **correo electrónico** diferente para continuar sin perder tus datos:`,
+          [{ label: '🔄 Reiniciar registro', action: 'iniciar_crear_cuenta' }],
+          undefined,
+          250
+        );
+      } else if (lowerDetail.includes('contraseña') || lowerDetail.includes('password')) {
+        setFlow('user_reg_password');
+        pushAgent(
+          `❌ **No se pudo crear la cuenta:**\n${detail}\n\nEscribe una nueva **contraseña** (mínimo 8 caracteres):`,
+          [{ label: '🔄 Reiniciar registro', action: 'iniciar_crear_cuenta' }],
+          undefined,
+          250
+        );
+      } else {
+        setFlow('fin');
+        pushAgent(
+          `❌ **No se pudo crear la cuenta:**\n${detail}`,
+          [
+            { label: '🔄 Intentar de nuevo', action: 'iniciar_crear_cuenta' },
+            { label: '✕ Cerrar chat', action: 'cerrar_chat' },
+          ],
+          undefined,
+          250
+        );
+      }
+    } finally {
+      savingReportRef.current = false;
+    }
+  };
+
+  // Finalizar creación de chat directo persistido en BD
+  const finalizarChatDirecto = async (mensajeInicial: string) => {
+    if (savingReportRef.current) return;
+    savingReportRef.current = true;
+    const title = directChatDraft.title || 'Chat de soporte Serviprox';
+
+    if (!user) {
+      savingReportRef.current = false;
+      setFlow('inicio');
+      pushAgent(
+        'Para guardar un chat directo en tu historial necesitas tener sesión iniciada. ¿Deseas crear una cuenta ahora o iniciar sesión?',
+        [
+          { label: '👤 Crear cuenta (Cliente o Profesional)', action: 'iniciar_crear_cuenta' },
+          { label: '🚀 Ir a Iniciar sesión', action: 'goto_user_login' },
+        ],
+        undefined,
+        250
+      );
+      return;
+    }
+
+    try {
+      const savedChat = await supportChatService.create({
+        title,
+        topic: 'soporte',
+        initialMessage: mensajeInicial,
+      });
+      window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
+      onChatSaved?.(savedChat);
+      setDirectChatDraft({});
+      setFlow('fin');
+      pushAgent(
+        `✅ **¡Chat de soporte creado y guardado!**\n\n💬 **Asunto:** ${savedChat.title}\n🔖 **ID de Chat:** #${savedChat.id}\n\nTu conversación ya aparece en la pestaña **"Mis Chats"** y el equipo de soporte fue notificado.`,
+        [
+          { label: '📂 Ver Mis Chats y Reportes', action: 'goto_pqrs' },
+          { label: '🔄 Iniciar otra consulta', action: 'restart' },
+        ],
+        {
+          ticketNumber: `CHAT-${savedChat.id}`,
+          type: 'chat_soporte',
+          summary: savedChat.title,
+        },
+        250
+      );
+    } catch (err) {
+      pushAgent(
+        `No pudimos guardar el chat en este momento (${extractApiErrorMessage(err)}). Inténtalo nuevamente.`,
+        [{ label: '🔄 Reintentar', action: 'iniciar_chat_directo' }],
+        undefined,
+        250
+      );
+    } finally {
+      savingReportRef.current = false;
+    }
   };
 
   // Finalizar creación de trabajador administrativo
@@ -402,6 +712,75 @@ export function LiveSupportChatModal({
   // ───────────────────────────────────────────────────────────────────────────
   const handleQuickAction = async (action: string) => {
     switch (action) {
+      case 'iniciar_crear_cuenta': {
+        pushUser('Deseo crear una cuenta (Cliente o Profesional) por el chat.');
+        setFlow('user_reg_role');
+        setUserRegDraft({});
+        setCreatedUserCreds(null);
+        pushAgent(
+          '👤 **Crear cuenta en Serviprox por el chat**\n\nTe pediré paso a paso tus datos: nombre y apellido, correo, contraseña, confirmar contraseña, teléfono, ciudad, cédula y dirección del inmueble.\n\n👉 **Paso 1:** Selecciona el tipo de cuenta que deseas crear:',
+          [
+            { label: '🏠 Cuenta Cliente (Perfil)', action: 'sel_reg_role:client' },
+            { label: '🛠️ Cuenta Profesional', action: 'sel_reg_role:professional' },
+          ],
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'instant_user_login': {
+        if (!createdUserCreds) {
+          onClose();
+          window.location.href = '/login';
+          break;
+        }
+        const creds = createdUserCreds;
+        setIsTyping(true);
+        try {
+          const logged = await login({ email: creds.email, password: creds.password });
+          setIsTyping(false);
+          setCreatedUserCreds(null);
+          onClose();
+          window.location.href = getEntryRoute(logged);
+        } catch (err) {
+          setIsTyping(false);
+          pushAgent(
+            `⚠️ No pudimos iniciar sesión automáticamente (${extractApiErrorMessage(err)}). Puedes ingresar desde Iniciar sesión.`,
+            [{ label: '🚀 Ir a Iniciar sesión', action: 'goto_user_login' }],
+            undefined,
+            250
+          );
+        }
+        break;
+      }
+
+      case 'goto_user_login': {
+        setCreatedUserCreds(null);
+        onClose();
+        window.location.href = '/login';
+        break;
+      }
+
+      case 'iniciar_chat_directo': {
+        pushUser('Quiero crear un chat directo con soporte.');
+        setFlow('chat_directo_titulo');
+        setDirectChatDraft({});
+        pushAgent(
+          '💬 **Crear chat de soporte**\n\nEscribe el **asunto o título** del chat que deseas crear (por ejemplo: "Seguimiento de reporte", "Consulta sobre un servicio", "Soporte general"):',
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'queja_producto': {
+        pushUser('Deseo radicar un PQR de Producto por este chat.');
+        startProductComplaint();
+        break;
+      }
+
       case 'iniciar_crear_admin': {
         pushUser('Deseo dar de alta mi cuenta administrativa en la base de datos.');
         setFlow('admin_worker_key');
@@ -472,12 +851,13 @@ export function LiveSupportChatModal({
 
       case 'cerrar_chat': {
         setCreatedAdminCreds(null);
+        setCreatedUserCreds(null);
         onClose();
         break;
       }
 
       case 'queja_contratista': {
-        pushUser('Deseo radicar una queja formal contra un contratista por este chat.');
+        pushUser('Deseo radicar un PQR de servicio contra un contratista por este chat.');
         startContractorComplaint();
         break;
       }
@@ -592,6 +972,62 @@ export function LiveSupportChatModal({
           break;
         }
 
+        // Selección de tipo de cuenta (Cliente o Profesional)
+        if (action.startsWith('sel_reg_role:')) {
+          const role = action.replace('sel_reg_role:', '') === 'professional' ? 'professional' : 'client';
+          setUserRegDraft((prev) => ({ ...prev, role }));
+          pushUser(role === 'professional' ? '🛠️ Cuenta Profesional' : '🏠 Cuenta Cliente (Perfil)');
+          setFlow('user_reg_fullname');
+          pushAgent(
+            `Perfecto, crearemos tu cuenta de **${role === 'professional' ? 'Profesional' : 'Cliente (Perfil)'}**.\n\n👉 **Paso 2:** Escribe tu **Nombre y apellido** completo (ejemplo: Laura Gómez):`,
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+
+        // Selección rápida de ciudad al registrar cuenta
+        if (action.startsWith('sel_reg_city:')) {
+          const city = action.replace('sel_reg_city:', '').trim() || 'Bogotá';
+          setUserRegDraft((prev) => ({ ...prev, city }));
+          pushUser(`🏙️ Ciudad: ${city}`);
+          setFlow('user_reg_document');
+          pushAgent(
+            `Ciudad registrada: **${city}**.\n\n👉 **Paso 7:** Escribe tu número de **Cédula / documento** (ejemplo: 1020345678):`,
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+
+        // Selección de producto Meko Shop para PQR de Producto
+        if (action.startsWith('sel_product:')) {
+          const pid = action.replace('sel_product:', '');
+          const foundProd = propsProducts.find((p) => String(p.id) === pid);
+          if (foundProd) {
+            const parsedId = /^\d+$/.test(String(foundProd.id)) ? Number(foundProd.id) : null;
+            setQuejaDraft((d) => ({
+              ...d,
+              subjectType: 'producto',
+              productId: parsedId,
+              productName: foundProd.title,
+              contractorId: '',
+              contractorName: foundProd.sellerName || 'Vendedor Meko Shop',
+              contractorCompany: `Meko Shop · ${foundProd.sellerName || 'Vendedor'}`,
+              contractorSpecialty: foundProd.category || 'Producto Meko Shop',
+              contractorAvatar: foundProd.imageUrl,
+            }));
+            pushUser(`📦 Producto seleccionado: ${foundProd.title}`);
+            setFlow('queja_descripcion');
+            pushAgent(
+              `✅ Producto identificado: **${foundProd.title}** (Vendedor: ${foundProd.sellerName}).\n\nAhora descríbeme detalladamente qué problema ocurrió con este producto:`
+            );
+          }
+          break;
+        }
+
         // Selección de contratista de la base de datos
         if (action.startsWith('sel_contractor:')) {
           const id = action.replace('sel_contractor:', '');
@@ -599,6 +1035,7 @@ export function LiveSupportChatModal({
           if (found) {
             setQuejaDraft((d) => ({
               ...d,
+              subjectType: 'servicio',
               contractorId: found.id,
               contractorName: found.name,
               contractorCompany: found.companyName,
@@ -634,7 +1071,32 @@ export function LiveSupportChatModal({
           break;
         }
 
-        if (action === 'goto_pqrs' || action === 'finish_chat') {
+        if (action.startsWith('copiar_radicado:')) {
+          const code = action.replace('copiar_radicado:', '').trim();
+          if (code && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            void navigator.clipboard.writeText(code).catch(() => {});
+          }
+          pushAgent(
+            `📋 Número de radicado **${code}** copiado. También quedó guardado de forma permanente en tu expediente PQR y en **"Mis Chats"**.`,
+            undefined,
+            undefined,
+            150
+          );
+          break;
+        }
+
+        if (action === 'goto_pqrs') {
+          window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
+          window.dispatchEvent(new CustomEvent('serviprox:problem-updated'));
+          onClose();
+          if (user && !window.location.pathname.includes('/pqrs')) {
+            const targetPath = user.role === 'professional' ? '/profesional/pqrs' : '/cliente/pqrs';
+            window.location.assign(targetPath);
+          }
+          break;
+        }
+
+        if (action === 'finish_chat') {
           onClose();
           break;
         }
@@ -685,11 +1147,15 @@ export function LiveSupportChatModal({
   // ───────────────────────────────────────────────────────────────────────────
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (flow === 'admin_saving') return;
+    if (flow === 'admin_saving' || flow === 'user_reg_saving') return;
     const text = inputText.trim();
     if (!text) return;
     setInputText('');
-    pushUser(flow === 'admin_password' ? '••••••••' : text);
+    const isPasswordStep =
+      flow === 'admin_password' ||
+      flow === 'user_reg_password' ||
+      flow === 'user_reg_confirm_password';
+    pushUser(isPasswordStep ? '••••••••' : text);
 
     const lower = text.toLowerCase();
 
@@ -707,18 +1173,38 @@ export function LiveSupportChatModal({
       return;
     }
 
-    // 0.5. Detectar intención de crear cuenta administrativa / alta trabajador
+    // 0.5. Detectar intención de crear cuenta administrativa vs Cliente/Profesional
     if (
       flow === 'inicio' &&
-      (lower.includes('crear') ||
-        lower.includes('cuenta') ||
-        lower.includes('registro') ||
-        lower.includes('trabajador') ||
+      (lower.includes('trabajador') ||
         lower.includes('admin') ||
-        lower.includes('alta') ||
+        lower.includes('staff') ||
         lower.includes('clave'))
     ) {
       void handleQuickAction('iniciar_crear_admin');
+      return;
+    }
+
+    if (
+      flow === 'inicio' &&
+      (lower.includes('crear cuenta') ||
+        lower.includes('registrarme') ||
+        lower.includes('registro') ||
+        lower.includes('nueva cuenta') ||
+        lower.includes('profesional') ||
+        lower.includes('perfil'))
+    ) {
+      void handleQuickAction('iniciar_crear_cuenta');
+      return;
+    }
+
+    if (flow === 'inicio' && (lower.includes('crear chat') || lower.includes('nuevo chat'))) {
+      void handleQuickAction('iniciar_chat_directo');
+      return;
+    }
+
+    if (flow === 'inicio' && lower.includes('producto')) {
+      void handleQuickAction('queja_producto');
       return;
     }
 
@@ -731,6 +1217,25 @@ export function LiveSupportChatModal({
         lower.includes('activar cuenta'))
     ) {
       void handleQuickAction('iniciar_desbloqueo');
+      return;
+    }
+
+    // 1.5. Detectar intención general de "reporte" para ofrecer todas las vías que dejan PQR + Radicado
+    if (
+      flow === 'inicio' &&
+      (lower.includes('reporte') || lower.includes('reportar')) &&
+      !lower.includes('contratista')
+    ) {
+      pushAgent(
+        'Con gusto te ayudo a registrar tu **reporte**. Todos los reportes generan un **PQR oficial con Número de Radicado** y guardan el historial de este chat.\n\n¿Qué tipo de reporte deseas radicar?',
+        [
+          { label: '📋 PQR de Servicio (Profesional)', action: 'queja_contratista' },
+          { label: '📦 PQR de Producto (Tienda)', action: 'queja_producto' },
+          { label: '📱 Reporte Técnico App (PQR + Radicado)', action: 'problema_app' },
+        ],
+        undefined,
+        250
+      );
       return;
     }
 
@@ -765,6 +1270,291 @@ export function LiveSupportChatModal({
     }
 
     switch (flow) {
+      // ── Flujo de Creación de Cuenta (Cliente / Perfil o Profesional) ─────────
+      case 'user_reg_role': {
+        const isPro = lower.includes('profes') || lower.includes('oficio') || lower.includes('técnic') || lower.includes('tecnic');
+        const isClient = lower.includes('client') || lower.includes('perfil') || lower.includes('hogar') || lower.includes('usuario');
+        if (!isPro && !isClient) {
+          pushAgent(
+            'Por favor elige si deseas crear una cuenta **Cliente (Perfil)** o **Profesional**:',
+            [
+              { label: '🏠 Cuenta Cliente (Perfil)', action: 'sel_reg_role:client' },
+              { label: '🛠️ Cuenta Profesional', action: 'sel_reg_role:professional' },
+            ],
+            undefined,
+            250
+          );
+          break;
+        }
+        const role: PublicRegisterRole = isPro ? 'professional' : 'client';
+        setUserRegDraft((prev) => ({ ...prev, role }));
+        setFlow('user_reg_fullname');
+        pushAgent(
+          `Excelente, crearemos tu cuenta de **${role === 'professional' ? 'Profesional' : 'Cliente (Perfil)'}**.\n\n👉 **Paso 2:** Escribe tu **Nombre y apellido** completo (ejemplo: Laura Gómez):`,
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'user_reg_fullname': {
+        const parts = text.split(/\s+/).filter(Boolean);
+        if (parts.length < 2 || text.length < 4) {
+          pushAgent(
+            '⚠️ Escribe tu **nombre y apellido** completos (al menos dos palabras, ejemplo: Laura Gómez):',
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+        const firstName = parts[0];
+        const lastName = parts.slice(1).join(' ');
+        setUserRegDraft((prev) => ({ ...prev, first_name: firstName, last_name: lastName }));
+        setFlow('user_reg_email');
+        pushAgent(
+          `Mucho gusto, **${firstName} ${lastName}**.\n\n👉 **Paso 3:** Escribe tu **Correo electrónico** (ejemplo: nombre@correo.com):`,
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'user_reg_email': {
+        if (!/^\S+@\S+\.\S+$/.test(text)) {
+          pushAgent(
+            '⚠️ Ingresa un correo electrónico válido (ejemplo: tu@correo.com):',
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+        const normalizedEmail = text.toLowerCase();
+        const nextDraft = { ...userRegDraft, email: normalizedEmail };
+        setUserRegDraft(nextDraft);
+        if (nextDraft.password && nextDraft.address && nextDraft.document_id) {
+          void finalizarCrearCuentaUsuario(nextDraft);
+          break;
+        }
+        setFlow('user_reg_password');
+        pushAgent(
+          `Correo registrado: **${normalizedEmail}**.\n\n👉 **Paso 4:** Define tu **Contraseña** (mínimo 8 caracteres):`,
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'user_reg_password': {
+        if (text.length < 8) {
+          pushAgent(
+            '⚠️ La contraseña debe tener al menos **8 caracteres**. Escribe una contraseña más segura:',
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+        setUserRegDraft((prev) => ({ ...prev, password: text }));
+        setFlow('user_reg_confirm_password');
+        pushAgent(
+          '👉 **Paso 5:** **Confirma tu contraseña** (escríbela nuevamente para verificar que coincida):',
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'user_reg_confirm_password': {
+        if (text !== userRegDraft.password) {
+          pushAgent(
+            '⚠️ Las contraseñas no coinciden. Escribe nuevamente la confirmación exactamente igual a tu contraseña:',
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+        const nextDraft = { ...userRegDraft, confirm_password: text };
+        setUserRegDraft(nextDraft);
+        if (nextDraft.address && nextDraft.document_id && nextDraft.phone) {
+          void finalizarCrearCuentaUsuario(nextDraft);
+          break;
+        }
+        setFlow('user_reg_phone');
+        pushAgent(
+          '✅ Contraseña confirmada.\n\n👉 **Paso 6:** Escribe tu **Teléfono / celular** (ejemplo: +57 300 000 0000):',
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'user_reg_phone': {
+        if (text.replace(/\D/g, '').length < 7) {
+          pushAgent(
+            '⚠️ Ingresa un número de teléfono válido (al menos 7 dígitos):',
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+        setUserRegDraft((prev) => ({ ...prev, phone: text }));
+        setFlow('user_reg_city');
+        pushAgent(
+          `Teléfono guardado: **${text}**.\n\n👉 **Paso 7:** Selecciona o escribe tu **Ciudad**:`,
+          [
+            { label: '📍 Bogotá', action: 'sel_reg_city:Bogotá' },
+            { label: '📍 Medellín', action: 'sel_reg_city:Medellín' },
+            { label: '📍 Cali', action: 'sel_reg_city:Cali' },
+            { label: '📍 Cartagena', action: 'sel_reg_city:Cartagena' },
+          ],
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'user_reg_city': {
+        setUserRegDraft((prev) => ({ ...prev, city: text }));
+        setFlow('user_reg_document');
+        pushAgent(
+          `Ciudad guardada: **${text}**.\n\n👉 **Paso 8:** Escribe tu **Cédula / documento de identidad** (ejemplo: CC 1020345678):`,
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'user_reg_document': {
+        if (text.length < 5) {
+          pushAgent(
+            '⚠️ Ingresa un número de cédula o documento válido:',
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+        setUserRegDraft((prev) => ({ ...prev, document_id: text }));
+        setFlow('user_reg_address');
+        pushAgent(
+          `Cédula guardada: **${text}**.\n\n👉 **Paso 9:** Escribe la **Dirección del inmueble** (ejemplo: Calle 72 # 11-45, Chapinero):`,
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'user_reg_address': {
+        if (text.length < 5) {
+          pushAgent(
+            '⚠️ Escribe una dirección de inmueble más completa (ejemplo: Calle 72 # 11-45):',
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+        const nextDraft = { ...userRegDraft, address: text };
+        setUserRegDraft(nextDraft);
+        if (nextDraft.role === 'professional') {
+          setFlow('user_reg_profession');
+          pushAgent(
+            `Dirección guardada: **${text}**.\n\n👉 **Último paso (Profesional):** Escribe tu **Profesión u oficio** (ejemplo: Electricista, Plomero, Técnico en aires):`,
+            undefined,
+            undefined,
+            250
+          );
+        } else {
+          void finalizarCrearCuentaUsuario(nextDraft);
+        }
+        break;
+      }
+
+      case 'user_reg_profession': {
+        if (text.length < 3) {
+          pushAgent(
+            '⚠️ Escribe tu profesión u oficio (mínimo 3 caracteres, ejemplo: Electricista):',
+            undefined,
+            undefined,
+            250
+          );
+          break;
+        }
+        const nextDraft = { ...userRegDraft, profession: text };
+        setUserRegDraft(nextDraft);
+        void finalizarCrearCuentaUsuario(nextDraft);
+        break;
+      }
+
+      // ── Flujo de Crear Chat Directo con Soporte ──────────────────────────────
+      case 'chat_directo_titulo': {
+        setDirectChatDraft({ title: text });
+        setFlow('chat_directo_mensaje');
+        pushAgent(
+          `Asunto registrado: **${text}**.\n\nAhora escribe tu **mensaje inicial** para crear y guardar este chat con soporte:`,
+          undefined,
+          undefined,
+          250
+        );
+        break;
+      }
+
+      case 'chat_directo_mensaje': {
+        void finalizarChatDirecto(text);
+        break;
+      }
+
+      // ── Selección de Producto para PQR de Producto ──────────────────────────
+      case 'queja_cual_producto': {
+        const foundProd = propsProducts.find((p) =>
+          p.title.toLowerCase().includes(lower) || lower.includes(p.title.toLowerCase())
+        );
+        if (foundProd) {
+          const parsedId = /^\d+$/.test(String(foundProd.id)) ? Number(foundProd.id) : null;
+          setQuejaDraft((d) => ({
+            ...d,
+            subjectType: 'producto',
+            productId: parsedId,
+            productName: foundProd.title,
+            contractorId: '',
+            contractorName: foundProd.sellerName || 'Vendedor Meko Shop',
+            contractorCompany: `Meko Shop · ${foundProd.sellerName || 'Vendedor'}`,
+            contractorSpecialty: foundProd.category || 'Producto Meko Shop',
+            contractorAvatar: foundProd.imageUrl,
+          }));
+          setFlow('queja_descripcion');
+          pushAgent(
+            `✅ Producto encontrado: **${foundProd.title}** (Vendedor: ${foundProd.sellerName}).\n\nDescribe detalladamente el inconveniente ocurrido con este producto:`
+          );
+        } else {
+          setQuejaDraft((d) => ({
+            ...d,
+            subjectType: 'producto',
+            productId: null,
+            productName: text,
+            contractorId: '',
+            contractorName: 'Vendedor Meko Shop',
+            contractorCompany: 'Meko Shop · Producto',
+            contractorSpecialty: 'Producto de Tienda',
+          }));
+          setFlow('queja_descripcion');
+          pushAgent(
+            `📦 Producto registrado: **${text}**.\n\nAhora descríbeme detalladamente qué problema o anomalía ocurrió con este producto:`
+          );
+        }
+        break;
+      }
       // ── Flujo de Alta / Registro de Trabajador Administrativo ────────────────
       case 'admin_worker_key': {
         if (text === 'Juanpablo9*') {
@@ -1152,45 +1942,74 @@ export function LiveSupportChatModal({
   };
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Finalizar y radicar PQR formal
+  // Finalizar y radicar PQR formal (Servicio o Producto + Registro de Chat)
   // ───────────────────────────────────────────────────────────────────────────
   const finalizarQueja = async () => {
     if (savingReportRef.current) return;
     savingReportRef.current = true;
-    const contractor =
+    const isProducto = quejaDraft.subjectType === 'producto';
+    const contractor: PqrContractorRef =
       registeredContractors.find((c) => c.id === quejaDraft.contractorId) ||
-      registeredContractors[0];
+      registeredContractors[0] || {
+        id: quejaDraft.contractorId || 'soporte-serviprox',
+        name: quejaDraft.contractorName || 'Profesional / Servicio Reportado',
+        companyName: quejaDraft.contractorCompany || 'Serviprox · Servicios',
+        specialtyLabel: quejaDraft.contractorSpecialty || 'Servicios Generales',
+      };
 
     const amountNum = quejaDraft.monto
       ? parseFloat(quejaDraft.monto.replace(/[^0-9.]/g, ''))
       : undefined;
 
+    if (!onPqrCreatedFromChat && !user) {
+      savingReportRef.current = false;
+      pushAgent('Para radicar un PQR desde aquí, inicia sesión primero o ve a la sección PQRS.');
+      return;
+    }
+
+    const transcript = buildChatTranscript();
+    const pqrPayload = {
+      type: 'queja' as const,
+      subjectType: (isProducto ? 'producto' : 'servicio') as 'producto' | 'servicio',
+      productId: isProducto ? quejaDraft.productId ?? null : null,
+      productName: isProducto ? quejaDraft.productName || 'Producto Meko Shop' : undefined,
+      relatedTo: isProducto
+        ? quejaDraft.productId
+          ? `Producto #${quejaDraft.productId}: ${quejaDraft.productName || 'Producto'}`
+          : `Producto: ${quejaDraft.productName || 'Producto Meko Shop'}`
+        : contractor.companyName || contractor.name,
+      reason: (isProducto
+        ? 'producto_defectuoso'
+        : (quejaDraft.descripcion || '').toLowerCase().includes('garant')
+          ? 'garantia_no_atendida'
+          : 'mala_calidad_obra') as PqrReport['reason'],
+      contractorId: isProducto ? '' : contractor.id,
+      contractorName: isProducto ? quejaDraft.contractorName || 'Vendedor Meko Shop' : contractor.name,
+      contractorCompany: isProducto ? quejaDraft.contractorCompany || 'Meko Shop · Producto' : contractor.companyName,
+      contractorSpecialty: isProducto ? quejaDraft.contractorSpecialty || 'Producto Meko Shop' : contractor.specialtyLabel,
+      contractorAvatar: isProducto ? quejaDraft.contractorAvatar : contractor.avatarUrl,
+      clientName: (user && `${user.first_name || ''} ${user.last_name || ''}`.trim()) || user?.username || 'Cliente',
+      clientPhone: user?.phone || '',
+      clientEmail: user?.email || '',
+      clientDocumentId: user?.document_id || '',
+      clientAddress: user?.address || '',
+      incidentDate: quejaDraft.fecha || new Date().toISOString().split('T')[0],
+      description: quejaDraft.descripcion || 'Queja radicada vía Chat en Vivo.',
+      amountDisputed: Number.isFinite(amountNum) ? amountNum : undefined,
+      desiredResolution:
+        quejaDraft.solucion ||
+        (isProducto
+          ? 'Revisión del producto, garantía o reembolso respaldado por el comité de calidad.'
+          : 'Revisión técnica urgente y mediación formal por la Defensoría de Bogotá.'),
+      evidenceFiles: simulatedScreenshot ? [simulatedScreenshot] : ['Registro_Chat_EnVivo.pdf'],
+      chatTranscript: transcript,
+    };
+
     let created: PqrReport;
     try {
-      const saved = await onPqrCreatedFromChat({
-        type: 'queja',
-        reason:
-          (quejaDraft.descripcion || '').toLowerCase().includes('garant')
-            ? 'garantia_no_atendida'
-            : 'mala_calidad_obra',
-        contractorId: contractor.id,
-        contractorName: contractor.name,
-        contractorCompany: contractor.companyName,
-        contractorSpecialty: contractor.specialtyLabel,
-        contractorAvatar: contractor.avatarUrl,
-        clientName: (user && `${user.first_name || ''} ${user.last_name || ''}`.trim()) || user?.username || '',
-        clientPhone: user?.phone || '',
-        clientEmail: user?.email || '',
-        clientDocumentId: user?.document_id || '',
-        clientAddress: user?.address || '',
-        incidentDate: quejaDraft.fecha || new Date().toISOString().split('T')[0],
-        description: quejaDraft.descripcion || 'Queja radicada vía Chat en Vivo.',
-        amountDisputed: Number.isFinite(amountNum) ? amountNum : undefined,
-        desiredResolution:
-          quejaDraft.solucion ||
-          'Revisión técnica urgente y mediación formal por la Defensoría de Bogotá.',
-        evidenceFiles: simulatedScreenshot ? [simulatedScreenshot] : ['Registro_Chat_EnVivo.pdf'],
-      });
+      const saved = onPqrCreatedFromChat
+        ? await onPqrCreatedFromChat(pqrPayload)
+        : await pqrService.create(pqrPayload);
       if (!saved) throw new Error('El servidor no devolvió el radicado.');
       created = saved;
     } catch (error) {
@@ -1201,17 +2020,22 @@ export function LiveSupportChatModal({
     }
 
     savingReportRef.current = false;
+    window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
     setFlow('fin');
+    const targetSummary = isProducto
+      ? `📦 Producto: **${quejaDraft.productName || 'Producto Meko Shop'}**`
+      : `👷 Contratista Requerido: **${contractor.companyName}** (${contractor.name})`;
     pushAgent(
-      `✅ ¡Tu queja formal ha sido radicada con éxito!\n\n🔖 Número Oficial: **${created.radicadoNumber}**\n👷 Contratista Requerido: **${contractor.companyName}** (${contractor.name})\n⏱️ Plazo de descargos: **48 horas hábiles** (Ley 1480 del Consumidor)\n\nPuedes consultar el expediente y las respuestas oficiales en la sección **"PQRS & Quejas"** de la app.`,
+      `✅ ¡Tu **PQR de ${isProducto ? 'Producto' : 'Servicio'}** y su **chat** quedaron registrados oficialmente!\n\n🔖 **Número de Radicado:** **${created.radicadoNumber}**\n${targetSummary}\n💬 Expediente PQR y conversación guardados en **"PQRS & Reportes"** y **"Mis Chats"**.\n⏱️ Plazo de respuesta: **48 horas hábiles** (Ley 1480 del Consumidor)`,
       [
-        { label: '📂 Ver mis Reclamos y Respuestas', action: 'goto_pqrs' },
-        { label: '🔄 Radicar otro reclamo', action: 'restart' },
+        { label: `📋 Copiar radicado ${created.radicadoNumber}`, action: `copiar_radicado:${created.radicadoNumber}` },
+        { label: '📂 Ver mi PQR y Chat', action: 'goto_pqrs' },
+        { label: '🔄 Radicar otro reporte', action: 'restart' },
       ],
       {
         ticketNumber: created.radicadoNumber,
-        type: 'pqr_contratista',
-        summary: `${contractor.companyName}: ${(quejaDraft.descripcion || '').slice(0, 75)}`,
+        type: isProducto ? 'pqr_producto' : 'pqr_contratista',
+        summary: `${isProducto ? quejaDraft.productName || 'Producto' : contractor.companyName}: ${(quejaDraft.descripcion || '').slice(0, 75)}`,
       }
     );
   };
@@ -1274,25 +2098,36 @@ export function LiveSupportChatModal({
       user?.username ||
       'Usuario Serviprox';
 
+    if (!onPqrCreatedFromChat && !user) {
+      savingReportRef.current = false;
+      pushAgent('Inicia sesión para radicar una apelación formal.');
+      return;
+    }
+
+    const apelacionPayload = {
+      type: 'reclamo' as const,
+      reason: 'otro' as const,
+      contractorId: 'administracion-serviprox',
+      contractorName: 'Administración Serviprox Bogotá',
+      contractorCompany: 'Comité Disciplinario y Mesa Técnica',
+      contractorSpecialty: 'Defensoría y Apelaciones',
+      clientName: userFullName,
+      clientPhone: user?.phone || '+57 300 000 0000',
+      clientEmail: user?.email || 'usuario@serviprox.co',
+      clientDocumentId: user?.document_id || 'CC Verificada',
+      clientAddress: user?.address || 'Bogotá D.C.',
+      incidentDate: new Date().toISOString().split('T')[0],
+      description: `Apelación formal radicada por Chat en Vivo:\n\nMotivo / Causal: ${apelacionDraft.motivo || 'Revisión de sanción'}\nDescargos: "${apelacionDraft.argumentos || 'Solicitud de revisión formal'}"`,
+      desiredResolution: 'Revisión por el Comité Administrativo y reactivación de cuenta.',
+      evidenceFiles: simulatedScreenshot ? [simulatedScreenshot] : ['Descargos_Apelacion_Chat.pdf'],
+      chatTranscript: buildChatTranscript(),
+    };
+
     let created: PqrReport;
     try {
-      const saved = await onPqrCreatedFromChat({
-        type: 'reclamo',
-        reason: 'otro',
-        contractorId: 'administracion-serviprox',
-        contractorName: 'Administración Serviprox Bogotá',
-        contractorCompany: 'Comité Disciplinario y Mesa Técnica',
-        contractorSpecialty: 'Defensoría y Apelaciones',
-        clientName: userFullName,
-        clientPhone: user?.phone || '+57 300 000 0000',
-        clientEmail: user?.email || 'usuario@serviprox.co',
-        clientDocumentId: user?.document_id || 'CC Verificada',
-        clientAddress: user?.address || 'Bogotá D.C.',
-        incidentDate: new Date().toISOString().split('T')[0],
-        description: `Apelación formal radicada por Chat en Vivo:\n\nMotivo / Causal: ${apelacionDraft.motivo || 'Revisión de sanción'}\nDescargos: "${apelacionDraft.argumentos || 'Solicitud de revisión formal'}"`,
-        desiredResolution: 'Revisión por el Comité Administrativo y reactivación de cuenta.',
-        evidenceFiles: simulatedScreenshot ? [simulatedScreenshot] : ['Descargos_Apelacion_Chat.pdf'],
-      });
+      const saved = onPqrCreatedFromChat
+        ? await onPqrCreatedFromChat(apelacionPayload)
+        : await pqrService.create(apelacionPayload);
       if (!saved) throw new Error('El servidor no devolvió el radicado.');
       created = saved;
     } catch (error) {
@@ -1318,9 +2153,10 @@ export function LiveSupportChatModal({
 
     setFlow('fin');
     pushAgent(
-      `✅ ¡Tu apelación formal ha sido radicada ante el Comité Administrativo!\n\n🔖 Número de Radicado: **${created.radicadoNumber}**\n🏛️ Destino: **Administración Serviprox Bogotá (Comité Disciplinario)**\n⏱️ Tiempo de evaluación: **24 a 48 horas hábiles**\n\nEl Administrador evaluará tus descargos en el panel de control administrativo y emitirá el fallo oficial.`,
+      `✅ ¡Tu apelación formal quedó radicada como **PQR oficial** ante el Comité Administrativo!\n\n🔖 **Número de Radicado:** **${created.radicadoNumber}**\n🏛️ Destino: **Administración Serviprox Bogotá (Comité Disciplinario)**\n💬 El historial completo del chat quedó vinculado a este radicado.\n⏱️ Tiempo de evaluación: **24 a 48 horas hábiles**`,
       [
-        { label: '📂 Ver mis Reclamos y Apelaciones', action: 'goto_pqrs' },
+        { label: `📋 Copiar radicado ${created.radicadoNumber}`, action: `copiar_radicado:${created.radicadoNumber}` },
+        { label: '📂 Ver mi PQR y Apelaciones', action: 'goto_pqrs' },
         { label: '🔄 Radicar otro trámite', action: 'restart' },
       ],
       {
@@ -1342,7 +2178,7 @@ export function LiveSupportChatModal({
     const userFullName = user
       ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username
       : 'Usuario';
-    const newProblem: AppProblemReport = {
+    const newProblem: AppProblemReport & { chatTranscript?: ChatTranscriptEntry[] } = {
       id: `prob-${Date.now()}`,
       ticketNumber: ticketId,
       category: cat,
@@ -1354,36 +2190,51 @@ export function LiveSupportChatModal({
       status: 'recibido',
       createdAt: new Date().toISOString(),
       responseNotes: 'Reporte en análisis por el equipo de desarrollo de Servicio Contratista Bogotá.',
+      chatTranscript: buildChatTranscript(),
     };
 
-    if (!onAppProblemReported) {
+    if (!onAppProblemReported && !user) {
       savingReportRef.current = false;
-      pushAgent('No se pudo guardar el reporte porque el servicio de soporte no está configurado. Inténtalo de nuevo más tarde.');
+      pushAgent('Inicia sesión primero para guardar tu reporte y generar el PQR con número de radicado.');
       return;
     }
 
     let created: AppProblemReport;
     try {
-      const saved = await onAppProblemReported(newProblem);
+      const saved = onAppProblemReported
+        ? await onAppProblemReported(newProblem)
+        : await appProblemService.create({
+            category: newProblem.category,
+            categoryLabel: newProblem.categoryLabel,
+            description: newProblem.description,
+            deviceInfo: newProblem.deviceInfo,
+            reportedBy: newProblem.reportedBy,
+            userEmail: newProblem.userEmail,
+            chatTranscript: newProblem.chatTranscript,
+          });
       if (!saved) throw new Error('El servidor no devolvió el ticket.');
       created = saved;
     } catch (error) {
       savingReportRef.current = false;
       console.error('[LiveSupportChatModal] No fue posible guardar el reporte técnico:', error);
-      pushAgent('No se pudo guardar el reporte en el servidor y no se generó un ticket. Verifica tu conexión e inténtalo de nuevo.');
+      pushAgent('No se pudo guardar el reporte en el servidor y no se generó un radicado. Verifica tu conexión e inténtalo de nuevo.');
       return;
     }
 
     savingReportRef.current = false;
+    window.dispatchEvent(new CustomEvent('serviprox:pqr-updated'));
+    window.dispatchEvent(new CustomEvent('serviprox:problem-updated'));
     setFlow('fin');
+    const officialRadicado = created.radicadoNumber || created.ticketNumber;
     pushAgent(
-      `✅ ¡Ticket técnico generado!\n\n🔖 Ticket: **${created.ticketNumber}**\n🔧 Área: **${created.categoryLabel}**\n\nEl equipo de soporte ha sido notificado para corregir la falla a la mayor brevedad.`,
+      `✅ ¡Tu **reporte**, su **PQR formal** y el **chat** quedaron registrados en la base de datos!\n\n🔖 **Número de Radicado PQR:** **${officialRadicado}**\n🛠️ **Ticket Técnico:** **${created.ticketNumber}**\n🔧 Área: **${created.categoryLabel}**\n💬 Tu conversación y expediente PQR quedaron guardados en **"PQRS & Reportes"** y **"Mis Chats"**.\n\nEl equipo administrativo y de soporte ya fue notificado para dar respuesta formal.`,
       [
-        { label: '📱 Ver mis tickets', action: 'goto_pqrs' },
-        { label: '🔄 Reportar otro problema', action: 'restart' },
+        { label: `📋 Copiar radicado ${officialRadicado}`, action: `copiar_radicado:${officialRadicado}` },
+        { label: '📂 Ver mi PQR y Chat', action: 'goto_pqrs' },
+        { label: '🔄 Radicar otro reporte', action: 'restart' },
       ],
       {
-        ticketNumber: created.ticketNumber,
+        ticketNumber: officialRadicado,
         type: 'problema_app',
         summary: problemaDraft.descripcion || problemaDraft.categoriaLabel || '',
       }
@@ -1691,7 +2542,11 @@ export function LiveSupportChatModal({
                           <span>
                             {msg.ticketCreated.type === 'problema_app'
                               ? 'Ticket Técnico Registrado'
-                              : 'Radicado PQR Formal Generado'}
+                              : msg.ticketCreated.type === 'chat_soporte'
+                                ? 'Chat de Soporte Creado'
+                                : msg.ticketCreated.type === 'pqr_producto'
+                                  ? 'Radicado PQR de Producto Generado'
+                                  : 'Radicado PQR Formal Generado'}
                           </span>
                         </div>
                         <div
@@ -1851,13 +2706,44 @@ export function LiveSupportChatModal({
             </button>
 
             <input
-              type="text"
+              type={
+                flow === 'user_reg_password' ||
+                flow === 'user_reg_confirm_password'
+                  ? 'password'
+                  : 'text'
+              }
               value={inputText}
-              disabled={flow === 'admin_saving'}
+              disabled={flow === 'admin_saving' || flow === 'user_reg_saving'}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={
                 flow === 'admin_saving'
                   ? 'Guardando cuenta administrativa...'
+                  : flow === 'user_reg_saving'
+                  ? 'Creando tu cuenta en Serviprox...'
+                  : flow === 'user_reg_role'
+                  ? 'Escribe "Cliente" o "Profesional" (o elige un botón)...'
+                  : flow === 'user_reg_fullname'
+                  ? 'Escribe tu nombre y apellido completo...'
+                  : flow === 'user_reg_email'
+                  ? 'Escribe tu correo electrónico...'
+                  : flow === 'user_reg_password'
+                  ? 'Define tu contraseña (mínimo 8 caracteres)...'
+                  : flow === 'user_reg_confirm_password'
+                  ? 'Escribe nuevamente tu contraseña para confirmar...'
+                  : flow === 'user_reg_phone'
+                  ? 'Escribe tu teléfono (ej: +57 300 000 0000)...'
+                  : flow === 'user_reg_city'
+                  ? 'Escribe tu ciudad (ej: Bogotá)...'
+                  : flow === 'user_reg_document'
+                  ? 'Escribe tu cédula o documento...'
+                  : flow === 'user_reg_address'
+                  ? 'Escribe la dirección del inmueble...'
+                  : flow === 'user_reg_profession'
+                  ? 'Escribe tu profesión u oficio (ej: Electricista)...'
+                  : flow === 'chat_directo_titulo'
+                  ? 'Escribe el asunto de tu chat...'
+                  : flow === 'chat_directo_mensaje'
+                  ? 'Escribe tu mensaje para soporte...'
                   : flow === 'admin_worker_key'
                   ? 'Escribe la clave de trabajador autorizada...'
                   : flow === 'admin_username'
@@ -1874,15 +2760,17 @@ export function LiveSupportChatModal({
                   ? 'Define tu contraseña administrativa (mínimo 6)...'
                   : flow === 'queja_cual_contratista'
                   ? 'Escribe el nombre del contratista registrado (ej: Carlos Mendoza)...'
+                  : flow === 'queja_cual_producto'
+                  ? 'Escribe el nombre del producto a reportar...'
                   : flow === 'queja_descripcion'
-                  ? 'Describe lo que ocurrió con el contratista...'
+                  ? 'Describe lo que ocurrió...'
                   : flow === 'queja_fecha'
                   ? 'Fecha de los hechos (ej: 18 de septiembre)...'
                   : flow === 'queja_monto'
                   ? 'Monto en disputa (ej: 180000 o "No aplica")...'
                   : flow === 'queja_solucion'
-                  ? 'Solución esperada (ej: reparación, cambio de maestro)...'
-                  : 'Escribe tu queja o problema con la app aquí...'
+                  ? 'Solución esperada (ej: reparación, reembolso)...'
+                  : 'Escribe tu reporte, consulta o "crear cuenta" aquí...'
               }
               className="live-chat-input-pill flex-1 px-3.5 py-2.5 text-xs sm:text-sm bg-neutral-50 border border-neutral-300 rounded-xl text-neutral-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
               style={{
@@ -1902,7 +2790,7 @@ export function LiveSupportChatModal({
 
             <button
               type="submit"
-              disabled={!inputText.trim() || flow === 'admin_saving'}
+              disabled={!inputText.trim() || flow === 'admin_saving' || flow === 'user_reg_saving'}
               className="live-chat-send-btn bg-rose-500 hover:bg-rose-600 disabled:opacity-40 active:scale-95 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0"
               style={{
                 height: '44px',

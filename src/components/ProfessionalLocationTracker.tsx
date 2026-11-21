@@ -46,7 +46,7 @@ export const ProfessionalLocationTracker: React.FC = () => {
       try {
         await professionalProfileService.updateLiveLocation(lat, lng);
         setGpsBlocked(false);
-      } catch (err) {
+      } catch {
         // En caso de fallo transitorio de red, se reintentará en la siguiente lectura
       }
     };

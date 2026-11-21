@@ -36,6 +36,7 @@ import type {
   ServiceCategory,
   ServiceRequest,
 } from "../types/serviprox";
+import { AccountSecurityCard } from "../components/AccountSecurityCard";
 import "./RolePages.css";
 
 type OfferingDraft = {
@@ -52,11 +53,13 @@ const ProfessionalProfilePage: React.FC = () => {
   const [profile, setProfile] = useState<ProfessionalProfile | null>(null);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [username, setUsername] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [accountCity, setAccountCity] = useState("");
+  const [accountAddress, setAccountAddress] = useState("");
   const [documentId, setDocumentId] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
@@ -87,11 +90,13 @@ const ProfessionalProfilePage: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
+    setUsername(user.username || "");
     setFirstName(user.first_name || "");
     setLastName(user.last_name || "");
     setEmail(user.email || "");
     setPhone(user.phone || "");
     setAccountCity(user.city || "");
+    setAccountAddress(user.address || "");
     setDocumentId(user.document_id || "");
     if (!displayName) {
       setDisplayName([user.first_name, user.last_name].filter(Boolean).join(" ") || user.email);
@@ -204,16 +209,23 @@ const ProfessionalProfilePage: React.FC = () => {
     setAccountSuccess(false);
     try {
       await updateMe({
+        username: username.trim(),
+        email: email.trim().toLowerCase(),
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         phone: phone.trim(),
         city: accountCity.trim(),
+        address: accountAddress.trim(),
         document_id: documentId.trim(),
       });
       setAccountSuccess(true);
-      setToast("¡Datos guardados con éxito!");
-    } catch {
-      setAccountError("No pudimos guardar tus datos personales en la base de datos.");
+      setToast("¡Datos de cuenta guardados con éxito!");
+    } catch (err) {
+      setAccountError(
+        err instanceof ApiError
+          ? err.message
+          : "No pudimos guardar tus datos personales en la base de datos."
+      );
     } finally {
       setSavingAccount(false);
     }
@@ -389,9 +401,28 @@ const ProfessionalProfilePage: React.FC = () => {
           <section className="sp-card">
             <div className="sp-card-title">
               <h2>Información personal</h2>
-              <p>Datos de contacto guardados en tu cuenta.</p>
+              <p>Edita tu usuario, correo y datos de contacto guardados en tu cuenta.</p>
             </div>
             <form className="sp-form sp-actions--spaced" onSubmit={handleAccountSubmit}>
+              <div className="sp-grid sp-grid--two">
+                <label className="sp-field">
+                  Usuario
+                  <IonInput
+                    value={username}
+                    required
+                    onIonInput={(event) => setUsername(String(event.detail.value ?? ""))}
+                  />
+                </label>
+                <label className="sp-field">
+                  Correo electrónico
+                  <IonInput
+                    type="email"
+                    value={email}
+                    required
+                    onIonInput={(event) => setEmail(String(event.detail.value ?? ""))}
+                  />
+                </label>
+              </div>
               <div className="sp-grid sp-grid--two">
                 <label className="sp-field">
                   Nombre
@@ -410,15 +441,19 @@ const ProfessionalProfilePage: React.FC = () => {
               </div>
               <div className="sp-grid sp-grid--two">
                 <label className="sp-field">
-                  Email
-                  <IonInput type="email" value={email} readonly />
-                </label>
-                <label className="sp-field">
                   Teléfono
                   <IonInput
                     type="tel"
                     value={phone}
                     onIonInput={(event) => setPhone(String(event.detail.value ?? ""))}
+                  />
+                </label>
+                <label className="sp-field">
+                  Documento de identidad (C.C. / NIT)
+                  <IonInput
+                    value={documentId}
+                    placeholder="Ej. CC 1020304050"
+                    onIonInput={(event) => setDocumentId(String(event.detail.value ?? ""))}
                   />
                 </label>
               </div>
@@ -431,11 +466,11 @@ const ProfessionalProfilePage: React.FC = () => {
                   />
                 </label>
                 <label className="sp-field">
-                  Documento de identidad (C.C. / NIT)
+                  Dirección
                   <IonInput
-                    value={documentId}
-                    placeholder="Ej. CC 1020304050"
-                    onIonInput={(event) => setDocumentId(String(event.detail.value ?? ""))}
+                    value={accountAddress}
+                    placeholder="Ej. Calle 72 # 10-34"
+                    onIonInput={(event) => setAccountAddress(String(event.detail.value ?? ""))}
                   />
                 </label>
               </div>
@@ -452,9 +487,14 @@ const ProfessionalProfilePage: React.FC = () => {
             </form>
           </section>
 
+          <AccountSecurityCard
+            isVerified={profile?.is_verified}
+            onSuccessToast={(message) => setToast(message)}
+          />
+
           <section className="sp-card sp-actions--spaced">
             <div className="sp-card-title">
-              <h2>Cuenta y seguridad</h2>
+              <h2>Preferencias de la aplicación</h2>
               <p>Preferencias locales de uso de la aplicación.</p>
             </div>
             <div className="sp-settings-list">

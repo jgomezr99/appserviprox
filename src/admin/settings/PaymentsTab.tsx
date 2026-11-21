@@ -84,7 +84,7 @@ export const PaymentsTab: React.FC<TabProps> = ({ form, setForm, sec, setSec, bu
     setLoading(true);
     setLoadError("");
     try {
-      const response = await api.get<any>("admin/payments/");
+      const response = await api.get<PaymentRow[] | { results?: PaymentRow[] }>("admin/payments/");
       const payments = Array.isArray(response) ? response : response?.results;
       if (!Array.isArray(payments)) throw new Error("La respuesta de pagos tiene un formato inesperado.");
       setRows(payments);

@@ -10,7 +10,6 @@ import {
   MessageSquare,
   ArrowRight,
   ShieldCheck,
-  User,
   MapPin,
   Phone,
   Mail,
@@ -128,12 +127,25 @@ export function PqrDetailModal({
                 <span className="font-mono font-black text-sm bg-rose-600 text-white px-2.5 py-0.5 rounded-lg tracking-wider">
                   {report.radicadoNumber}
                 </span>
+                <span
+                  className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                    report.subjectType === 'producto' || Boolean(report.productId) || (report.relatedTo || '').toLowerCase().startsWith('producto #')
+                      ? 'bg-amber-500/30 text-amber-200 border border-amber-400/40'
+                      : 'bg-blue-500/30 text-blue-200 border border-blue-400/40'
+                  }`}
+                >
+                  {report.subjectType === 'producto' || Boolean(report.productId) || (report.relatedTo || '').toLowerCase().startsWith('producto #')
+                    ? '📦 Producto'
+                    : '🔧 Servicio'}
+                </span>
                 <span className="text-xs text-neutral-300 font-bold uppercase tracking-wide">
                   {report.type.replace('_', ' ')}
                 </span>
               </div>
               <h2 className="text-base sm:text-lg font-black text-white mt-1">
-                Expediente y Respuestas de la Queja
+                {report.subjectType === 'producto' || Boolean(report.productId) || (report.relatedTo || '').toLowerCase().startsWith('producto #')
+                  ? 'Expediente de PQR · Producto Meko Shop'
+                  : 'Expediente y Respuestas de la Queja · Servicio'}
               </h2>
             </div>
           </div>
@@ -180,31 +192,42 @@ export function PqrDetailModal({
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5">
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Contractor */}
-            <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 flex items-center gap-3">
-              <img
-                src={
-                  report.contractorAvatar ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(report.contractorName)}&background=0284c7&color=fff&bold=true&rounded=true`
-                }
-                alt={report.contractorName}
-                className="w-12 h-12 rounded-xl object-cover border border-neutral-300 flex-shrink-0"
-              />
-              <div className="min-w-0">
-                <span className="text-[10px] font-black text-rose-600 uppercase tracking-wide">
-                  Contratista Requerido
-                </span>
-                <h4 className="text-sm font-extrabold text-neutral-900 truncate">
-                  {report.contractorCompany}
-                </h4>
-                <p className="text-xs text-neutral-600 font-medium">
-                  {report.contractorName}
-                  {report.contractorSpecialty
-                    ? ` • ${report.contractorSpecialty}`
-                    : ''}
-                </p>
-              </div>
-            </div>
+            {/* Contractor or Product */}
+            {(() => {
+              const isProd =
+                report.subjectType === 'producto' ||
+                Boolean(report.productId) ||
+                Boolean(report.productName) ||
+                (report.relatedTo || '').toLowerCase().startsWith('producto #');
+              const entityTitle = isProd
+                ? report.productName || report.relatedTo || report.contractorCompany || 'Producto Meko Shop'
+                : report.contractorCompany || report.contractorName;
+              return (
+                <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 flex items-center gap-3">
+                  <img
+                    src={
+                      report.contractorAvatar ||
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(isProd ? entityTitle : report.contractorName || 'Serviprox')}&background=${isProd ? 'd97706' : '0284c7'}&color=fff&bold=true&rounded=true`
+                    }
+                    alt={isProd ? entityTitle : report.contractorName}
+                    className="w-12 h-12 rounded-xl object-cover border border-neutral-300 flex-shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <span className={`text-[10px] font-black uppercase tracking-wide ${isProd ? 'text-amber-700' : 'text-rose-600'}`}>
+                      {isProd ? 'Producto Reportado (Meko Shop)' : 'Contratista Requerido'}
+                    </span>
+                    <h4 className="text-sm font-extrabold text-neutral-900 truncate">
+                      {entityTitle}
+                    </h4>
+                    <p className="text-xs text-neutral-600 font-medium">
+                      {isProd ? 'Vendedor: ' : ''}
+                      {report.contractorName || 'Serviprox'}
+                      {report.contractorSpecialty ? ` • ${report.contractorSpecialty}` : ''}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Status card */}
             <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 flex flex-col justify-between">

@@ -77,7 +77,7 @@ const DEFAULT_CONVERSATIONS: ChatConversation[] = [
     unread: 0,
     messages: [
       { id: "m-3", sender: "client", text: "¿Cuál es el costo aproximado del punto eléctrico adicional?", time: "Ayer 3:15 PM" },
-      { id: "m-4", sender: "pro", text: "Hola Andrés, el punto eléctrico estándar está en \$45.000 con mano de obra y materiales básicos.", time: "Ayer 3:20 PM" },
+      { id: "m-4", sender: "pro", text: "Hola Andrés, el punto eléctrico estándar está en $45.000 con mano de obra y materiales básicos.", time: "Ayer 3:20 PM" },
       { id: "m-5", sender: "client", text: "Listo, quedamos confirmados para el viernes a las 2:00 PM.", time: "Ayer 3:22 PM" },
     ],
   },
@@ -129,7 +129,7 @@ const ProfessionalDashboard: React.FC = () => {
           setProfile(payload);
           try {
             localStorage.setItem("serviprox_cached_pro_profile", JSON.stringify(payload));
-          } catch {}
+          } catch { /* ignore storage errors */ }
         }
       })
       .catch((error) => {
@@ -149,7 +149,7 @@ const ProfessionalDashboard: React.FC = () => {
     setActivePlan(planName);
     try {
       localStorage.setItem("serviprox_pro_advertising_plan", planName);
-    } catch {}
+    } catch { /* ignore storage errors */ }
     setAdsModalOpen(false);
     setToastMessage(`¡Campaña publicitaria "${planName}" activada con éxito! Tu perfil ahora está destacado.`);
   };
@@ -158,7 +158,7 @@ const ProfessionalDashboard: React.FC = () => {
     setActivePlan("");
     try {
       localStorage.removeItem("serviprox_pro_advertising_plan");
-    } catch {}
+    } catch { /* ignore storage errors */ }
     setAdsModalOpen(false);
     setToastMessage("Campaña publicitaria pausada.");
   };

@@ -81,16 +81,17 @@ const INITIAL_REPORTS: ProductReportItem[] = [
 ];
 
 export const getProductReports = (): ProductReportItem[] => {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined") return INITIAL_REPORTS;
   try {
     const raw = localStorage.getItem(REPORTS_KEY);
-    if (!raw) return [];
+    if (!raw) {
+      localStorage.setItem(REPORTS_KEY, JSON.stringify(INITIAL_REPORTS));
+      return INITIAL_REPORTS;
+    }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((report) => !["REP-PROD-101", "REP-PROD-102"].includes(String(report?.id)))
-      : [];
+    return Array.isArray(parsed) ? parsed : INITIAL_REPORTS;
   } catch {
-    return [];
+    return INITIAL_REPORTS;
   }
 };
 

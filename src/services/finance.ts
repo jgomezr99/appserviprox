@@ -219,8 +219,9 @@ export const financeService = {
     summary: async (): Promise<FinanceSummary> => {
       try {
         return await api.get<FinanceSummary>("admin/finance/summary/");
-      } catch (err: any) {
-        if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+      } catch (err: unknown) {
+        const e = err as { status?: number; message?: string };
+        if (e?.status === 404 || e?.status === 403 || String(e?.message || "").includes("Recurso no encontrado")) {
           return DEFAULT_FINANCE_SUMMARY;
         }
         throw err;
@@ -229,8 +230,9 @@ export const financeService = {
     payments: async (): Promise<PaymentRow[]> => {
       try {
         return await api.get<PaymentRow[]>("admin/payments/");
-      } catch (err: any) {
-        if (err?.status === 404 || err?.status === 403 || String(err?.message || "").includes("Recurso no encontrado")) {
+      } catch (err: unknown) {
+        const e = err as { status?: number; message?: string };
+        if (e?.status === 404 || e?.status === 403 || String(e?.message || "").includes("Recurso no encontrado")) {
           return [];
         }
         throw err;
@@ -241,8 +243,9 @@ export const financeService = {
     payouts: async (): Promise<PayoutRow[]> => {
       try {
         return await api.get<PayoutRow[]>("admin/payouts/");
-      } catch (err: any) {
-        if (err?.status === 404 || err?.status === 403) return [];
+      } catch (err: unknown) {
+        const e = err as { status?: number };
+        if (e?.status === 404 || e?.status === 403) return [];
         throw err;
       }
     },
@@ -251,8 +254,9 @@ export const financeService = {
     withdrawals: async (): Promise<WithdrawalRow[]> => {
       try {
         return await api.get<WithdrawalRow[]>("admin/withdrawals/");
-      } catch (err: any) {
-        if (err?.status === 404 || err?.status === 403) return [];
+      } catch (err: unknown) {
+        const e = err as { status?: number };
+        if (e?.status === 404 || e?.status === 403) return [];
         throw err;
       }
     },
@@ -263,8 +267,9 @@ export const financeService = {
     refunds: async (): Promise<RefundRow[]> => {
       try {
         return await api.get<RefundRow[]>("admin/refunds/");
-      } catch (err: any) {
-        if (err?.status === 404 || err?.status === 403) return [];
+      } catch (err: unknown) {
+        const e = err as { status?: number };
+        if (e?.status === 404 || e?.status === 403) return [];
         throw err;
       }
     },
@@ -275,8 +280,9 @@ export const financeService = {
     report: async (from: string, to: string): Promise<FinanceReport> => {
       try {
         return await api.get<FinanceReport>(`admin/finance/report/${reportQuery(from, to)}`);
-      } catch (err: any) {
-        if (err?.status === 404 || err?.status === 403) {
+      } catch (err: unknown) {
+        const e = err as { status?: number };
+        if (e?.status === 404 || e?.status === 403) {
           return { totals: { orders: 0, gross: 0, commissions: 0, professionals: 0 }, rows: [] };
         }
         throw err;

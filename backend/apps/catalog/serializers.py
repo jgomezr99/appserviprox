@@ -1,13 +1,12 @@
 from rest_framework import serializers
 
-from .models import Service, ServiceCategory, StoreProduct, StoreProductReport
+from .models import Service, ServiceCategory, StoreProduct
 
 MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024
 
 class StoreProductSerializer(serializers.ModelSerializer):
     image = serializers.ImageField(write_only=True, required=False, allow_null=True)
     image_url = serializers.SerializerMethodField()
-    images = serializers.SerializerMethodField()
     is_owner = serializers.SerializerMethodField()
 
     class Meta:
@@ -24,7 +23,6 @@ class StoreProductSerializer(serializers.ModelSerializer):
             "city",
             "image",
             "image_url",
-            "images",
             "is_owner",
             "created_at",
         ]
@@ -59,47 +57,10 @@ class StoreProductSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return request.build_absolute_uri(path) if request else path
 
-    def get_images(self, instance) -> list[str]:
-        request = self.context.get("request")
-        paths = []
-        if instance.image:
-            paths.append(f"/api/v1/store/products/{instance.pk}/image/")
-        paths.extend(f"/api/v1/store/products/{instance.pk}/gallery/{image.pk}/" for image in instance.gallery.all())
-        return [request.build_absolute_uri(path) if request else path for path in paths]
-
     def get_is_owner(self, instance) -> bool:
         request = self.context.get("request")
         user = getattr(request, "user", None)
         return bool(user and user.is_authenticated and instance.owner_id == user.id)
-
-
-class StoreProductReportSerializer(serializers.ModelSerializer):
-    productId = serializers.CharField(source="product_id_snapshot", read_only=True)
-    productTitle = serializers.CharField(source="product_title", read_only=True)
-    productPrice = serializers.IntegerField(source="product_price", read_only=True)
-    productCategory = serializers.CharField(source="product_category", read_only=True)
-    productImage = serializers.CharField(source="product_image", read_only=True)
-    sellerId = serializers.CharField(source="seller_id_snapshot", read_only=True)
-    sellerName = serializers.CharField(source="seller_name", read_only=True)
-    sellerEmail = serializers.EmailField(source="seller_email", read_only=True)
-    sellerPhone = serializers.CharField(source="seller_phone", read_only=True)
-    sellerRole = serializers.CharField(source="seller_role", read_only=True)
-    reporterName = serializers.CharField(source="reporter_name", read_only=True)
-    reporterEmail = serializers.EmailField(source="reporter_email", read_only=True)
-    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
-    adminResponse = serializers.CharField(source="admin_response", read_only=True)
-    adminRespondedAt = serializers.DateTimeField(source="admin_responded_at", read_only=True)
-    adminName = serializers.CharField(source="admin_name", read_only=True)
-    actionTaken = serializers.CharField(source="action_taken", read_only=True)
-
-    class Meta:
-        model = StoreProductReport
-        fields = [
-            "id", "productId", "productTitle", "productPrice", "productCategory", "productImage",
-            "sellerId", "sellerName", "sellerEmail", "sellerPhone", "sellerRole", "reporterName",
-            "reporterEmail", "reason", "description", "priority", "createdAt", "status",
-            "adminResponse", "adminRespondedAt", "adminName", "actionTaken",
-        ]
 
 
 class ServiceSerializer(serializers.ModelSerializer):

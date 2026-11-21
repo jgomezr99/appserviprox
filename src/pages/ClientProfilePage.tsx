@@ -24,8 +24,10 @@ import {
 	saveOutline,
 } from "ionicons/icons";
 import { useAuth } from "../context/AuthContext";
+import { ApiError } from "../services/api";
 import { authService } from "../services/auth";
 import { MaintenanceNotice, useMaintenance } from "../components/MaintenanceNotice";
+import { AccountSecurityCard } from "../components/AccountSecurityCard";
 import "./RolePages.css";
 
 const DELETE_REASONS = [
@@ -43,6 +45,7 @@ const ClientProfilePage: React.FC = () => {
 	const [darkMode, setDarkMode] = useState(() => {
 		return localStorage.getItem("serviprox:dark-mode") === "true";
 	});
+	const [username, setUsername] = useState("");
 	const [email, setEmail] = useState("");
 	const [firstName, setFirstName] = useState("");
 	const [lastName, setLastName] = useState("");
@@ -51,6 +54,7 @@ const ClientProfilePage: React.FC = () => {
 	const [city, setCity] = useState("Bogotá");
 	const [address, setAddress] = useState("");
 	const [saving, setSaving] = useState(false);
+	const [saveError, setSaveError] = useState("");
 	const [toast, setToast] = useState("");
 	const [deleteOpen, setDeleteOpen] = useState(false);
 	const [deleteReason, setDeleteReason] = useState("");
@@ -58,6 +62,7 @@ const ClientProfilePage: React.FC = () => {
 	const [deleting, setDeleting] = useState(false);
 
 	useEffect(() => {
+		setUsername(user?.username || "");
 		setFirstName(user?.first_name || "");
 		setEmail(user?.email || "");
 		setLastName(user?.last_name || "");
@@ -80,8 +85,10 @@ const ClientProfilePage: React.FC = () => {
 		event.preventDefault();
 		if (saving || maintenance) return;
 		setSaving(true);
+		setSaveError("");
 		try {
 			await updateMe({
+				username: username.trim(),
 				email: email.trim().toLowerCase(),
 				first_name: firstName.trim(),
 				last_name: lastName.trim(),
@@ -92,8 +99,11 @@ const ClientProfilePage: React.FC = () => {
 			});
 			setIsEditing(false);
 			setToast("Datos personales guardados correctamente.");
-		} catch {
-			setToast("No se pudieron guardar los datos personales.");
+		} catch (err) {
+			const msg =
+				err instanceof ApiError ? err.message : "No se pudieron guardar los datos personales.";
+			setSaveError(msg);
+			setToast(msg);
 		} finally {
 			setSaving(false);
 		}
@@ -131,8 +141,8 @@ const ClientProfilePage: React.FC = () => {
 
 					<header className="sp-role-header">
 						<span className="sp-role-kicker">CUENTA DE CLIENTE</span>
-						<h1>Datos personales</h1>
-						<p>Administra la información que usaremos para tus servicios.</p>
+						<h1>Datos personales y cuenta</h1>
+						<p>Revisa tu cuenta, edita tus datos y actualiza tu contraseña cuando lo necesites.</p>
 					</header>
 
 					<section className="sp-card client-profile-card">
@@ -142,7 +152,7 @@ const ClientProfilePage: React.FC = () => {
 								<h2>Información personal</h2>
 								<p>{user?.email || "Cuenta cliente"}</p>
 							</div>
-							{!isEditing && <IonButton fill="outline" size="small" disabled={maintenance} onClick={() => setIsEditing(true)}>
+							{!isEditing && <IonButton fill="outline" size="small" disabled={maintenance} onClick={() => { setSaveError(""); setIsEditing(true); }}>
 								<IonIcon slot="start" icon={createOutline} /> Editar
 							</IonButton>}
 						</div>
@@ -150,6 +160,7 @@ const ClientProfilePage: React.FC = () => {
 						{isEditing ? (
 							<form className="sp-form" onSubmit={handleSave}>
 								<div className="sp-grid sp-grid--two">
+									<label className="sp-field">Usuario<IonInput value={username} required onIonInput={(e) => setUsername(String(e.detail.value ?? ""))} /></label>
 									<label className="sp-field">Correo electrónico<IonInput type="email" value={email} required onIonInput={(e) => setEmail(String(e.detail.value ?? ""))} /></label>
 									<label className="sp-field">Nombre<IonInput value={firstName} onIonInput={(e) => setFirstName(String(e.detail.value ?? ""))} /></label>
 									<label className="sp-field">Apellido<IonInput value={lastName} onIonInput={(e) => setLastName(String(e.detail.value ?? ""))} /></label>
@@ -158,20 +169,29 @@ const ClientProfilePage: React.FC = () => {
 									<label className="sp-field">Ciudad<IonInput value={city} onIonInput={(e) => setCity(String(e.detail.value ?? ""))} /></label>
 									<label className="sp-field">Dirección<IonInput value={address} onIonInput={(e) => setAddress(String(e.detail.value ?? ""))} /></label>
 								</div>
+								{saveError && <p className="sp-error" role="alert">{saveError}</p>}
 								<div className="client-profile-actions">
 									<IonButton type="submit" disabled={saving || maintenance}><IonIcon slot="start" icon={saveOutline} />{saving ? "Guardando..." : "Guardar cambios"}</IonButton>
-									<IonButton type="button" fill="clear" onClick={() => setIsEditing(false)}>Cancelar</IonButton>
+									<IonButton type="button" fill="clear" onClick={() => { setSaveError(""); setIsEditing(false); }}>Cancelar</IonButton>
 								</div>
 							</form>
 						) : (
 							<div className="client-profile-summary">
+								<p><strong>Usuario</strong><span>@{user?.username || "No registrado"}</span></p>
+								<p><strong>Correo</strong><span>{user?.email || "No registrado"}</span></p>
 								<p><strong>Nombre</strong><span>{[user?.first_name, user?.last_name].filter(Boolean).join(" ") || "No registrado"}</span></p>
+								<p><strong>Documento</strong><span>{user?.document_id || "No registrado"}</span></p>
 								<p><strong>Teléfono</strong><span>{user?.phone || "No registrado"}</span></p>
 								<p><strong>Ciudad</strong><span>{user?.city || "No registrada"}</span></p>
 								<p><strong>Dirección</strong><span>{user?.address || "No registrada"}</span></p>
 							</div>
 						)}
 					</section>
+
+					<AccountSecurityCard
+						disabled={maintenance}
+						onSuccessToast={(message) => setToast(message)}
+					/>
 
 					<section className="sp-card client-profile-preferences-card">
 						<div className="client-profile-preference-label">

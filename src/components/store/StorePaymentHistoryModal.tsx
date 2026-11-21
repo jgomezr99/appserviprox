@@ -1,7 +1,7 @@
 import React from "react";
 import { IonModal, IonIcon } from "@ionic/react";
 import { closeOutline } from "ionicons/icons";
-import { CreditCard, CheckCircle2, ShieldCheck, Receipt, Download } from "lucide-react";
+import { CreditCard, CheckCircle2, Receipt } from "lucide-react";
 import { MekoPaymentRecord } from "../../data/storeStorage";
 
 interface StorePaymentHistoryModalProps {

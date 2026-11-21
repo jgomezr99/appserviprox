@@ -21,7 +21,7 @@ type Props = {
   onChanged?: () => void;
 };
 
-const normalize = (value: string) => (value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const normalize = (value: string) => value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 function keywordsFromText(value: string): string[] {
   const seen = new Set<string>();
   return value.split(/[\n,;]+/).map((term) => term.trim().replace(/\s+/g, " "))

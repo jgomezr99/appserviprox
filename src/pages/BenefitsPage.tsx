@@ -10,15 +10,10 @@ import {
   IonTitle,
   IonToolbar,
   IonToast,
-  IonBadge,
 } from "@ionic/react";
 import {
-  giftOutline,
-  star,
   walletOutline,
-  checkmarkCircleOutline,
   sparkles,
-  ribbonOutline,
   alertCircleOutline,
   arrowBackOutline,
 } from "ionicons/icons";
@@ -37,6 +32,28 @@ interface BenefitItem {
   icon: string;
   level: "Todos" | "Bronce" | "Plata" | "Oro";
   description: string;
+}
+
+interface ConfiguredBenefitItem {
+  id: string | number;
+  title?: string;
+  points?: number | string;
+  recharge_amount?: number | string;
+  category?: string;
+  icon?: string;
+  level_required?: BenefitItem["level"];
+  description?: string;
+}
+
+interface ProfessionalBenefitsProfile {
+  points?: number | string;
+  wallet_balance?: number | string;
+}
+
+interface BenefitRedemptionRow {
+  benefit_id: string;
+  title: string;
+  status: string;
 }
 
 export const BenefitsPage: React.FC = () => {
@@ -62,7 +79,7 @@ export const BenefitsPage: React.FC = () => {
     try {
       const settings = await platformSettingsService.fetchPublic();
       const configuredItems = settings.benefit_catalog?.items || settings.sections?.benefit_catalog?.items;
-      setCatalog(Array.isArray(configuredItems) ? configuredItems.map((item: any) => ({
+      setCatalog(Array.isArray(configuredItems) ? configuredItems.map((item: ConfiguredBenefitItem) => ({
         id: item.id,
         title: item.title || "",
         points: Number(item.points || 0),
@@ -75,8 +92,8 @@ export const BenefitsPage: React.FC = () => {
 
       if (user?.role === "professional") {
         const [profile, redemptions] = await Promise.all([
-          api.get<any>("professionals/me/"),
-          api.get<any>("professionals/benefit-redemptions/"),
+          api.get<ProfessionalBenefitsProfile>("professionals/me/"),
+          api.get<BenefitRedemptionRow[]>("professionals/benefit-redemptions/"),
         ]);
         const points = Number(profile.points);
         const balance = Number(profile.wallet_balance);

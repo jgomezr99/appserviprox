@@ -22,7 +22,6 @@ import {
   closeCircleOutline,
   constructOutline,
   flashOutline,
-  homeOutline,
   locationOutline,
   navigateOutline,
   paperPlaneOutline,
@@ -273,8 +272,8 @@ const ClientProfessionalDetail: React.FC = () => {
   const calculatedTravel = useMemo(() => {
     let profLat = Number(professional?.latitude) || 4.672;
     let profLng = Number(professional?.longitude) || -74.055;
-    let homeLat = Number(household?.latitude) || 4.626910245009691;
-    let homeLng = Number(household?.longitude) || -74.06721883068974;
+    const homeLat = Number(household?.latitude) || 4.626910245009691;
+    const homeLng = Number(household?.longitude) || -74.06721883068974;
 
     if (Math.abs(profLat - homeLat) < 0.0005 && Math.abs(profLng - homeLng) < 0.0005) {
       profLat += 0.018;

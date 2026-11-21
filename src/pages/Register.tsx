@@ -10,13 +10,15 @@ import {
   IonText,
 } from "@ionic/react";
 import {
-  arrowBackOutline,
-  arrowForwardOutline,
   briefcaseOutline,
+  callOutline,
+  cardOutline,
+  chatbubblesOutline,
   checkmarkCircleOutline,
   eyeOffOutline,
   eyeOutline,
   homeOutline,
+  locationOutline,
   lockClosedOutline,
   mailOutline,
   personOutline,
@@ -29,11 +31,12 @@ import { getEntryRoute } from "../utils/routes";
 import logo from "../Assets/logo.png";
 import styles from "./Login.module.css";
 import { usePlatformSettings } from "../services/platformSettings";
+import { LiveSupportChatModal } from "../components/pqr/LiveSupportChatModal";
 
 const emailOk = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
 
 const MAX_CERTIFICATE_BYTES = 5 * 1024 * 1024;
-const CERTIFICATE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+const CERTIFICATE_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 
 const slugPart = (value: string) =>
   value
@@ -49,7 +52,9 @@ const buildUsername = (firstName: string, lastName: string) => {
 
 const getApiFieldMessage = (payload: unknown) => {
   if (!payload || typeof payload !== "object") return "";
-  const entries = Object.entries(payload as Record<string, unknown>);
+  const rec = payload as Record<string, unknown>;
+  if (typeof rec.detail === "string" && rec.detail.trim()) return rec.detail;
+  const entries = Object.entries(rec);
   const first = entries.find(([, value]) => Array.isArray(value) || typeof value === "string");
   if (!first) return "";
   const [field, value] = first;
@@ -58,6 +63,7 @@ const getApiFieldMessage = (payload: unknown) => {
     email: "Correo",
     username: "Usuario",
     password: "Contraseña",
+    confirm_password: "Confirmar contraseña",
     role: "Tipo de cuenta",
     profession: "Profesión",
     certificate: "Certificado",
@@ -70,7 +76,7 @@ const getRegisterErrorMessage = (error: unknown) => {
     return getApiFieldMessage(error.payload) || "No pudimos crear la cuenta.";
   }
   if (error instanceof TypeError) {
-    return "No pudimos conectar con Serviprox. Revisa que el backend esté disponible.";
+    return "No pudimos conectar con Serviprox. Revisa que el servidor esté disponible.";
   }
   return "No pudimos crear la cuenta. Inténtalo nuevamente.";
 };
@@ -83,14 +89,14 @@ const roleOptions: Array<{
 }> = [
   {
     value: "client",
-    title: "Necesito servicios para mi hogar",
-    text: "Busca profesionales y crea solicitudes para tu vivienda.",
+    title: "Cliente (Perfil)",
+    text: "Busca profesionales, gestiona tu hogar y crea solicitudes.",
     icon: homeOutline,
   },
   {
     value: "professional",
-    title: "Quiero ofrecer mis servicios",
-    text: "Prepara tu cuenta para recibir clientes de servicios del hogar.",
+    title: "Profesional",
+    text: "Ofrece tus servicios, recibe solicitudes y gestiona tus ingresos.",
     icon: briefcaseOutline,
   },
 ];
@@ -102,29 +108,30 @@ const Register: React.FC = () => {
   const registrationClosed = platform.features.new_users === false || platform.features.maintenance;
   const professionalsOpen = platform.features.professionals !== false;
   const visibleRoleOptions = roleOptions.filter((option) => option.value !== "professional" || professionalsOpen);
+
   const [role, setRole] = useState<PublicRegisterRole>("client");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("Bogotá");
   const [documentId, setDocumentId] = useState("");
   const [address, setAddress] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [profession, setProfession] = useState("");
+  const [certificate, setCertificate] = useState<File | null>(null);
+  const [certificateError, setCertificateError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [step, setStep] = useState<1 | 2>(1);
-  const [profession, setProfession] = useState("");
-  const [certificate, setCertificate] = useState<File | null>(null);
-  const [certificateError, setCertificateError] = useState("");
+  const [registerChatOpen, setRegisterChatOpen] = useState(false);
 
   const pickCertificate = (file: File | null) => {
     setCertificateError("");
     if (file && !CERTIFICATE_TYPES.includes(file.type)) {
-      setCertificateError("El certificado debe ser un archivo PDF, JPG o PNG.");
+      setCertificateError("El certificado debe ser un archivo PDF, JPG, PNG o WEBP.");
       setCertificate(null);
       return;
     }
@@ -135,6 +142,7 @@ const Register: React.FC = () => {
     }
     setCertificate(file);
   };
+
   useEffect(() => {
     if (!sessionLoading && isAuthenticated) {
       history.replace(getEntryRoute(user));
@@ -156,25 +164,51 @@ const Register: React.FC = () => {
   }, [professionalsOpen, role]);
 
   const passwordsMatch = password === confirmPassword;
-  const canContinue =
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
-    emailOk(email) &&
-    password.length >= 8 &&
-    passwordsMatch;
-  const certificateOk = role !== "professional" || (profession.trim().length >= 3 && certificate !== null);
-  const canSubmit = canContinue && certificateOk && !isSubmitting && !registrationClosed;
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (step === 1) {
-      if (canContinue) {
-        setError("");
-        setStep(2);
-      }
+    if (isSubmitting || registrationClosed) return;
+
+    if (!firstName.trim()) {
+      setError("Por favor ingresa tu nombre.");
       return;
     }
-    if (!canSubmit) return;
+    if (!lastName.trim()) {
+      setError("Por favor ingresa tu apellido.");
+      return;
+    }
+    if (!emailOk(email)) {
+      setError("Por favor ingresa un correo electrónico válido.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+    if (!passwordsMatch) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+    if (!phone.trim()) {
+      setError("Por favor ingresa tu número de teléfono.");
+      return;
+    }
+    if (!city.trim()) {
+      setError("Por favor ingresa tu ciudad.");
+      return;
+    }
+    if (!documentId.trim()) {
+      setError("Por favor ingresa tu cédula o documento.");
+      return;
+    }
+    if (!address.trim()) {
+      setError("Por favor ingresa la dirección del inmueble.");
+      return;
+    }
+    if (role === "professional" && profession.trim().length < 3) {
+      setError("Por favor indica tu profesión u oficio (mínimo 3 caracteres).");
+      return;
+    }
 
     setError("");
     setIsSubmitting(true);
@@ -190,8 +224,12 @@ const Register: React.FC = () => {
         address: address.trim(),
         role,
         password,
-        ...(role === "professional" && certificate
-          ? { profession: profession.trim(), certificate }
+        confirm_password: confirmPassword,
+        ...(role === "professional"
+          ? {
+              profession: profession.trim(),
+              ...(certificate ? { certificate } : {}),
+            }
           : {}),
       };
       const currentUser = await register({ ...payload, username: baseUsername });
@@ -213,11 +251,10 @@ const Register: React.FC = () => {
             </div>
             <IonText>
               <p className={styles.kicker}>Tu punto de partida en Serviprox</p>
-              <h1>Crea una cuenta para conectar hogar y profesionales.</h1>
-              {/*<p className={styles.brandCopy}>
-                Elige cómo quieres usar Serviprox. El rol queda registrado en Django
-                y guiará la experiencia en los siguientes sprints.
-              </p>*/}
+              <h1>Crea tu cuenta de Cliente o Profesional.</h1>
+              <p className={styles.brandCopy}>
+                Completa el formulario o crea tu cuenta en segundos conversando con nuestro chat guiado.
+              </p>
             </IonText>
           </section>
 
@@ -226,27 +263,35 @@ const Register: React.FC = () => {
               <span className={styles.cardEyebrow}>CREAR CUENTA</span>
               <h2 id="register-title">Empieza en Serviprox</h2>
               <p>
-                {step === 1
-                  ? "Selecciona tu tipo de cuenta y crea tu acceso"
-                  : "Completa tus datos personales"}
-              </p>
-              <p aria-label={`Paso ${step} de 2`} style={{ fontWeight: 700, marginTop: 8 }}>
-                Paso {step} de 2
+                Selecciona si eres Cliente (Perfil) o Profesional y completa todos tus datos en este formulario.
               </p>
             </div>
 
             {registrationClosed && (
-              <p role="alert" style={{ background: "#fef3c7", color: "#92400e", borderRadius: 12, padding: "12px 14px", fontWeight: 600 }}>
+              <p
+                role="alert"
+                style={{
+                  background: "#fef3c7",
+                  color: "#92400e",
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  fontWeight: 600,
+                }}
+              >
                 {platform.features.maintenance
                   ? platform.maintenance_message
                   : "El registro de nuevos usuarios está deshabilitado por el momento."}
               </p>
             )}
 
-            <form className={styles.form} onSubmit={handleRegister} noValidate style={registrationClosed ? { display: "none" } : undefined}>
-              {step === 1 && (<>
+            <form
+              className={styles.form}
+              onSubmit={handleRegister}
+              noValidate
+              style={registrationClosed ? { display: "none" } : undefined}
+            >
               <fieldset className={styles.roleGroup}>
-                <legend>¿Qué quieres hacer en Serviprox?</legend>
+                <legend>Tipo de cuenta</legend>
                 {visibleRoleOptions.map((option) => {
                   const selected = role === option.value;
                   return (
@@ -369,19 +414,19 @@ const Register: React.FC = () => {
                   Las contraseñas no coinciden.
                 </p>
               )}
-              </>)}
 
-              {step === 2 && (<>
               <div className={styles.twoColumn}>
                 <label className={styles.field}>
                   <span>Teléfono</span>
                   <div className={styles.inputShell}>
+                    <IonIcon icon={callOutline} aria-hidden="true" />
                     <IonInput
                       type="tel"
                       value={phone}
                       autocomplete="tel"
                       placeholder="+57 300 000 0000"
                       onIonInput={(event) => setPhone(String(event.detail.value ?? ""))}
+                      required
                     />
                   </div>
                 </label>
@@ -389,11 +434,13 @@ const Register: React.FC = () => {
                 <label className={styles.field}>
                   <span>Ciudad</span>
                   <div className={styles.inputShell}>
+                    <IonIcon icon={locationOutline} aria-hidden="true" />
                     <IonInput
                       value={city}
                       autocomplete="address-level2"
                       placeholder="Bogotá"
                       onIonInput={(event) => setCity(String(event.detail.value ?? ""))}
+                      required
                     />
                   </div>
                 </label>
@@ -401,23 +448,27 @@ const Register: React.FC = () => {
 
               <div className={styles.twoColumn}>
                 <label className={styles.field}>
-                  <span>Cédula / pasaporte</span>
+                  <span>Cédula / documento</span>
                   <div className={styles.inputShell}>
+                    <IonIcon icon={cardOutline} aria-hidden="true" />
                     <IonInput
                       value={documentId}
-                      placeholder="Ej: CC 1.020.345.678"
+                      placeholder="Ej: 1020345678"
                       onIonInput={(event) => setDocumentId(String(event.detail.value ?? ""))}
+                      required
                     />
                   </div>
                 </label>
 
                 <label className={styles.field}>
-                  <span>Dirección del Inmueble (Bogotá)</span>
+                  <span>Dirección del inmueble</span>
                   <div className={styles.inputShell}>
+                    <IonIcon icon={homeOutline} aria-hidden="true" />
                     <IonInput
                       value={address}
                       placeholder="Ej: Calle 72 # 11-45, Chapinero"
                       onIonInput={(event) => setAddress(String(event.detail.value ?? ""))}
+                      required
                     />
                   </div>
                 </label>
@@ -440,12 +491,19 @@ const Register: React.FC = () => {
                   </label>
 
                   <label className={styles.field}>
-                    <span>Certificado profesional (PDF, JPG o PNG, máx. 5 MB)</span>
+                    <span>Certificado profesional (opcional — PDF, JPG o PNG, máx. 5 MB)</span>
                     <input
                       type="file"
-                      accept="application/pdf,image/jpeg,image/png"
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
                       onChange={(event) => pickCertificate(event.target.files?.[0] ?? null)}
-                      required
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "14px",
+                        border: "1px dashed #cbd5e1",
+                        background: "#f8fafc",
+                        fontSize: "0.86rem",
+                        color: "#334155",
+                      }}
                     />
                     {certificate && <small>Archivo seleccionado: {certificate.name}</small>}
                   </label>
@@ -456,7 +514,6 @@ const Register: React.FC = () => {
                   )}
                 </>
               )}
-              </>)}
 
               {error && (
                 <p className={styles.error} role="alert">
@@ -464,41 +521,45 @@ const Register: React.FC = () => {
                 </p>
               )}
 
-              {step === 1 ? (
-                <IonButton
-                  expand="block"
-                  type="submit"
-                  className={styles.primaryButton}
-                  disabled={!canContinue}
+              <IonButton
+                expand="block"
+                type="submit"
+                className={styles.primaryButton}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? <IonSpinner name="crescent" /> : "Crear cuenta"}
+              </IonButton>
+
+              {platform.features.chat !== false && (
+                <button
+                  type="button"
+                  id="btn-register-create-chat"
+                  onClick={() => setRegisterChatOpen(true)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    padding: "13px 16px",
+                    borderRadius: "16px",
+                    background: "#fff1f2",
+                    border: "1.5px solid #fecdd3",
+                    color: "#e11d48",
+                    fontWeight: 800,
+                    fontSize: "0.94rem",
+                    cursor: "pointer",
+                    marginTop: "2px",
+                  }}
                 >
-                  Continuar <IonIcon slot="end" icon={arrowForwardOutline} />
-                </IonButton>
-              ) : (
-                <>
-                  <IonButton
-                    expand="block"
-                    type="submit"
-                    className={styles.primaryButton}
-                    disabled={!canSubmit}
-                  >
-                    {isSubmitting ? <IonSpinner name="crescent" /> : "Crear cuenta"}
-                  </IonButton>
-                  <IonButton
-                    expand="block"
-                    type="button"
-                    fill="clear"
-                    disabled={isSubmitting}
-                    onClick={() => setStep(1)}
-                  >
-                    <IonIcon slot="start" icon={arrowBackOutline} />
-                    Volver al paso 1
-                  </IonButton>
-                </>
+                  <IonIcon icon={chatbubblesOutline} style={{ fontSize: "20px" }} aria-hidden="true" />
+                  <span>Crear cuenta por el chat (Cliente o Profesional)</span>
+                </button>
               )}
             </form>
 
-            <div className={styles.footerPrompt}>
-              <span>Ya tienes cuenta</span>
+            <div className={styles.footerPrompt} style={{ marginTop: "16px" }}>
+              <span>¿Ya tienes cuenta?</span>
               <IonButton routerLink="/login" fill="clear" className={styles.linkButton}>
                 Iniciar sesión
               </IonButton>
@@ -506,6 +567,12 @@ const Register: React.FC = () => {
           </section>
         </main>
       </IonContent>
+
+      <LiveSupportChatModal
+        isOpen={registerChatOpen}
+        onClose={() => setRegisterChatOpen(false)}
+        initialFlow="crear_cuenta"
+      />
     </IonPage>
   );
 };

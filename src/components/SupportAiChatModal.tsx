@@ -216,7 +216,7 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
   };
 
   // Ejecución del desbloqueo oficial en el sistema
-  const executeUnblockOperation = async (desc: string, radicadoId: string) => {
+  const executeUnblockOperation = async (desc: string) => {
     try {
       // 1. Eliminar de serviprox_blocked_users en localStorage
       const stored = JSON.parse(localStorage.getItem('serviprox_blocked_users') || '{}');
@@ -269,7 +269,7 @@ export const SupportAiChatModal: React.FC<SupportAiChatModalProps> = ({
 
       if (!isUnpardonable && isSubstantial) {
         // ── DICTAMEN 1: DESBLOQUEO DE CUENTA APROBADO ──
-        executeUnblockOperation(description, radicadoTicket);
+        executeUnblockOperation(description);
 
         setMessages((prev) => [
           ...prev,

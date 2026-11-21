@@ -1,7 +1,7 @@
 import React from "react";
 import { IonModal, IonIcon } from "@ionic/react";
 import { closeOutline } from "ionicons/icons";
-import { Package, Truck, Clock, CheckCircle2, MapPin, ExternalLink } from "lucide-react";
+import { Package, Truck, Clock, CheckCircle2, MapPin } from "lucide-react";
 import { MekoOrder } from "../../data/storeStorage";
 
 interface StoreOrderHistoryModalProps {
@@ -85,7 +85,6 @@ export const StoreOrderHistoryModal: React.FC<StoreOrderHistoryModalProps> = ({
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {orders.map((order) => {
-                const isPaid = order.status === "Pagado con Wompi";
                 const isEnCamino = order.status === "En camino";
                 const isEntregado = order.status === "Entregado";
 

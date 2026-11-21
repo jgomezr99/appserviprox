@@ -61,10 +61,7 @@ const getConfiguredVmUrl = (): string => {
   if (raw) {
     return normalizeApiUrl(raw);
   }
-  if (isVitestEnv()) {
-    return DEFAULT_WEB_VM_API_URL;
-  }
-  return "http://127.0.0.1:8000/api/v1";
+  return "";
 };
 
 export const getSavedCustomHost = (): string => {
@@ -73,31 +70,23 @@ export const getSavedCustomHost = (): string => {
     if (localStorage.getItem("serviprox_custom_host_explicit") === "1") {
       return localStorage.getItem("serviprox_api_host") || "";
     }
-    const adminMode = localStorage.getItem("serviprox_auth_mode");
-    if (adminMode === "vm" || adminMode === "local-sqlite") {
-      return localStorage.getItem("serviprox_api_host") || "";
-    }
-    const saved = localStorage.getItem("serviprox_api_host");
-    if (saved) return saved;
   }
   return "";
 };
 
 export const getConnectionMode = (baseUrl?: string): ConnectionMode => {
-  const target = (baseUrl || activeBaseUrl || "").trim().toLowerCase();
+  const target = (baseUrl || activeBaseUrl || "").trim();
   if (target.includes("/api/vm/v1")) return "vm-proxy";
-  if (target.includes("duckdns") || target.includes("serviprox-pte")) return "vm-direct";
+  const configured = getConfiguredVmUrl();
+  if (configured && target === configured) return "vm-direct";
   if (
-    target.includes("127.0.0.1") ||
-    target.includes("localhost") ||
-    target.includes("sqlite") ||
-    (typeof window !== "undefined" &&
-      window.location?.origin &&
-      target === `${window.location.origin.toLowerCase().replace(/\/$/, "")}/api/v1`)
+    typeof window !== "undefined" &&
+    window.location?.origin &&
+    target === `${window.location.origin.replace(/\/$/, "")}/api/v1`
   ) {
     return "local-sqlite";
   }
-  return "custom";
+  return target.includes("serviprox-pte.duckdns.org") ? "vm-direct" : "custom";
 };
 
 const getPriorityCandidateBaseUrls = (): string[] => {
@@ -109,42 +98,42 @@ const getPriorityCandidateBaseUrls = (): string[] => {
     return [configuredUrl];
   }
 
-  // 1. En entorno Web de desarrollo, el servidor Django local en 127.0.0.1:8000 tiene prioridad máxima
-  if (!Capacitor.isNativePlatform() && typeof window !== "undefined") {
-    candidates.push("http://127.0.0.1:8000/api/v1");
-    candidates.push("http://localhost:8000/api/v1");
-  }
-
-  // 2. Host personalizado guardado explícitamente por el usuario desde el modal (si no es la MV caída)
+  // 1. Host personalizado guardado explícitamente por el usuario desde el modal
   const saved = getSavedCustomHost();
-  if (saved && !saved.includes("duckdns") && !saved.includes("serviprox-pte")) {
+  if (saved) {
     candidates.push(normalizeApiUrl(saved));
   }
 
-  // 3. Conexión directa configurada en VITE_API_URL
-  if (configuredUrl && !configuredUrl.includes("duckdns") && !configuredUrl.includes("serviprox-pte")) {
+  // 2. Conexión directa configurada en VITE_API_URL (Máquina Virtual)
+  if (configuredUrl) {
     candidates.push(configuredUrl);
   }
 
-  // 4. Servidor local SQLite / backend de desarrollo en Web
+  // 3. Proxy anti-CORS en servidor + respaldo SQLite local para paneles web
   if (!Capacitor.isNativePlatform() && typeof window !== "undefined" && window.location) {
+    const hostname = window.location.hostname;
+    const isNetlify = hostname.includes("netlify.app");
     const origin = window.location.origin ? window.location.origin.replace(/\/$/, "") : "";
-    const isNetlify = window.location.hostname.includes("netlify.app");
 
     if (origin && !isNetlify) {
+      if (configuredUrl && !configuredUrl.startsWith(origin)) {
+        candidates.push(`${origin}/api/vm/v1`);
+      }
       candidates.push(`${origin}/api/v1`);
+    }
+
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      candidates.push("http://127.0.0.1:8000/api/v1");
+      candidates.push("http://localhost:8000/api/v1");
     }
   }
 
-  // 4. Candidatos para entornos nativos Capacitor (Android / iOS)
+  // 4. Candidatos de respaldo para entornos nativos Capacitor
   if (Capacitor.isNativePlatform()) {
+    candidates.push(DEFAULT_WEB_VM_API_URL);
+    candidates.push("http://192.168.0.6:8000/api/v1");
     candidates.push("http://10.0.2.2:8000/api/v1");
     candidates.push("http://127.0.0.1:8000/api/v1");
-    candidates.push("http://192.168.0.6:8000/api/v1");
-    candidates.push(DEFAULT_WEB_VM_API_URL);
-  } else {
-    // Opción remota secundaria si está encendida
-    candidates.push(DEFAULT_WEB_VM_API_URL);
   }
 
   return Array.from(new Set(candidates.filter(Boolean)));
@@ -200,44 +189,41 @@ const hasLocalAuthenticatedSession = (): boolean => {
 };
 
 const resolveApiBaseUrl = (): string => {
-  // 1. Host personalizado guardado explícitamente por el usuario (otra base de datos elegida)
-  const customHost = getSavedCustomHost();
-  if (customHost) {
-    return normalizeApiUrl(customHost);
-  }
-
-  // 2. Sesión activa en modo local-sqlite
   if (hasLocalAuthenticatedSession()) {
     const localBase = getLocalFallbackApiUrl();
     if (localBase) return localBase;
   }
 
-  // 3. Última URL funcional recordada en la sesión
+  const customHost = getSavedCustomHost();
+  if (customHost) {
+    return normalizeApiUrl(customHost);
+  }
+
+  const configuredUrl = getConfiguredVmUrl();
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
   if (typeof window !== "undefined") {
     try {
       const working =
         sessionStorage.getItem("serviprox_working_base_url") ||
         localStorage.getItem("serviprox_last_working_url");
       if (working) {
-        return normalizeApiUrl(working);
+        const normalized = normalizeApiUrl(working);
+        if (getPriorityCandidateBaseUrls().includes(normalized)) {
+          return normalized;
+        }
       }
     } catch {
       // ignore
     }
   }
 
-  // 4. URL configurada en VITE_API_URL
-  const configuredUrl = getConfiguredVmUrl();
-  if (configuredUrl) {
-    return configuredUrl;
-  }
-
-  // 5. Capacitor Android
   if (Capacitor.isNativePlatform()) {
-    return "http://10.0.2.2:8000/api/v1";
+    return DEFAULT_WEB_VM_API_URL;
   }
 
-  // 6. Servidor local por defecto en Web
   if (typeof window !== "undefined" && window.location?.origin) {
     if (window.location.hostname.includes("netlify.app")) {
       return "/api/v1";
@@ -251,7 +237,8 @@ const resolveApiBaseUrl = (): string => {
 // Base URL dinámica y reactiva
 let activeBaseUrl = resolveApiBaseUrl();
 let lastFallbackAt = 0;
-const MV_RETRY_COOLDOWN_MS = 15000;
+const MV_RETRY_COOLDOWN_MS = 120000;
+const failedCandidatesUntil = new Map<string, number>();
 export let API_BASE_URL = activeBaseUrl;
 
 export const getApiBaseUrl = (): string => activeBaseUrl;
@@ -263,32 +250,30 @@ export const getCandidateBaseUrls = (): string[] => {
   }
 
   const ordered: string[] = [];
-
-  // 1. Host personalizado guardado por el usuario (otra base de datos elegida)
-  const saved = getSavedCustomHost();
-  if (saved) {
-    ordered.push(normalizeApiUrl(saved));
-  }
-
-  // 2. Base local de respaldo
   const localFallback = getLocalFallbackApiUrl();
   const pinnedLocal = hasLocalAuthenticatedSession();
   if (pinnedLocal && localFallback && priority.includes(localFallback)) {
     ordered.push(localFallback);
   }
 
-  // 3. Base URL actualmente activa
-  if (activeBaseUrl && priority.includes(activeBaseUrl)) {
+  const activeMode = activeBaseUrl ? getConnectionMode(activeBaseUrl) : null;
+  const keepFallbackFirst =
+    pinnedLocal || (activeMode === "local-sqlite" && Date.now() - lastFallbackAt < MV_RETRY_COOLDOWN_MS);
+
+  if (activeBaseUrl && priority.includes(activeBaseUrl) && (activeMode !== "local-sqlite" || keepFallbackFirst)) {
     ordered.push(activeBaseUrl);
   }
 
-  // 4. Sesión de trabajo activa
   if (typeof window !== "undefined") {
     try {
       const sessionWorking = sessionStorage.getItem("serviprox_working_base_url");
       if (sessionWorking) {
         const normalized = normalizeApiUrl(sessionWorking);
-        if (priority.includes(normalized)) {
+        const sessionMode = getConnectionMode(normalized);
+        if (
+          priority.includes(normalized) &&
+          (sessionMode !== "local-sqlite" || pinnedLocal || Date.now() - lastFallbackAt < MV_RETRY_COOLDOWN_MS)
+        ) {
           ordered.push(normalized);
         }
       }
@@ -297,12 +282,15 @@ export const getCandidateBaseUrls = (): string[] => {
     }
   }
 
-  // 5. Resto de candidatos de prioridad (servidor local :8000, Android :8000, MV)
   for (const cand of priority) {
     ordered.push(cand);
   }
 
-  return Array.from(new Set(ordered.filter(Boolean)));
+  const deduped = Array.from(new Set(ordered.filter(Boolean)));
+  if (deduped.length <= 1) return deduped;
+  const now = Date.now();
+  const healthy = deduped.filter((b) => (failedCandidatesUntil.get(b) || 0) <= now);
+  return healthy.length > 0 ? [...healthy, ...deduped.filter((b) => !healthy.includes(b))] : deduped;
 };
 
 export const setWorkingBaseUrl = (
@@ -433,26 +421,15 @@ const parseResponse = async (response: Response) => {
   return text;
 };
 
-const getErrorMessage = (status: number, payload: unknown, path?: string) => {
-  let detail: string | undefined;
-  if (typeof payload === "object" && payload) {
-    const body = payload as Record<string, unknown>;
-    for (const key of ["detail", "message", "error"]) {
-      if (typeof body[key] === "string" && body[key]) {
-        detail = body[key] as string;
-        break;
-      }
-    }
-    if (!detail && "non_field_errors" in body) {
-      const errors = body.non_field_errors;
-      detail = Array.isArray(errors) ? String(errors[0]) : String(errors);
-    }
-  } else if (typeof payload === "string" && payload.trim() && !payload.trim().startsWith("<")) {
-    detail = payload.trim().slice(0, 300);
+const getErrorMessage = (status: number, payload: unknown) => {
+  if (typeof payload === "object" && payload && "detail" in payload) {
+    return String((payload as { detail: unknown }).detail);
   }
-
-  const endpoint = path ? ` (${path})` : "";
-  return detail ? `${detail}${endpoint}` : `API request failed with status ${status}${endpoint}`;
+  if (typeof payload === "object" && payload && "non_field_errors" in payload) {
+    const errors = (payload as { non_field_errors: unknown }).non_field_errors;
+    return Array.isArray(errors) ? String(errors[0]) : String(errors);
+  }
+  return `API request failed with status ${status}`;
 };
 
 const isGatewayOrNetworkError = (status?: number): boolean => {
@@ -481,7 +458,14 @@ async function fetchWithResilience(
       const url = buildUrlForBase(base, path, params);
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const isMultipart = typeof FormData !== "undefined" && init.body instanceof FormData;
+        const localFallback = getLocalFallbackApiUrl();
+        const timeoutMs = isMultipart
+          ? 30000
+          : candidates.length > 1 && base !== localFallback
+            ? 5000
+            : 12000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         const reqHeaders = new Headers(init.headers);
         const savedHost = getSavedCustomHost();
         if (base.includes("/api/vm/v1") && savedHost) {
@@ -512,9 +496,13 @@ async function fetchWithResilience(
             continue;
           }
 
-          // Si el candidato actual responde con 404 (recurso no encontrado, ej. endpoints nuevos aún no desplegados en la MV),
+          // Si el candidato actual responde con 404 (recurso no encontrado, ej. endpoints nuevos aún no desplegados en la MV)
+          // o 403 en rutas de admin (permisos o sesión de usuario desincronizados entre VM y local),
           // guardamos la respuesta y permitimos intentar con el siguiente candidato antes de fallar.
-          if (response.status === 404 && candidates.length > 1) {
+          if (
+            (response.status === 404 || (response.status === 403 && path.startsWith("admin/"))) &&
+            candidates.length > 1
+          ) {
             lastResponse = response;
             continue;
           }
@@ -526,8 +514,14 @@ async function fetchWithResilience(
         }
 
         lastResponse = response;
+        if (candidates.length > 1) {
+          failedCandidatesUntil.set(base, Date.now() + 60000);
+        }
       } catch (err) {
         lastError = err;
+        if (candidates.length > 1) {
+          failedCandidatesUntil.set(base, Date.now() + 60000);
+        }
       }
     }
   }
@@ -646,7 +640,7 @@ async function request<T>(
   if (!response.ok) {
     throw new ApiError(
       response.status,
-      getErrorMessage(response.status, payload, path),
+      getErrorMessage(response.status, payload),
       payload
     );
   }
@@ -691,7 +685,7 @@ async function blobRequest(
     const payload = await parseResponse(response);
     throw new ApiError(
       response.status,
-      getErrorMessage(response.status, payload, path),
+      getErrorMessage(response.status, payload),
       payload
     );
   }
@@ -757,7 +751,7 @@ export const checkBackendHealth = async (
     try {
       const url = `${base.replace(/\/$/, "")}/health/`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
       const headers = new Headers({ Accept: "application/json" });
       if (candidate.targetOverride && base.includes("/api/vm/v1")) {
         headers.set("X-Serviprox-Target-Base", candidate.targetOverride);
@@ -778,22 +772,18 @@ export const checkBackendHealth = async (
           source?: string;
           detail?: string;
         };
-        if (res.ok && (data.status === "ok" || res.status === 200) && data.database !== "disconnected") {
+        if (res.ok && data.status === "ok" && data.database === "connected") {
           const mode: ConnectionMode =
-            data.source === "local-sqlite" || data.engine === "sqlite"
-              ? "local-sqlite"
-              : getConnectionMode(base);
-          const resolvedEngine =
-            data.engine || (base.includes("duckdns") ? "postgresql" : "sqlite");
+            data.source === "local-sqlite" ? "local-sqlite" : getConnectionMode(base);
           setWorkingBaseUrl(base, {
-            database: "connected",
-            engine: resolvedEngine,
+            database: data.database,
+            engine: data.engine,
             mode,
           });
           return {
             ok: true,
-            database: "connected",
-            engine: resolvedEngine,
+            database: data.database,
+            engine: data.engine,
             mode,
             url: base,
           };
@@ -807,27 +797,10 @@ export const checkBackendHealth = async (
     }
   }
 
-  if (customCandidate) {
-    return {
-      ok: false,
-      database: "disconnected",
-      error: lastDetail || "No pudimos conectar con el servidor backend especificado.",
-    };
-  }
-
-  // Si la máquina virtual o servidor remoto no responde, conmuta automáticamente a la Base de Datos Autónoma (SQLite)
-  const fallbackUrl = activeBaseUrl || "http://127.0.0.1:8000/api/v1";
-  setWorkingBaseUrl(fallbackUrl, {
-    database: "connected",
-    engine: "Base de Datos Autónoma (SQLite)",
-    mode: "local-sqlite",
-  });
   return {
-    ok: true,
-    database: "connected",
-    engine: "Base de Datos Autónoma (SQLite)",
-    mode: "local-sqlite",
-    url: fallbackUrl,
+    ok: false,
+    database: "disconnected",
+    error: lastDetail || "No pudimos conectar con el backend o la base de datos.",
   };
 };
 
@@ -885,86 +858,6 @@ export const saveCustomApiHost = async (
   };
 };
 
-export type DatabaseTarget = "local-django" | "autonomous-sqlite" | "cloud-postgres" | "vm-duckdns" | "custom";
-
-/**
- * Conmuta entre distintas bases de datos para Serviprox:
- * - local-django: Servidor local SQLite Django (http://127.0.0.1:8000/api/v1)
- * - autonomous-sqlite: Base de datos SQLite autónoma integrada (siempre activa)
- * - cloud-postgres: Base de datos en la nube (PostgreSQL / Supabase / Render / Railway)
- * - vm-duckdns: Máquina virtual remota DuckDNS
- * - custom: Endpoint personalizado
- */
-export const switchDatabaseTarget = async (
-  target: DatabaseTarget,
-  customUrl?: string
-): Promise<{
-  ok: boolean;
-  message: string;
-  url: string;
-  mode: ConnectionMode;
-  engine: string;
-  database: string;
-}> => {
-  let targetUrl = "";
-  let targetMode: ConnectionMode = "local-sqlite";
-  let targetEngine = "SQLite (Local)";
-
-  switch (target) {
-    case "local-django":
-      targetUrl = "http://127.0.0.1:8000/api/v1";
-      targetMode = "local-sqlite";
-      targetEngine = "SQLite (Local)";
-      break;
-    case "autonomous-sqlite":
-      targetUrl = "http://127.0.0.1:8000/api/v1";
-      targetMode = "local-sqlite";
-      targetEngine = "SQLite (Autónomo)";
-      break;
-    case "cloud-postgres":
-      targetUrl = customUrl ? normalizeApiUrl(customUrl) : "https://api.serviprox.com/api/v1";
-      targetMode = "custom";
-      targetEngine = "PostgreSQL (Nube)";
-      break;
-    case "vm-duckdns":
-      targetUrl = DEFAULT_WEB_VM_API_URL;
-      targetMode = "vm-direct";
-      targetEngine = "PostgreSQL (DuckDNS MV)";
-      break;
-    case "custom":
-    default:
-      targetUrl = customUrl ? normalizeApiUrl(customUrl) : resolveApiBaseUrl();
-      targetMode = getConnectionMode(targetUrl);
-      targetEngine = targetMode === "local-sqlite" ? "SQLite" : "PostgreSQL";
-      break;
-  }
-
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem("serviprox_api_host", targetUrl);
-      localStorage.setItem("serviprox_custom_host_explicit", "1");
-      localStorage.setItem("serviprox_auth_mode", targetMode);
-      localStorage.setItem("serviprox_db_target", target);
-      sessionStorage.setItem("serviprox_working_base_url", targetUrl);
-    } catch {}
-  }
-
-  setWorkingBaseUrl(targetUrl, {
-    database: "connected",
-    engine: targetEngine,
-    mode: targetMode,
-  });
-
-  return {
-    ok: true,
-    message: `Base de datos seleccionada: ${targetEngine}.`,
-    url: targetUrl,
-    mode: targetMode,
-    engine: targetEngine,
-    database: "connected",
-  };
-};
-
 /**
  * Limpia la URL personalizada de localStorage y restaura el valor por defecto (VITE_API_URL).
  */
@@ -1003,5 +896,4 @@ export const api = {
   checkHealth: checkBackendHealth,
   saveCustomHost: saveCustomApiHost,
   clearCustomHost: clearCustomApiHost,
-  switchDatabase: switchDatabaseTarget,
 };
