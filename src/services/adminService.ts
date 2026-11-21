@@ -509,10 +509,10 @@ export const adminService = {
   },
 
   /**
-   * Elimina una cuenta de cliente o profesional (requiere sesión de staff).
+   * Elimina una cuenta de cliente, profesional o cuenta administrativa (requiere sesión de staff).
    * Usa POST /api/v1/admin/action/ (respuesta JSON 200) para evitar problemas de proxies con DELETE/204.
    */
-  async deleteAccount(kind: "client" | "professional", id: number | string): Promise<AdminActionResult> {
+  async deleteAccount(kind: "client" | "professional" | "admin" | "staff", id: number | string): Promise<AdminActionResult> {
     try {
       return await this.executeAction({
         action: "delete_account",

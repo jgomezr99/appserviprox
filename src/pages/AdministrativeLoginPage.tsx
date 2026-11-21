@@ -84,10 +84,16 @@ const AdministrativeLoginPage: React.FC = () => {
 	const [showPassword, setShowPassword] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState("");
+	const [recoveryOpen, setRecoveryOpen] = useState(false);
 	const [recoveryStep, setRecoveryStep] = useState<"username" | "code">("username");
+	const [recoveryChannel, setRecoveryChannel] = useState<"both" | "email" | "sms">("both");
+	const [recoveryIdentifier, setRecoveryIdentifier] = useState("");
 	const [recoveryCode, setRecoveryCode] = useState("");
 	const [newPassword, setNewPassword] = useState("");
+	const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
 	const [recoveryMessage, setRecoveryMessage] = useState("");
+	const [recoveryPreviewCode, setRecoveryPreviewCode] = useState("");
+	const [recoveryPreviewNotice, setRecoveryPreviewNotice] = useState("");
 	const [recoveryError, setRecoveryError] = useState("");
 	const [recoverySubmitting, setRecoverySubmitting] = useState(false);
 	const [serverModalOpen, setServerModalOpen] = useState(false);
@@ -211,26 +217,52 @@ const AdministrativeLoginPage: React.FC = () => {
 	};
 
 	const handlePasswordReset = async () => {
-		const trimmedUser = username.trim();
-		if (!trimmedUser || recoverySubmitting) return;
+		const target = (recoveryIdentifier || username).trim();
+		if (!target || recoverySubmitting) return;
 		setRecoveryMessage("");
 		setRecoveryError("");
 		setRecoverySubmitting(true);
 		try {
 			if (recoveryStep === "username") {
-				await authService.requestPasswordReset(trimmedUser);
+				setRecoveryPreviewCode("");
+				setRecoveryPreviewNotice("");
+				const res = await authService.requestPasswordReset({
+					identifier: target,
+					email: target.includes("@") ? target.toLowerCase() : "",
+					username: !target.includes("@") ? target : "",
+					phone: target.replace(/\D/g, "").length >= 7 ? target : "",
+					channel: recoveryChannel,
+					portal: "admin",
+				});
 				setRecoveryStep("code");
-				setRecoveryMessage("Si el usuario existe, se enviará un código de verificación al correo asociado.");
+				setRecoveryMessage(
+					res.detail ||
+						"Si la cuenta administrativa existe, enviamos el código de 6 dígitos al correo y/o SMS registrados."
+				);
+				if (res.preview_code) {
+					setRecoveryPreviewCode(res.preview_code);
+					setRecoveryPreviewNotice(res.preview_notice || "");
+				}
 			} else {
 				await authService.confirmPasswordReset({
-					email: trimmedUser,
+					identifier: target,
+					email: target.includes("@") ? target.toLowerCase() : "",
+					username: !target.includes("@") ? target : "",
+					phone: target.replace(/\D/g, "").length >= 7 ? target : "",
 					code: recoveryCode,
 					new_password: newPassword,
+					portal: "admin",
 				});
 				setRecoveryStep("username");
+				setRecoveryOpen(false);
 				setRecoveryCode("");
 				setNewPassword("");
-				setRecoveryMessage("Contraseña administrativa actualizada correctamente. Ya puedes iniciar sesión con tu usuario.");
+				setRecoveryPreviewCode("");
+				setRecoveryPreviewNotice("");
+				setCreationSuccessBanner(
+					"Contraseña administrativa actualizada correctamente. Ya puedes iniciar sesión."
+				);
+				setRecoveryMessage("Contraseña administrativa actualizada correctamente. Ya puedes iniciar sesión.");
 			}
 		} catch (resetError) {
 			const payload = resetError instanceof ApiError
@@ -240,7 +272,7 @@ const AdministrativeLoginPage: React.FC = () => {
 				typeof payload?.detail === "string"
 					? payload.detail
 					: recoveryStep === "username"
-						? "No pudimos enviar el código. Verifica la disponibilidad del backend o contacta soporte."
+						? "No pudimos enviar el código. Verifica los datos ingresados o la disponibilidad del servidor."
 						: "No pudimos actualizar la contraseña. Verifica el código e inténtalo nuevamente."
 			);
 		} finally {
@@ -249,15 +281,28 @@ const AdministrativeLoginPage: React.FC = () => {
 	};
 
 	const resendPasswordResetCode = async () => {
-		const trimmedUser = username.trim();
-		if (!trimmedUser || recoverySubmitting) return;
+		const target = (recoveryIdentifier || username).trim();
+		if (!target || recoverySubmitting) return;
 		setRecoveryMessage("");
 		setRecoveryError("");
+		setRecoveryPreviewCode("");
+		setRecoveryPreviewNotice("");
 		setRecoveryCode("");
 		setRecoverySubmitting(true);
 		try {
-			await authService.requestPasswordReset(trimmedUser);
-			setRecoveryMessage("Enviamos un código nuevo. El código anterior ya no es válido.");
+			const res = await authService.requestPasswordReset({
+				identifier: target,
+				email: target.includes("@") ? target.toLowerCase() : "",
+				username: !target.includes("@") ? target : "",
+				phone: target.replace(/\D/g, "").length >= 7 ? target : "",
+				channel: recoveryChannel,
+				portal: "admin",
+			});
+			setRecoveryMessage(res.detail || "Enviamos un código nuevo. El código anterior ya no es válido.");
+			if (res.preview_code) {
+				setRecoveryPreviewCode(res.preview_code);
+				setRecoveryPreviewNotice(res.preview_notice || "");
+			}
 		} catch (resetError) {
 			const payload = resetError instanceof ApiError
 				? resetError.payload as { detail?: unknown }
@@ -265,7 +310,7 @@ const AdministrativeLoginPage: React.FC = () => {
 			setRecoveryError(
 				typeof payload?.detail === "string"
 					? payload.detail
-					: "No pudimos enviar otro código. Verifica que el backend y el correo estén disponibles."
+					: "No pudimos enviar otro código. Verifica que el backend esté disponible."
 			);
 		} finally {
 			setRecoverySubmitting(false);
@@ -805,35 +850,191 @@ const AdministrativeLoginPage: React.FC = () => {
 								</div>
 							</label>
 
-							{recoveryStep === "code" && (
-								<>
+							{recoveryOpen && (
+								<div
+									style={{
+										background: "#f8fafc",
+										border: "1px solid #cbd5e1",
+										borderRadius: "14px",
+										padding: "14px",
+										display: "flex",
+										flexDirection: "column",
+										gap: "10px",
+									}}
+								>
+									<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+										<strong style={{ fontSize: "0.86rem", color: "#0f172a" }}>
+											Recuperar cuenta administrativa (Correo / SMS)
+										</strong>
+										<button
+											type="button"
+											onClick={() => {
+												setRecoveryOpen(false);
+												setRecoveryStep("username");
+												setRecoveryError("");
+											}}
+											style={{
+												border: "none",
+												background: "transparent",
+												color: "#64748b",
+												cursor: "pointer",
+												fontWeight: 700,
+											}}
+										>
+											✕
+										</button>
+									</div>
+									<div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "6px" }}>
+										{(
+											[
+												{ id: "both", label: "Correo y SMS" },
+												{ id: "email", label: "Solo Correo" },
+												{ id: "sms", label: "Solo SMS" },
+											] as const
+										).map((opt) => (
+											<button
+												key={opt.id}
+												type="button"
+												onClick={() => setRecoveryChannel(opt.id)}
+												style={{
+													padding: "7px 6px",
+													borderRadius: "10px",
+													border: recoveryChannel === opt.id ? "2px solid #1d4ed8" : "1px solid #cbd5e1",
+													background: recoveryChannel === opt.id ? "#eff6ff" : "#ffffff",
+													color: recoveryChannel === opt.id ? "#1d4ed8" : "#475569",
+													fontSize: "0.75rem",
+													fontWeight: 700,
+													cursor: "pointer",
+												}}
+											>
+												{opt.label}
+											</button>
+										))}
+									</div>
 									<label>
-										Código de recuperación
+										Usuario, correo electrónico o teléfono
 										<div className="admin-login-input">
 											<IonInput
-												value={recoveryCode}
-												inputmode="numeric"
-												maxlength={6}
-												placeholder="Código de 6 dígitos"
-												onIonInput={(event) =>
-													setRecoveryCode(String(event.detail.value ?? "").replace(/\D/g, ""))
-												}
+												type="text"
+												value={recoveryIdentifier}
+												placeholder="admin, correo@serviprox.com o 3101234567"
+												onIonInput={(event) => setRecoveryIdentifier(String(event.detail.value ?? ""))}
+												onIonChange={(event) => setRecoveryIdentifier(String(event.detail.value ?? ""))}
 											/>
 										</div>
 									</label>
-									<label>
-										Nueva contraseña
-										<div className="admin-login-input">
-											<IonInput
-												type="password"
-												value={newPassword}
-												autocomplete="new-password"
-												placeholder="Nueva contraseña"
-												onIonInput={(event) => setNewPassword(String(event.detail.value ?? ""))}
-											/>
+									{recoveryPreviewCode && (
+										<div
+											style={{
+												background: "#eff6ff",
+												border: "1px solid #93c5fd",
+												borderRadius: "12px",
+												padding: "10px 12px",
+												color: "#1e3a8a",
+												fontSize: "0.82rem",
+											}}
+										>
+											<div style={{ fontWeight: 800, marginBottom: "4px" }}>
+												Código de verificación: <span style={{ letterSpacing: "2px", fontSize: "1rem" }}>{recoveryPreviewCode}</span>
+											</div>
+											{recoveryPreviewNotice && (
+												<p style={{ margin: "0 0 6px", fontSize: "0.74rem", color: "#334155" }}>{recoveryPreviewNotice}</p>
+											)}
+											<button
+												type="button"
+												onClick={() => setRecoveryCode(recoveryPreviewCode)}
+												style={{
+													padding: "5px 10px",
+													borderRadius: "8px",
+													border: "none",
+													background: "#1d4ed8",
+													color: "#ffffff",
+													fontSize: "0.75rem",
+													fontWeight: 700,
+													cursor: "pointer",
+												}}
+											>
+												Usar este código
+											</button>
 										</div>
-									</label>
-								</>
+									)}
+									{recoveryStep === "code" && (
+										<>
+											<label>
+												Código de recuperación (6 dígitos)
+												<div className="admin-login-input">
+													<IonInput
+														value={recoveryCode}
+														inputmode="numeric"
+														maxlength={6}
+														placeholder="Código de 6 dígitos"
+														onIonInput={(event) =>
+															setRecoveryCode(String(event.detail.value ?? "").replace(/\D/g, ""))
+														}
+													/>
+												</div>
+											</label>
+											<label>
+												Nueva contraseña (mínimo 6 caracteres)
+												<div className="admin-login-input">
+													<IonInput
+														type={showRecoveryPassword ? "text" : "password"}
+														value={newPassword}
+														autocomplete="new-password"
+														placeholder="Nueva contraseña"
+														onIonInput={(event) => setNewPassword(String(event.detail.value ?? ""))}
+													/>
+													<IonButton
+														type="button"
+														fill="clear"
+														onClick={() => setShowRecoveryPassword((v) => !v)}
+														aria-label="Mostrar nueva contraseña"
+													>
+														<IonIcon icon={showRecoveryPassword ? eyeOffOutline : eyeOutline} />
+													</IonButton>
+												</div>
+											</label>
+										</>
+									)}
+									<div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+										<button
+											type="button"
+											className="admin-login-support"
+											style={{
+												flex: 1,
+												background: "#1d4ed8",
+												color: "#ffffff",
+												borderRadius: "10px",
+												padding: "9px 12px",
+												fontWeight: 700,
+												border: "none",
+											}}
+											onClick={() => void handlePasswordReset()}
+											disabled={
+												!(recoveryIdentifier || username).trim() ||
+												recoverySubmitting ||
+												(recoveryStep === "code" &&
+													(recoveryCode.length !== 6 || newPassword.length < 6))
+											}
+										>
+											{recoverySubmitting
+												? "Procesando..."
+												: recoveryStep === "username"
+													? "Enviar código por Correo / SMS"
+													: "Confirmar y cambiar contraseña"}
+										</button>
+										{recoveryStep === "code" && (
+											<button
+												type="button"
+												className="admin-login-support"
+												onClick={() => void resendPasswordResetCode()}
+												disabled={recoverySubmitting}
+											>
+												Enviar otro código
+											</button>
+										)}
+									</div>
+								</div>
 							)}
 
 							<IonButton
@@ -907,30 +1108,19 @@ const AdministrativeLoginPage: React.FC = () => {
 							<button
 								type="button"
 								className="admin-login-support"
-								onClick={() => void handlePasswordReset()}
-								disabled={
-									!username.trim() ||
-									recoverySubmitting ||
-									(recoveryStep === "code" &&
-										(recoveryCode.length !== 6 || newPassword.length < 6))
-								}
+								onClick={() => {
+									setRecoveryOpen((prev) => {
+										const next = !prev;
+										if (next && !recoveryIdentifier && username.trim()) {
+											setRecoveryIdentifier(username.trim());
+										}
+										return next;
+									});
+									setRecoveryError("");
+								}}
 							>
-								{recoverySubmitting
-									? "Procesando..."
-									: recoveryStep === "username"
-										? "Recuperar contraseña con usuario"
-										: "Cambiar contraseña"}
+								🔑 Recuperar cuenta administrativa (Correo / SMS)
 							</button>
-							{recoveryStep === "code" && (
-								<button
-									type="button"
-									className="admin-login-support"
-									onClick={() => void resendPasswordResetCode()}
-									disabled={recoverySubmitting}
-								>
-									Enviar otro código
-								</button>
-							)}
 							{recoveryMessage && <p role="status">{recoveryMessage}</p>}
 							{recoveryError && <p className="admin-login-error" role="alert">{recoveryError}</p>}
 						</form>

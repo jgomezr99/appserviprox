@@ -38,6 +38,14 @@ import {
   slugify,
 } from "../db.ts";
 import { exportFullBackup, importFixtureRecords } from "../seed.ts";
+import {
+  maskEmail,
+  maskPhone,
+  normalizePhoneDigits,
+  phoneMatches,
+  sendRecoveryEmail,
+  sendRecoverySms,
+} from "../notificationsDelivery.ts";
 
 const router = Router();
 
@@ -483,39 +491,170 @@ router.post("/admin/register-worker/", handleRegisterWorker);
 router.post("/auth/register-worker/", handleRegisterWorker);
 router.post("/auth/register-admin/", handleRegisterWorker);
 
-router.post("/auth/password-reset/request/", (req: Request, res: Response) => {
-  const identity = String(req.body?.email || req.body?.username || "").trim().toLowerCase();
-  if (identity) {
-    const user = db
-      .prepare("SELECT * FROM users WHERE (lower(email) = ? OR lower(username) = ?) AND is_active = 1 LIMIT 1")
-      .get(identity, identity) as DbUser | undefined;
-    if (user) {
-      const ts = nowIso();
-      db.prepare("UPDATE password_reset_codes SET used_at = ? WHERE user_id = ? AND used_at IS NULL").run(ts, user.id);
-      const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
-      const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
-      db.prepare("INSERT INTO password_reset_codes (user_id, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?)").run(
-        user.id,
-        hashPassword(code),
-        expiresAt,
-        ts
-      );
-      console.log(`[Serviprox] Código de recuperación para ${user.email}: ${code}`);
-    }
+const recoveryRequestRateMap = new Map<string, { count: number; resetAt: number }>();
+const recoveryConfirmAttemptsMap = new Map<number, number>();
+
+function isRecoveryRateLimited(key: string): boolean {
+  const now = Date.now();
+  const entry = recoveryRequestRateMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    recoveryRequestRateMap.set(key, { count: 1, resetAt: now + 15 * 60_000 });
+    return false;
   }
-  res.json({ detail: "Si el usuario o correo existe, enviaremos un código de recuperación." });
+  if (entry.count >= 8) return true;
+  entry.count += 1;
+  return false;
+}
+
+function findUserForRecovery(rawIdentifier: string, rawPhone: string, portal?: string): DbUser | undefined {
+  const identifier = String(rawIdentifier || "").trim();
+  const phoneCandidate = String(rawPhone || "").trim() || identifier;
+  const isAdminPortal = String(portal || "").toLowerCase() === "admin";
+  const adminClause = isAdminPortal ? " AND (is_staff = 1 OR is_superuser = 1 OR role = 'staff')" : "";
+
+  if (identifier) {
+    const lowerId = identifier.toLowerCase();
+    const byEmailOrUser = db
+      .prepare(`SELECT * FROM users WHERE (lower(email) = ? OR lower(username) = ?) AND is_active = 1${adminClause} LIMIT 1`)
+      .get(lowerId, lowerId) as DbUser | undefined;
+    if (byEmailOrUser) return byEmailOrUser;
+  }
+
+  const digits = normalizePhoneDigits(phoneCandidate);
+  if (digits.length >= 7) {
+    const candidates = db
+      .prepare(`SELECT * FROM users WHERE phone IS NOT NULL AND trim(phone) != '' AND is_active = 1${adminClause}`)
+      .all() as DbUser[];
+    const match = candidates.find((u) => phoneMatches(u.phone, phoneCandidate));
+    if (match) return match;
+  }
+
+  return undefined;
+}
+
+router.post("/auth/password-reset/request/", async (req: Request, res: Response) => {
+  const rawIdentifier = String(
+    req.body?.identifier || req.body?.email || req.body?.username || req.body?.phone || ""
+  ).trim();
+  const rawPhone = String(req.body?.phone || "").trim();
+  const requestedChannel = String(req.body?.channel || "both").toLowerCase().trim();
+  const portal = String(req.body?.portal || "").toLowerCase().trim();
+
+  if (!rawIdentifier && !rawPhone) {
+    res.status(400).json({ detail: "Ingresa tu correo electrónico, usuario o número de teléfono." });
+    return;
+  }
+
+  const rateKey = `${req.ip || "local"}:${(rawIdentifier || rawPhone).toLowerCase()}`;
+  if (isRecoveryRateLimited(rateKey)) {
+    res.status(429).json({
+      detail: "Demasiados intentos de recuperación. Espera unos minutos antes de solicitar otro código.",
+    });
+    return;
+  }
+
+  const user = findUserForRecovery(rawIdentifier, rawPhone, portal);
+  if (!user) {
+    res.json({
+      detail: "Si los datos coinciden con una cuenta registrada, enviaremos el código de verificación al correo y/o teléfono asociado.",
+      channels_sent: [],
+      delivery_mode: "live",
+    });
+    return;
+  }
+
+  const ts = nowIso();
+  db.prepare("UPDATE password_reset_codes SET used_at = ? WHERE user_id = ? AND used_at IS NULL").run(ts, user.id);
+  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+  const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+  db.prepare("INSERT INTO password_reset_codes (user_id, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?)").run(
+    user.id,
+    hashPassword(code),
+    expiresAt,
+    ts
+  );
+  recoveryConfirmAttemptsMap.delete(user.id);
+
+  const hasEmail = Boolean(user.email && user.email.includes("@"));
+  const hasPhone = normalizePhoneDigits(user.phone || "").length >= 7;
+  const wantEmail =
+    requestedChannel === "email" ||
+    requestedChannel === "both" ||
+    (requestedChannel === "sms" && !hasPhone && hasEmail);
+  const wantSms =
+    requestedChannel === "sms" ||
+    requestedChannel === "both" ||
+    (requestedChannel === "email" && !hasEmail && hasPhone);
+
+  const userName = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username || user.email;
+  const isAdmin = Boolean(user.is_staff || user.is_superuser || user.role === "staff");
+
+  const [emailResult, smsResult] = await Promise.all([
+    wantEmail && hasEmail
+      ? sendRecoveryEmail({ to: user.email, code, userName, isAdmin })
+      : Promise.resolve(null),
+    wantSms && hasPhone
+      ? sendRecoverySms({ to: user.phone, code, isAdmin })
+      : Promise.resolve(null),
+  ]);
+
+  const channelsSent: Array<"email" | "sms"> = [];
+  if (wantEmail && hasEmail) channelsSent.push("email");
+  if (wantSms && hasPhone) channelsSent.push("sms");
+
+  const anyLiveSent = Boolean(emailResult?.sent || smsResult?.sent);
+  const maskedEmailVal = hasEmail ? maskEmail(user.email) : "";
+  const maskedPhoneVal = hasPhone ? maskPhone(user.phone) : "";
+
+  console.log(
+    `[Serviprox Recovery] Código para ${user.email || user.username} (${channelsSent.join("+") || "none"}, live=${anyLiveSent}): ${code}`
+  );
+
+  const channelParts: string[] = [];
+  if (channelsSent.includes("email") && maskedEmailVal) {
+    channelParts.push(`correo (${maskedEmailVal})`);
+  }
+  if (channelsSent.includes("sms") && maskedPhoneVal) {
+    channelParts.push(`SMS (${maskedPhoneVal})`);
+  }
+
+  const fallbackNote =
+    requestedChannel === "sms" && !hasPhone && hasEmail
+      ? " Esta cuenta no tiene teléfono registrado, así que lo enviamos a tu correo."
+      : "";
+
+  const detail = channelParts.length > 0
+    ? `Código de 6 dígitos enviado por ${channelParts.join(" y ")}.${fallbackNote}`
+    : "Se generó el código de recuperación para tu cuenta.";
+
+  const responsePayload: Record<string, unknown> = {
+    ok: true,
+    detail,
+    channels_sent: channelsSent,
+    masked_email: maskedEmailVal || undefined,
+    masked_phone: maskedPhoneVal || undefined,
+    delivery_mode: anyLiveSent ? "live" : "preview",
+  };
+
+  if (!anyLiveSent && process.env.DISABLE_DEV_RECOVERY_PREVIEW !== "true") {
+    responsePayload.preview_code = code;
+    responsePayload.preview_notice =
+      "Modo vista previa activo (sin servidor SMTP ni Twilio configurados en variables de entorno). Usa este código para completar la verificación.";
+  }
+
+  res.json(responsePayload);
 });
 
 router.post("/auth/password-reset/confirm/", (req: Request, res: Response) => {
-  const identity = String(req.body?.email || req.body?.username || "").trim().toLowerCase();
+  const rawIdentifier = String(
+    req.body?.identifier || req.body?.email || req.body?.username || req.body?.phone || ""
+  ).trim();
+  const rawPhone = String(req.body?.phone || "").trim();
+  const portal = String(req.body?.portal || "").toLowerCase().trim();
   const code = String(req.body?.code || "").replace(/\D/g, "");
   const newPassword = String(req.body?.new_password || "");
 
-  const user = identity
-    ? (db
-        .prepare("SELECT * FROM users WHERE lower(email) = ? OR lower(username) = ? LIMIT 1")
-        .get(identity, identity) as DbUser | undefined)
-    : undefined;
+  const user = findUserForRecovery(rawIdentifier, rawPhone, portal);
 
   const resetRow = user
     ? (db
@@ -525,8 +664,21 @@ router.post("/auth/password-reset/confirm/", (req: Request, res: Response) => {
         .get(user.id, nowIso()) as { id: number; code_hash: string } | undefined)
     : undefined;
 
-  if (!user || !resetRow || !verifyPassword(code, resetRow.code_hash)) {
-    res.status(400).json({ detail: "El código no es válido o ya venció." });
+  if (!user || !resetRow) {
+    res.status(400).json({ detail: "El código no es válido o ya venció. Solicita uno nuevo." });
+    return;
+  }
+
+  if (code.length !== 6 || !verifyPassword(code, resetRow.code_hash)) {
+    const attempts = (recoveryConfirmAttemptsMap.get(user.id) || 0) + 1;
+    recoveryConfirmAttemptsMap.set(user.id, attempts);
+    if (attempts >= 5) {
+      db.prepare("UPDATE password_reset_codes SET used_at = ? WHERE id = ?").run(nowIso(), resetRow.id);
+      recoveryConfirmAttemptsMap.delete(user.id);
+      res.status(400).json({ detail: "Demasiados intentos fallidos. El código fue invalidado; solicita uno nuevo." });
+      return;
+    }
+    res.status(400).json({ detail: "El código de 6 dígitos es incorrecto o ya venció." });
     return;
   }
 
@@ -538,7 +690,10 @@ router.post("/auth/password-reset/confirm/", (req: Request, res: Response) => {
 
   db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashPassword(newPassword), user.id);
   db.prepare("UPDATE password_reset_codes SET used_at = ? WHERE id = ?").run(nowIso(), resetRow.id);
-  res.json({ detail: "Contraseña actualizada correctamente." });
+  recoveryConfirmAttemptsMap.delete(user.id);
+  if (user.email) clearFailedLogin(user.email.toLowerCase());
+  if (user.username) clearFailedLogin(user.username.toLowerCase());
+  res.json({ ok: true, detail: "Contraseña actualizada correctamente. Ya puedes iniciar sesión." });
 });
 
 router.get("/auth/me/", requireAuth, (req: AuthedRequest, res: Response) => {
@@ -674,78 +829,107 @@ router.post("/auth/change-password/", requireAuth, async (req: AuthedRequest, re
 });
 
 function purgeUserAccountData(userId: number) {
-  const profRows = db
-    .prepare("SELECT id FROM professional_profiles WHERE user_id = ?")
-    .all(userId) as Array<{ id: number }>;
-  const profIds = profRows.map((r) => Number(r.id));
+  db.exec("BEGIN");
+  try {
+    const profRows = db
+      .prepare("SELECT id FROM professional_profiles WHERE user_id = ?")
+      .all(userId) as Array<{ id: number }>;
+    const profIds = profRows.map((r) => Number(r.id));
 
-  const orderRows = db
-    .prepare(
-      profIds.length > 0
-        ? `SELECT id FROM orders WHERE client_id = ? OR professional_id IN (${profIds.map(() => "?").join(",")})`
-        : "SELECT id FROM orders WHERE client_id = ?"
-    )
-    .all(userId, ...profIds) as Array<{ id: number }>;
-  const orderIds = orderRows.map((r) => Number(r.id));
+    const hhRows = db
+      .prepare("SELECT id FROM households WHERE owner_id = ?")
+      .all(userId) as Array<{ id: number }>;
+    const hhIds = hhRows.map((r) => Number(r.id));
 
-  for (const oid of orderIds) {
-    db.prepare("DELETE FROM order_messages WHERE order_id = ?").run(oid);
-    db.prepare("DELETE FROM order_timeline WHERE order_id = ?").run(oid);
-    db.prepare("DELETE FROM order_quotes WHERE order_id = ?").run(oid);
-    db.prepare("DELETE FROM reviews WHERE order_id = ?").run(oid);
-    db.prepare("DELETE FROM refund_requests WHERE order_id = ?").run(oid);
-    db.prepare("DELETE FROM payments WHERE order_id = ?").run(oid);
-    db.prepare("DELETE FROM orders WHERE id = ?").run(oid);
+    const reqRows = db
+      .prepare(
+        hhIds.length > 0
+          ? `SELECT id FROM service_requests WHERE client_id = ? OR household_id IN (${hhIds.map(() => "?").join(",")})`
+          : "SELECT id FROM service_requests WHERE client_id = ?"
+      )
+      .all(userId, ...hhIds) as Array<{ id: number }>;
+    const reqIds = reqRows.map((r) => Number(r.id));
+
+    const orderConditions = ["client_id = ?"];
+    const orderParams: Array<number> = [userId];
+    if (profIds.length > 0) {
+      orderConditions.push(`professional_id IN (${profIds.map(() => "?").join(",")})`);
+      orderParams.push(...profIds);
+    }
+    if (reqIds.length > 0) {
+      orderConditions.push(`service_request_id IN (${reqIds.map(() => "?").join(",")})`);
+      orderParams.push(...reqIds);
+    }
+    const orderRows = db
+      .prepare(`SELECT id FROM orders WHERE ${orderConditions.join(" OR ")}`)
+      .all(...orderParams) as Array<{ id: number }>;
+    const orderIds = orderRows.map((r) => Number(r.id));
+
+    for (const oid of orderIds) {
+      db.prepare("DELETE FROM order_admin_notes WHERE order_id = ?").run(oid);
+      db.prepare("DELETE FROM order_events WHERE order_id = ?").run(oid);
+      db.prepare("DELETE FROM work_evidence WHERE order_id = ?").run(oid);
+      db.prepare("DELETE FROM reviews WHERE order_id = ?").run(oid);
+      db.prepare("DELETE FROM refunds WHERE order_id = ?").run(oid);
+      db.prepare("DELETE FROM payments WHERE order_id = ?").run(oid);
+      db.prepare("DELETE FROM orders WHERE id = ?").run(oid);
+    }
+
+    db.prepare("DELETE FROM refunds WHERE payment_id IN (SELECT id FROM payments WHERE client_id = ?)").run(userId);
+    db.prepare("UPDATE refunds SET requested_by_id = NULL WHERE requested_by_id = ?").run(userId);
+    db.prepare("UPDATE refunds SET resolved_by_id = NULL WHERE resolved_by_id = ?").run(userId);
+    db.prepare("UPDATE withdrawals SET resolved_by_id = NULL WHERE resolved_by_id = ?").run(userId);
+    db.prepare("DELETE FROM payments WHERE client_id = ?").run(userId);
+
+    for (const pid of profIds) {
+      db.prepare("DELETE FROM withdrawals WHERE professional_id = ?").run(pid);
+      db.prepare("DELETE FROM request_candidates WHERE professional_id = ?").run(pid);
+      db.prepare("UPDATE service_requests SET professional_id = NULL WHERE professional_id = ?").run(pid);
+      db.prepare("UPDATE pqr_reports SET contractor_id = NULL WHERE contractor_id = ?").run(pid);
+      db.prepare("DELETE FROM professional_services WHERE profile_id = ?").run(pid);
+      db.prepare("DELETE FROM portfolio_items WHERE profile_id = ?").run(pid);
+      db.prepare("DELETE FROM availability_slots WHERE profile_id = ?").run(pid);
+      db.prepare("DELETE FROM benefit_redemptions WHERE profile_id = ?").run(pid);
+    }
+
+    for (const rid of reqIds) {
+      db.prepare("DELETE FROM service_request_images WHERE service_request_id = ?").run(rid);
+      db.prepare("DELETE FROM request_candidates WHERE request_id = ?").run(rid);
+      db.prepare("DELETE FROM service_requests WHERE id = ?").run(rid);
+    }
+
+    db.prepare("UPDATE service_request_images SET uploaded_by_id = NULL WHERE uploaded_by_id = ?").run(userId);
+    db.prepare("UPDATE order_admin_notes SET author_id = NULL WHERE author_id = ?").run(userId);
+    db.prepare("UPDATE order_events SET created_by_id = NULL WHERE created_by_id = ?").run(userId);
+    db.prepare("UPDATE diagnostic_sessions SET user_id = NULL WHERE user_id = ?").run(userId);
+    db.prepare("UPDATE pqr_reports SET client_id = NULL WHERE client_id = ?").run(userId);
+    db.prepare("UPDATE app_problem_reports SET user_id = NULL WHERE user_id = ?").run(userId);
+    db.prepare("UPDATE admin_audit_logs SET admin_user_id = NULL WHERE admin_user_id = ?").run(userId);
+
+    const chatRows = db
+      .prepare("SELECT id FROM support_chats WHERE user_id = ?")
+      .all(userId) as Array<{ id: number }>;
+    for (const ch of chatRows) {
+      db.prepare("DELETE FROM support_chat_messages WHERE chat_id = ?").run(Number(ch.id));
+      db.prepare("DELETE FROM support_chats WHERE id = ?").run(Number(ch.id));
+    }
+
+    db.prepare("DELETE FROM password_reset_codes WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM store_products WHERE owner_id = ?").run(userId);
+    db.prepare("DELETE FROM households WHERE owner_id = ?").run(userId);
+    db.prepare("DELETE FROM notifications WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM client_profiles WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM professional_profiles WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+    db.exec("COMMIT");
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      // ignore rollback error
+    }
+    throw err;
   }
-
-  db.prepare("UPDATE refund_requests SET requested_by_id = NULL WHERE requested_by_id = ?").run(userId);
-  db.prepare("UPDATE refund_requests SET resolved_by_id = NULL WHERE resolved_by_id = ?").run(userId);
-  db.prepare("UPDATE withdrawal_requests SET resolved_by_id = NULL WHERE resolved_by_id = ?").run(userId);
-  db.prepare("DELETE FROM payments WHERE client_id = ?").run(userId);
-
-  for (const pid of profIds) {
-    db.prepare("DELETE FROM withdrawal_requests WHERE professional_id = ?").run(pid);
-    db.prepare("DELETE FROM request_candidates WHERE professional_id = ?").run(pid);
-    db.prepare("UPDATE service_requests SET professional_id = NULL WHERE professional_id = ?").run(pid);
-    db.prepare("UPDATE pqr_reports SET contractor_id = NULL WHERE contractor_id = ?").run(pid);
-    db.prepare("DELETE FROM professional_services WHERE profile_id = ?").run(pid);
-    db.prepare("DELETE FROM professional_certificates WHERE profile_id = ?").run(pid);
-    db.prepare("DELETE FROM professional_portfolio WHERE profile_id = ?").run(pid);
-    db.prepare("DELETE FROM professional_availability WHERE profile_id = ?").run(pid);
-  }
-
-  const reqRows = db
-    .prepare("SELECT id FROM service_requests WHERE client_id = ?")
-    .all(userId) as Array<{ id: number }>;
-  for (const r of reqRows) {
-    db.prepare("DELETE FROM request_attachments WHERE service_request_id = ?").run(Number(r.id));
-    db.prepare("DELETE FROM request_candidates WHERE request_id = ?").run(Number(r.id));
-    db.prepare("DELETE FROM service_requests WHERE id = ?").run(Number(r.id));
-  }
-
-  db.prepare("UPDATE request_attachments SET uploaded_by_id = NULL WHERE uploaded_by_id = ?").run(userId);
-  db.prepare("UPDATE order_quotes SET created_by_id = NULL WHERE created_by_id = ?").run(userId);
-  db.prepare("UPDATE order_messages SET author_id = NULL WHERE author_id = ?").run(userId);
-  db.prepare("UPDATE diagnostic_sessions SET user_id = NULL WHERE user_id = ?").run(userId);
-  db.prepare("UPDATE pqr_reports SET client_id = NULL WHERE client_id = ?").run(userId);
-  db.prepare("UPDATE app_problem_reports SET user_id = NULL WHERE user_id = ?").run(userId);
-  db.prepare("UPDATE admin_audit_logs SET admin_user_id = NULL WHERE admin_user_id = ?").run(userId);
-
-  const chatRows = db
-    .prepare("SELECT id FROM support_chats WHERE user_id = ?")
-    .all(userId) as Array<{ id: number }>;
-  for (const ch of chatRows) {
-    db.prepare("DELETE FROM support_chat_messages WHERE chat_id = ?").run(Number(ch.id));
-    db.prepare("DELETE FROM support_chats WHERE id = ?").run(Number(ch.id));
-  }
-
-  db.prepare("DELETE FROM store_products WHERE owner_id = ?").run(userId);
-  db.prepare("DELETE FROM households WHERE owner_id = ?").run(userId);
-  db.prepare("DELETE FROM notifications WHERE user_id = ?").run(userId);
-  db.prepare("DELETE FROM user_identities WHERE user_id = ?").run(userId);
-  db.prepare("DELETE FROM client_profiles WHERE user_id = ?").run(userId);
-  db.prepare("DELETE FROM professional_profiles WHERE user_id = ?").run(userId);
-  db.prepare("DELETE FROM users WHERE id = ?").run(userId);
 }
 
 router.delete("/auth/me/delete/", requireAuth, (req: AuthedRequest, res: Response) => {
@@ -1097,10 +1281,11 @@ function deleteAccountByKindAndId(
   staffUser: DbUser
 ): { status: number; body: Record<string, unknown> } {
   const kind = String(rawKind || "").toLowerCase().trim();
-  const cleanId = String(rawId ?? "").trim().replace(/^(pro-|client-|user-)/i, "");
+  const cleanId = String(rawId ?? "").trim().replace(/^(pro-|client-|user-|admin-|staff-)/i, "");
   const pk = Number.parseInt(cleanId, 10);
 
-  if (kind !== "client" && kind !== "professional") {
+  const allowedKinds = new Set(["client", "professional", "admin", "staff"]);
+  if (!allowedKinds.has(kind)) {
     return { status: 400, body: { detail: "Tipo de cuenta inválido." } };
   }
 
@@ -1131,8 +1316,37 @@ function deleteAccountByKindAndId(
   if (!user) {
     return { status: 404, body: { detail: "La cuenta no existe." } };
   }
-  if (user.is_staff || user.is_superuser || user.role === "staff" || user.id === staffUser.id) {
-    return { status: 403, body: { detail: "No se puede eliminar esta cuenta administrativa." } };
+
+  if (user.id === staffUser.id) {
+    return {
+      status: 403,
+      body: { detail: "No puedes eliminar tu propia cuenta administrativa mientras tienes la sesión activa." },
+    };
+  }
+
+  const targetIsAdmin = Boolean(user.is_staff || user.is_superuser || user.role === "staff");
+  if (targetIsAdmin) {
+    if (kind !== "admin" && kind !== "staff") {
+      return {
+        status: 403,
+        body: { detail: "Para eliminar una cuenta administrativa debes hacerlo desde la gestión de cuentas administrativas." },
+      };
+    }
+    if (user.is_superuser && !staffUser.is_superuser) {
+      return {
+        status: 403,
+        body: { detail: "Solo un Superadministrador puede eliminar otra cuenta Superadmin." },
+      };
+    }
+    const remainingAdmins = db
+      .prepare("SELECT COUNT(*) as c FROM users WHERE is_active = 1 AND (is_staff = 1 OR is_superuser = 1 OR role = 'staff')")
+      .get() as { c: number };
+    if (Number(remainingAdmins?.c || 0) <= 1) {
+      return {
+        status: 403,
+        body: { detail: "Debe permanecer al menos una cuenta administrativa activa en la plataforma." },
+      };
+    }
   }
 
   const label = `${user.first_name} ${user.last_name}`.trim() || user.email;

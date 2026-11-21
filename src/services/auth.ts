@@ -157,23 +157,63 @@ export const authService = {
     return api.post<User>("auth/register/", form, { auth: false });
   },
 
-  requestPasswordReset: (emailOrUsername: string) =>
-    api.post<{ detail: string }>(
-      "auth/password-reset/request/",
-      { email: emailOrUsername, username: emailOrUsername },
-      { auth: false }
-    ),
+  requestPasswordReset: (
+    input:
+      | string
+      | {
+          identifier?: string;
+          email?: string;
+          username?: string;
+          phone?: string;
+          channel?: "email" | "sms" | "both";
+          portal?: "user" | "admin";
+        }
+  ) => {
+    const payload =
+      typeof input === "string"
+        ? { identifier: input, email: input, username: input, phone: input, channel: "both" as const }
+        : {
+            identifier: input.identifier ?? input.email ?? input.username ?? input.phone ?? "",
+            email: input.email ?? input.identifier ?? "",
+            username: input.username ?? input.identifier ?? "",
+            phone: input.phone ?? input.identifier ?? "",
+            channel: input.channel ?? "both",
+            portal: input.portal,
+          };
+    return api.post<{
+      ok?: boolean;
+      detail: string;
+      channels_sent?: Array<"email" | "sms">;
+      masked_email?: string;
+      masked_phone?: string;
+      delivery_mode?: "live" | "preview";
+      preview_code?: string;
+      preview_notice?: string;
+    }>("auth/password-reset/request/", payload, { auth: false });
+  },
 
   confirmPasswordReset: (payload: {
-    email: string;
+    identifier?: string;
+    email?: string;
+    username?: string;
+    phone?: string;
     code: string;
     new_password: string;
-  }) =>
-    api.post<{ detail: string }>(
+    portal?: "user" | "admin";
+  }) => {
+    const identifier = payload.identifier ?? payload.email ?? payload.username ?? payload.phone ?? "";
+    return api.post<{ ok?: boolean; detail: string }>(
       "auth/password-reset/confirm/",
-      { ...payload, username: payload.email },
+      {
+        ...payload,
+        identifier,
+        email: payload.email ?? identifier,
+        username: payload.username ?? identifier,
+        phone: payload.phone ?? identifier,
+      },
       { auth: false }
-    ),
+    );
+  },
 
   registerAdminWorker: async (
     payload: AdminWorkerRegistrationPayload

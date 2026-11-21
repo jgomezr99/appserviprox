@@ -2350,9 +2350,19 @@ export const AdminDashboard: React.FC = () => {
       });
     });
 
-  const handleDeleteAccount = async (kind: "client" | "professional", id: number | string, name: string) => {
+  const handleDeleteAccount = async (
+    kind: "client" | "professional" | "admin" | "staff",
+    id: number | string,
+    name: string
+  ) => {
+    const kindLabel =
+      kind === "admin" || kind === "staff"
+        ? "cuenta administrativa"
+        : kind === "professional"
+          ? "cuenta de profesional"
+          : "cuenta de cliente";
     const ok = await showConfirm(
-      `¿Eliminar definitivamente la cuenta de ${name}? También se borrarán sus pedidos, viviendas y registros asociados. Esta acción no se puede deshacer.`,
+      `¿Eliminar definitivamente la ${kindLabel} de ${name}? También se borrarán sus pedidos, viviendas y registros asociados. Esta acción no se puede deshacer.`,
       "Eliminar cuenta"
     );
     if (!ok) return;
@@ -2369,7 +2379,7 @@ export const AdminDashboard: React.FC = () => {
           }
           return next;
         });
-      } else {
+      } else if (kind === "professional") {
         setAllProsList((prev) => {
           const next = prev.filter((p) => String(p.id) !== String(id));
           try {
@@ -2380,6 +2390,7 @@ export const AdminDashboard: React.FC = () => {
           return next;
         });
       }
+      setRolesUsersList((prev) => prev.filter((u) => String(u.id) !== String(id)));
 
       showNotification(`La cuenta de ${name} fue eliminada permanentemente de la base de datos.`, "success");
       void Promise.all([
@@ -10843,23 +10854,53 @@ export const AdminDashboard: React.FC = () => {
                                   </div>
                                 </td>
                                 <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenRoleChangeModal(u)}
-                                    className="ad-btn"
-                                    style={{
-                                      padding: "6px 12px",
-                                      fontSize: "0.78rem",
-                                      borderRadius: "6px",
-                                      background: "#f1f5f9",
-                                      color: "#334155",
-                                      border: "1px solid #cbd5e1",
-                                      fontWeight: 600,
-                                      cursor: "pointer",
-                                    }}
-                                  >
-                                    ✏️ Gestionar
-                                  </button>
+                                  <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRoleChangeModal(u)}
+                                      className="ad-btn"
+                                      style={{
+                                        padding: "6px 12px",
+                                        fontSize: "0.78rem",
+                                        borderRadius: "6px",
+                                        background: "#f1f5f9",
+                                        color: "#334155",
+                                        border: "1px solid #cbd5e1",
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      ✏️ Gestionar
+                                    </button>
+                                    {Number(u.id) !== Number(user?.id) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const deleteKind: "client" | "professional" | "admin" =
+                                            u.is_staff || u.is_superuser || u.role === "staff"
+                                              ? "admin"
+                                              : u.role === "professional"
+                                                ? "professional"
+                                                : "client";
+                                          void handleDeleteAccount(deleteKind, u.id, u.full_name || u.email || u.username || `Usuario #${u.id}`);
+                                        }}
+                                        className="ad-btn"
+                                        style={{
+                                          padding: "6px 12px",
+                                          fontSize: "0.78rem",
+                                          borderRadius: "6px",
+                                          background: "#fef2f2",
+                                          color: "#b91c1c",
+                                          border: "1px solid #fecaca",
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                        }}
+                                        title="Eliminar cuenta permanentemente"
+                                      >
+                                        🗑️ Eliminar
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );

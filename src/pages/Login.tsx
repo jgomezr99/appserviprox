@@ -19,6 +19,7 @@ import {
   homeOutline,
   lockClosedOutline,
   mailOutline,
+  phonePortraitOutline,
   shieldCheckmarkOutline,
 } from "ionicons/icons";
 import { useHistory } from "react-router-dom";
@@ -129,9 +130,15 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   const [connectionSuccess, setConnectionSuccess] = useState("");
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [recoveryStep, setRecoveryStep] = useState<"email" | "code">("email");
+  const [recoveryChannel, setRecoveryChannel] = useState<"both" | "email" | "sms">("both");
+  const [recoveryIdentifier, setRecoveryIdentifier] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [recoveryPreviewCode, setRecoveryPreviewCode] = useState("");
+  const [recoveryPreviewNotice, setRecoveryPreviewNotice] = useState("");
   const [recoveryError, setRecoveryError] = useState("");
   const [recoverySubmitting, setRecoverySubmitting] = useState(false);
   const [showLoginForm, setShowLoginForm] =   useState(administrative);
@@ -261,16 +268,40 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
     }
   };
 
+  const recoveryTargetValid = () => {
+    const raw = (recoveryIdentifier || email).trim();
+    if (!raw) return false;
+    if (recoveryChannel === "email") return emailOk(raw);
+    if (recoveryChannel === "sms") return raw.replace(/\D/g, "").length >= 7 || emailOk(raw);
+    return emailOk(raw) || raw.replace(/\D/g, "").length >= 7;
+  };
+
   const requestRecoveryCode = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!emailOk(email) || recoverySubmitting) return;
+    const target = (recoveryIdentifier || email).trim();
+    if (!recoveryTargetValid() || recoverySubmitting) return;
     setRecoveryError("");
     setRecoveryMessage("");
+    setRecoveryPreviewCode("");
+    setRecoveryPreviewNotice("");
     setRecoverySubmitting(true);
     try {
-      await authService.requestPasswordReset(email.trim().toLowerCase());
+      const res = await authService.requestPasswordReset({
+        identifier: target,
+        email: target.includes("@") ? target.toLowerCase() : "",
+        phone: target.replace(/\D/g, "").length >= 7 ? target : "",
+        channel: recoveryChannel,
+        portal: administrative ? "admin" : "user",
+      });
       setRecoveryStep("code");
-      setRecoveryMessage("Si el correo está registrado, recibirás un código de 6 dígitos.");
+      setRecoveryMessage(
+        res.detail ||
+          "Si la cuenta está registrada, enviamos tu código de 6 dígitos por correo electrónico y/o SMS."
+      );
+      if (res.preview_code) {
+        setRecoveryPreviewCode(res.preview_code);
+        setRecoveryPreviewNotice(res.preview_notice || "");
+      }
     } catch (err) {
       setRecoveryError(getPasswordRecoveryDeliveryError(err));
     } finally {
@@ -280,20 +311,32 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
 
   const confirmRecovery = async (event: React.FormEvent) => {
     event.preventDefault();
+    const target = (recoveryIdentifier || email).trim();
     if (recoveryCode.length !== 6 || newPassword.length < 6 || recoverySubmitting) return;
+    if (confirmNewPassword && confirmNewPassword !== newPassword) {
+      setRecoveryError("Las contraseñas no coinciden.");
+      return;
+    }
     setRecoveryError("");
     setRecoverySubmitting(true);
     try {
       await authService.confirmPasswordReset({
-        email: email.trim().toLowerCase(),
+        identifier: target,
+        email: target.includes("@") ? target.toLowerCase() : "",
+        phone: target.replace(/\D/g, "").length >= 7 ? target : "",
         code: recoveryCode,
         new_password: newPassword,
+        portal: administrative ? "admin" : "user",
       });
       setRecoveryOpen(false);
       setRecoveryStep("email");
       setRecoveryCode("");
       setNewPassword("");
-      setError("Contraseña actualizada. Ya puedes iniciar sesión.");
+      setConfirmNewPassword("");
+      setRecoveryPreviewCode("");
+      setRecoveryPreviewNotice("");
+      setConnectionSuccess("Contraseña actualizada correctamente. Ya puedes iniciar sesión.");
+      setError("");
     } catch (err) {
       if (err instanceof ApiError && err.status === 400) {
         const payload = err.payload as { detail?: unknown };
@@ -311,14 +354,27 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   };
 
   const resendRecoveryCode = async () => {
-    if (!emailOk(email) || recoverySubmitting) return;
+    const target = (recoveryIdentifier || email).trim();
+    if (!target || recoverySubmitting) return;
     setRecoveryError("");
     setRecoveryMessage("");
+    setRecoveryPreviewCode("");
+    setRecoveryPreviewNotice("");
     setRecoveryCode("");
     setRecoverySubmitting(true);
     try {
-      await authService.requestPasswordReset(email.trim().toLowerCase());
-      setRecoveryMessage("Enviamos un código nuevo. El código anterior ya no es válido.");
+      const res = await authService.requestPasswordReset({
+        identifier: target,
+        email: target.includes("@") ? target.toLowerCase() : "",
+        phone: target.replace(/\D/g, "").length >= 7 ? target : "",
+        channel: recoveryChannel,
+        portal: administrative ? "admin" : "user",
+      });
+      setRecoveryMessage(res.detail || "Enviamos un código nuevo. El código anterior ya no es válido.");
+      if (res.preview_code) {
+        setRecoveryPreviewCode(res.preview_code);
+        setRecoveryPreviewNotice(res.preview_notice || "");
+      }
     } catch (err) {
       setRecoveryError(getPasswordRecoveryDeliveryError(err));
     } finally {
@@ -495,13 +551,18 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
                 onClick={() => {
                   setRecoveryOpen(true);
                   setRecoveryStep("email");
+                  setRecoveryChannel("both");
+                  setRecoveryIdentifier(email.trim());
                   setRecoveryCode("");
                   setNewPassword("");
+                  setConfirmNewPassword("");
+                  setRecoveryPreviewCode("");
+                  setRecoveryPreviewNotice("");
                   setRecoveryError("");
                   setRecoveryMessage("");
                 }}
               >
-                Olvidaste la contraseña
+                Olvidaste la contraseña (Correo / SMS)
               </IonButton>
 
               {connectionSuccess && (
@@ -582,59 +643,185 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
           className={styles.recoveryModal}
         >
           <div className={styles.recoveryContent}>
-            <span className={styles.cardEyebrow}>RECUPERAR ACCESO</span>
+            <span className={styles.cardEyebrow}>RECUPERAR CUENTA (CLIENTE / PROFESIONAL)</span>
             <h2>Restablece tu contraseña</h2>
-            <p>Te enviaremos un código temporal a tu correo electrónico.</p>
+            <p>Recibe un código de verificación de 6 dígitos en tu correo electrónico y/o por SMS a tu celular registrado.</p>
             {recoveryStep === "email" ? (
               <form className={styles.form} onSubmit={requestRecoveryCode}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px", marginBottom: "6px" }}>
+                  {(
+                    [
+                      { id: "both", label: "Correo y SMS" },
+                      { id: "email", label: "Solo Correo" },
+                      { id: "sms", label: "Solo SMS" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setRecoveryChannel(opt.id)}
+                      style={{
+                        padding: "9px 8px",
+                        borderRadius: "12px",
+                        border: recoveryChannel === opt.id ? "2px solid #1d4ed8" : "1px solid #cbd5e1",
+                        background: recoveryChannel === opt.id ? "#eff6ff" : "#ffffff",
+                        color: recoveryChannel === opt.id ? "#1d4ed8" : "#475569",
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
                 <label className={styles.field}>
-                  <span>Correo electrónico</span>
+                  <span>
+                    {recoveryChannel === "sms"
+                      ? "Número de teléfono o correo registrado"
+                      : recoveryChannel === "email"
+                        ? "Correo electrónico registrado"
+                        : "Correo electrónico o número de teléfono"}
+                  </span>
                   <div className={styles.inputShell}>
-                    <IonIcon icon={mailOutline} aria-hidden="true" />
+                    <IonIcon icon={recoveryChannel === "sms" ? phonePortraitOutline : mailOutline} aria-hidden="true" />
                     <IonInput
-                      type="email"
-                      value={email}
-                      autocomplete="email"
-                      onIonInput={(event) => setEmail(String(event.detail.value ?? ""))}
+                      type={recoveryChannel === "email" ? "email" : "text"}
+                      value={recoveryIdentifier}
+                      placeholder={
+                        recoveryChannel === "sms"
+                          ? "Ej: 3101234567"
+                          : recoveryChannel === "email"
+                            ? "tu@correo.com"
+                            : "tu@correo.com o 3101234567"
+                      }
+                      onIonInput={(event) => setRecoveryIdentifier(String(event.detail.value ?? ""))}
                     />
                   </div>
                 </label>
-                <IonButton expand="block" type="submit" className={styles.primaryButton} disabled={!emailOk(email) || recoverySubmitting}>
-                  {recoverySubmitting ? <IonSpinner name="crescent" /> : "Enviar código"}
+                <IonButton expand="block" type="submit" className={styles.primaryButton} disabled={!recoveryTargetValid() || recoverySubmitting}>
+                  {recoverySubmitting ? <IonSpinner name="crescent" /> : "Enviar código de recuperación"}
                 </IonButton>
               </form>
             ) : (
               <form className={styles.form} onSubmit={confirmRecovery}>
+                {recoveryMessage && <p className={styles.recoveryMessage}>{recoveryMessage}</p>}
+                {recoveryPreviewCode && (
+                  <div
+                    style={{
+                      background: "#eff6ff",
+                      border: "1px solid #93c5fd",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      marginBottom: "6px",
+                      color: "#1e3a8a",
+                      fontSize: "0.84rem",
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, marginBottom: "4px" }}>
+                      Código generado: <span style={{ fontSize: "1.05rem", letterSpacing: "2px" }}>{recoveryPreviewCode}</span>
+                    </div>
+                    {recoveryPreviewNotice && (
+                      <p style={{ margin: "0 0 8px", fontSize: "0.76rem", color: "#334155" }}>{recoveryPreviewNotice}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryCode(recoveryPreviewCode)}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: "#1d4ed8",
+                        color: "#ffffff",
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Usar este código
+                    </button>
+                  </div>
+                )}
                 <label className={styles.field}>
                   <span>Código de 6 dígitos</span>
-                  <IonInput
-                    value={recoveryCode}
-                    inputmode="numeric"
-                    maxlength={6}
-                    onIonInput={(event) => setRecoveryCode(String(event.detail.value ?? "").replace(/\D/g, ""))}
-                  />
+                  <div className={styles.inputShell}>
+                    <IonInput
+                      value={recoveryCode}
+                      inputmode="numeric"
+                      maxlength={6}
+                      placeholder="000000"
+                      onIonInput={(event) => setRecoveryCode(String(event.detail.value ?? "").replace(/\D/g, ""))}
+                    />
+                  </div>
                 </label>
                 <label className={styles.field}>
-                  <span>Nueva contraseña</span>
-                  <IonInput
-                    type="password"
-                    value={newPassword}
-                    autocomplete="new-password"
-                    onIonInput={(event) => setNewPassword(String(event.detail.value ?? ""))}
-                  />
+                  <span>Nueva contraseña (mínimo 6 caracteres)</span>
+                  <div className={styles.inputShell}>
+                    <IonIcon icon={lockClosedOutline} aria-hidden="true" />
+                    <IonInput
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      autocomplete="new-password"
+                      placeholder="Nueva contraseña"
+                      onIonInput={(event) => setNewPassword(String(event.detail.value ?? ""))}
+                    />
+                    <IonButton
+                      type="button"
+                      fill="clear"
+                      className={styles.passwordToggle}
+                      onClick={() => setShowNewPassword((v) => !v)}
+                    >
+                      <IonIcon icon={showNewPassword ? eyeOffOutline : eyeOutline} />
+                    </IonButton>
+                  </div>
                 </label>
-                {recoveryMessage && <p className={styles.recoveryMessage}>{recoveryMessage}</p>}
-                <IonButton expand="block" type="submit" className={styles.primaryButton} disabled={recoveryCode.length !== 6 || newPassword.length < 6 || recoverySubmitting}>
-                  {recoverySubmitting ? <IonSpinner name="crescent" /> : "Cambiar contraseña"}
-                </IonButton>
+                <label className={styles.field}>
+                  <span>Confirmar nueva contraseña</span>
+                  <div className={styles.inputShell}>
+                    <IonIcon icon={lockClosedOutline} aria-hidden="true" />
+                    <IonInput
+                      type={showNewPassword ? "text" : "password"}
+                      value={confirmNewPassword}
+                      autocomplete="new-password"
+                      placeholder="Repite la nueva contraseña"
+                      onIonInput={(event) => setConfirmNewPassword(String(event.detail.value ?? ""))}
+                    />
+                  </div>
+                </label>
                 <IonButton
-                  type="button"
-                  fill="clear"
-                  onClick={() => void resendRecoveryCode()}
-                  disabled={recoverySubmitting}
+                  expand="block"
+                  type="submit"
+                  className={styles.primaryButton}
+                  disabled={
+                    recoveryCode.length !== 6 ||
+                    newPassword.length < 6 ||
+                    (confirmNewPassword.length > 0 && confirmNewPassword !== newPassword) ||
+                    recoverySubmitting
+                  }
                 >
-                  Enviar otro código
+                  {recoverySubmitting ? <IonSpinner name="crescent" /> : "Confirmar y cambiar contraseña"}
                 </IonButton>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                  <IonButton
+                    type="button"
+                    fill="clear"
+                    onClick={() => {
+                      setRecoveryStep("email");
+                      setRecoveryError("");
+                    }}
+                    disabled={recoverySubmitting}
+                  >
+                    Cambiar medio
+                  </IonButton>
+                  <IonButton
+                    type="button"
+                    fill="clear"
+                    onClick={() => void resendRecoveryCode()}
+                    disabled={recoverySubmitting}
+                  >
+                    Reenviar código
+                  </IonButton>
+                </div>
               </form>
             )}
             {recoveryError && <p className={styles.error} role="alert">{recoveryError}</p>}
