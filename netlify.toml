@@ -1,6 +1,6 @@
 [build]
   publish = "dist"
-  command = "npm run build"
+  command = "npm ci --include=dev && npm run build"
 
 [build.environment]
   VITE_API_URL = "https://serviprox-pte.duckdns.org/api/v1"
