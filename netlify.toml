@@ -4,6 +4,7 @@
 
 [build.environment]
   VITE_API_URL = "https://serviprox-pte.duckdns.org/api/v1"
+  SECRETS_SCAN_OMIT_KEYS = "VITE_API_URL"
 
 # Regla para Single Page Application (SPA): permite recargar cualquier ruta (/login, /register, etc.) sin error 404 en Netlify
 [[redirects]]
